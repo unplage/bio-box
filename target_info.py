@@ -88,8 +88,12 @@ async def _llm_chat(prompt: str, api_key: str) -> str:
     payload = {
         "model": ZHIPUAI_MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "max_tokens": 2048,
+        "temperature": 0.6,
+        "max_tokens": 131072,
+        "stream": True,
+        "thinking": {
+            "type": "enabled"
+        },
     }
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await _request_with_retry(
@@ -106,28 +110,28 @@ async def _llm_chat(prompt: str, api_key: str) -> str:
 
 _LLM_PROMPTS = {
     "target_overview": (
-        "你是一个生物医药领域的专家。请根据以下靶点信息，生成一份专业的靶点概述（中文，200-300字），"
+        "你是一个生物医药领域的专家。请根据以下靶点信息，生成一份专业的靶点概述（中文，200-500字），"
         "涵盖基因符号、蛋白类别、功能描述和相关疾病。\n\n{context}"
     ),
     "research_progress": (
         "你是一个生物医药领域的专家。以下是关于某靶点的文献数据（年份分布和标题列表），"
-        "请分析研究趋势，指出近三年的研究热点和方向（中文，150-200字）。\n\n{context}"
+        "请分析研究趋势，指出近三年的研究热点和方向（中文，150-500字）。\n\n{context}"
     ),
     "clinical_landscape": (
         "你是一个临床研究专家。以下是关于某靶点的临床试验数据（阶段分布、适应症列表），"
-        "请分析临床开发格局，指出当前阶段分布特征和主要探索方向（中文，150-200字）。\n\n{context}"
+        "请分析临床开发格局，指出当前阶段分布特征和主要探索方向（中文，150-500字）。\n\n{context}"
     ),
     "key_findings": (
         "你是一个生物医药领域的专家。请根据以下文献标题列表，提取最有代表性的3-5个研究发现，"
-        "逐条列出并简要说明其意义（中文，200-300字）。\n\n{context}"
+        "逐条列出并简要说明其意义（中文，200-800字）。\n\n{context}"
     ),
     "future_outlook": (
         "你是一个药物研发专家。以下是针对某靶点的药物管线数据（已获批药物和在研药物），"
-        "请分析其未来发展趋势和值得关注的方向（中文，150-200字）。\n\n{context}"
+        "请分析其未来发展趋势和值得关注的方向（中文，150-500字）。\n\n{context}"
     ),
     "web_summary": (
         "你是一个生物医药行业情报分析师。请利用联网搜索能力，针对以下靶点，"
-        "搜集并整理最新全网关键情报（中文，400-600字），涵盖以下方面：\n"
+        "搜集并整理最新全网关键情报（中文，400-800字），涵盖以下方面：\n"
         "1. 关键里程碑事件：重要的研究发现、学术突破、指南更新等\n"
         "2. 重大收购与合作：药企之间的并购、授权引进、战略合作等\n"
         "3. 临床试验重大进展：近期成功的 III 期结果、FDA 突破性疗法认定、"
