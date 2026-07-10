@@ -90,7 +90,7 @@ async def _llm_chat(prompt: str, api_key: str) -> str:
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.6,
         "max_tokens": 131072,
-        "stream": True,
+        "stream": False,
         "thinking": {
             "type": "enabled"
         },
