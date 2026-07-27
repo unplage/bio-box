@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧹 精准数据清理工具</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            padding: 1.5rem 1rem;
+            margin: 0;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            max-width: 900px;
+            width: 100%;
+            border-radius: 12px;
+            padding: 1.8rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #2c3e50;
+            margin-top: 0;
+            font-size: 1.6rem;
+        }
+        .badge {
+            background: #3498db;
+            color: white;
+            padding: 0.15rem 1.2rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        #status {
+            padding: 0.8rem 1.2rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            font-weight: 500;
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .section {
+            margin: 1.2rem 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .section-header {
+            background: #f8fafc;
+            padding: 0.6rem 1.2rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #e2e8f0;
+            cursor: default;
+            align-items: center;
+        }
+        .section-header .count {
+            background: #e2e8f0;
+            padding: 0 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        .item-list {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 0.3rem 1.2rem;
+            background: white;
+        }
+        .item {
+            padding: 4px 0;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+        .item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .item .label {
+            word-break: break-all;
+            color: #1e293b;
+        }
+        .item .tag {
+            font-size: 0.7rem;
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 0 8px;
+            border-radius: 12px;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+        .item .tag.matched { background: #d1fae5; color: #065f46; }
+        .empty-msg {
+            color: #94a3b8;
+            font-style: italic;
+            padding: 8px 0;
+        }
+        .actions {
+            margin: 2rem 0 1rem;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 10px 28px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-primary {
+            background: #e74c3c;
+            color: white;
+        }
+        .btn-primary:hover { background: #c0392b; }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-success {
+            background: #2ecc71;
+            color: white;
+        }
+        .btn-success:hover { background: #27ae60; }
+        .note {
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            color: #64748b;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 1rem;
+        }
+        .log-area {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 0.8rem 1rem;
+            border-radius: 6px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin-top: 1rem;
+            display: none;
+        }
+        .log-area.show { display: block; }
+        .log-line { padding: 2px 0; }
+        .log-ok   { color: #7bed9f; }
+        .log-err  { color: #ff6b6b; }
+        .log-info { color: #70a1ff; }
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .filter-bar label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.9rem;
+        }
+        .filter-bar input[type="text"] {
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            flex: 1;
+            min-width: 150px;
+        }
+        .filter-bar .select-all {
+            background: #e2e8f0;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .filter-bar .select-all:hover { background: #cbd5e1; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>
+        🧹 数据清理工具
+        <span class="badge" id="projectBadge">项目</span>
+    </h1>
+    <div id="status">⏳ 正在扫描存储数据...</div>
+
+    <!-- 筛选控制 -->
+    <div class="filter-bar" id="filterBar" style="display:none;">
+        <label>🔍 筛选词：<input type="text" id="filterInput" value="" placeholder="输入关键词过滤"></label>
+        <button class="select-all" id="selectAllBtn">全选</button>
+        <button class="select-all" id="deselectAllBtn">全不选</button>
+        <button class="select-all" id="matchFilterBtn">勾选匹配项</button>
+    </div>
+
+    <!-- 扫描结果 -->
+    <div id="resultArea" style="display:none;">
+        <div class="section" id="lsSection">
+            <div class="section-header"><span>📦 localStorage</span><span class="count" id="lsCount">0</span></div>
+            <div class="item-list" id="lsList"></div>
+        </div>
+        <div class="section" id="ssSection">
+            <div class="section-header"><span>📦 sessionStorage</span><span class="count" id="ssCount">0</span></div>
+            <div class="item-list" id="ssList"></div>
+        </div>
+        <div class="section" id="cookieSection">
+            <div class="section-header"><span>🍪 Cookies (路径: <span id="cookiePathDisplay"></span>)</span><span class="count" id="cookieCount">0</span></div>
+            <div class="item-list" id="cookieList"></div>
+        </div>
+        <div class="section" id="idbSection">
+            <div class="section-header"><span>🗄️ IndexedDB</span><span class="count" id="idbCount">0</span></div>
+            <div class="item-list" id="idbList"></div>
+        </div>
+        <div class="section" id="cacheSection">
+            <div class="section-header"><span>💾 CacheStorage</span><span class="count" id="cacheCount">0</span></div>
+            <div class="item-list" id="cacheList"></div>
+        </div>
+        <div class="section" id="swSection">
+            <div class="section-header"><span>⚙️ Service Worker</span><span class="count" id="swCount">0</span></div>
+            <div class="item-list" id="swList"></div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="actions" id="actions">
+        <button class="btn btn-primary" id="deleteBtn" disabled>🗑️ 删除已勾选</button>
+        <button class="btn btn-secondary" id="cancelBtn">✖ 关闭页面</button>
+        <button class="btn btn-success" id="reloadBtn" style="display:none;">🚀 重新打开应用</button>
+    </div>
+
+    <!-- 日志 -->
+    <div class="log-area" id="logArea"></div>
+    <div class="note">
+        ✅ 扫描结果列出了当前源下的所有存储数据。自动勾选了 <strong id="matchInfo">与项目名匹配</strong> 的项。<br>
+        请仔细核对，取消勾选不想删除的项，然后点击删除。仅删除勾选项，不影响同源其他项目（除非你手动勾选了它们）。
+    </div>
+</div>
+
+<script>
+    (async function() {
+        // ---------- 1. 识别项目 ----------
+        const path = window.location.pathname;
+        const segments = path.split('/').filter(s => s.length > 0);
+        let projectName = segments.length > 0 ? segments[0] : '';
+        if (!projectName) projectName = 'app';
+        const projectPath = '/' + projectName + '/';
+
+        document.getElementById('projectBadge').textContent = projectName;
+        document.getElementById('cookiePathDisplay').textContent = projectPath;
+        document.getElementById('matchInfo').textContent = `包含 "${projectName}"`;
+
+        const statusDiv = document.getElementById('status');
+        const resultArea = document.getElementById('resultArea');
+        const filterBar = document.getElementById('filterBar');
+        const filterInput = document.getElementById('filterInput');
+        const deleteBtn = document.getElementById('deleteBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const reloadBtn = document.getElementById('reloadBtn');
+        const logArea = document.getElementById('logArea');
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const deselectAllBtn = document.getElementById('deselectAllBtn');
+        const matchFilterBtn = document.getElementById('matchFilterBtn');
+
+        function log(msg, type = 'info') {
+            logArea.classList.add('show');
+            const line = document.createElement('div');
+            line.className = 'log-line log-' + type;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logArea.appendChild(line);
+            logArea.scrollTop = logArea.scrollHeight;
+            console.log(msg);
+        }
+
+        function setStatus(msg, type = 'info') {
+            statusDiv.textContent = msg;
+            statusDiv.style.background = type === 'success' ? '#d4edda' : type === 'error' ? '#f8d7da' : '#d1ecf1';
+            statusDiv.style.color = type === 'success' ? '#155724' : type === 'error' ? '#721c24' : '#0c5460';
+        }
+
+        // ---------- 2. 扫描 ----------
+        setStatus('🔍 正在扫描...', 'info');
+        log(`📌 项目标识: "${projectName}"，路径: ${projectPath}`);
+
+        const scanResults = {
+            localStorage: [],
+            sessionStorage: [],
+            cookies: [],
+            indexedDB: [],
+            cacheStorage: [],
+            serviceWorker: []
+        };
+
+        // 2.1 localStorage
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key) scanResults.localStorage.push(key);
+        }
+
+        // 2.2 sessionStorage
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key) scanResults.sessionStorage.push(key);
+        }
+
+        // 2.3 Cookies (仅当前可见的)
+        const allCookies = document.cookie.split(';').map(c => c.trim().split('=')[0]).filter(Boolean);
+        scanResults.cookies = allCookies;
+
+        // 2.4 IndexedDB
+        if (window.indexedDB) {
+            try {
+                const dbs = await indexedDB.databases ? await indexedDB.databases() : [];
+                for (const dbInfo of dbs) {
+                    if (dbInfo.name) scanResults.indexedDB.push(dbInfo.name);
+                }
+            } catch (e) {
+                log('⚠️ 无法获取 IndexedDB 列表（可能不支持），尝试常用名称', 'info');
+                // 降级：尝试几个常见名称
+                const common = ['ddz', 'ddzDB', 'pwa-ddz', 'my-pwa-db', 'landlord'];
+                for (const name of common) {
+                    try {
+                        await new Promise((resolve) => {
+                            const req = indexedDB.open(name);
+                            req.onsuccess = () => { req.result.close(); scanResults.indexedDB.push(name); resolve(); };
+                            req.onerror = () => resolve();
+                        });
+                    } catch (e) {}
+                }
+            }
+        }
+
+        // 2.5 CacheStorage
+        if ('caches' in window) {
+            try {
+                const cacheNames = await caches.keys();
+                scanResults.cacheStorage = cacheNames;
+            } catch (e) {}
+        }
+
+        // 2.6 Service Worker
+        if ('serviceWorker' in navigator) {
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (const reg of registrations) {
+                    scanResults.serviceWorker.push(reg.scope);
+                }
+            } catch (e) {}
+        }
+
+        // ---------- 3. 渲染 ----------
+        function renderSection(sectionId, listId, countId, items, type) {
+            const container = document.getElementById(listId);
+            container.innerHTML = '';
+            if (!items || items.length === 0) {
+                container.innerHTML = '<div class="empty-msg">（无）</div>';
+                document.getElementById(countId).textContent = '0';
+                return;
+            }
+            let html = '';
+            let matchCount = 0;
+            const filter = projectName.toLowerCase();
+            for (const item of items) {
+                const isMatch = item.toLowerCase().includes(filter);
+                if (isMatch) matchCount++;
+                const tagClass = isMatch ? 'tag matched' : 'tag';
+                const tagText = isMatch ? '✅ 匹配' : '其他';
+                const checked = isMatch ? 'checked' : '';
+                html += `
+                    <div class="item">
+                        <input type="checkbox" class="item-checkbox" data-type="${type}" data-name="${item.replace(/"/g, '&quot;')}" ${checked}>
+                        <span class="label">${item}</span>
+                        <span class="${tagClass}">${tagText}</span>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+            document.getElementById(countId).textContent = items.length;
+            return matchCount;
+        }
+
+        // 先隐藏结果区域，等渲染完再显示
+        resultArea.style.display = 'block';
+        filterBar.style.display = 'flex';
+
+        renderSection('lsSection', 'lsList', 'lsCount', scanResults.localStorage, 'localStorage');
+        renderSection('ssSection', 'ssList', 'ssCount', scanResults.sessionStorage, 'sessionStorage');
+        renderSection('cookieSection', 'cookieList', 'cookieCount', scanResults.cookies, 'cookie');
+        renderSection('idbSection', 'idbList', 'idbCount', scanResults.indexedDB, 'indexedDB');
+        renderSection('cacheSection', 'cacheList', 'cacheCount', scanResults.cacheStorage, 'cacheStorage');
+        renderSection('swSection', 'swList', 'swCount', scanResults.serviceWorker, 'serviceWorker');
+
+        // 统计总勾选项
+        function updateDeleteBtn() {
+            const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+            deleteBtn.disabled = checkboxes.length === 0;
+            if (checkboxes.length === 0) {
+                deleteBtn.textContent = '🗑️ 删除已勾选（0项）';
+            } else {
+                deleteBtn.textContent = `🗑️ 删除已勾选（${checkboxes.length}项）`;
+            }
+        }
+        updateDeleteBtn();
+
+        // 监听复选框变化
+        document.querySelectorAll('.item-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateDeleteBtn);
+        });
+
+        // 全选/全不选/匹配筛选
+        selectAllBtn.addEventListener('click', () => {
+            document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = true);
+            updateDeleteBtn();
+        });
+        deselectAllBtn.addEventListener('click', () => {
+            document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
+            updateDeleteBtn();
+        });
+        matchFilterBtn.addEventListener('click', () => {
+            const filter = filterInput.value.trim().toLowerCase();
+            document.querySelectorAll('.item-checkbox').forEach(cb => {
+                const name = cb.dataset.name.toLowerCase();
+                cb.checked = filter === '' ? name.includes(projectName.toLowerCase()) : name.includes(filter);
+            });
+            updateDeleteBtn();
+        });
+
+        // 筛选框输入时，动态高亮？不自动勾选，只做显示过滤
+        filterInput.addEventListener('input', () => {
+            const filter = filterInput.value.trim().toLowerCase();
+            document.querySelectorAll('.item').forEach(itemDiv => {
+                const label = itemDiv.querySelector('.label');
+                if (label) {
+                    const text = label.textContent.toLowerCase();
+                    itemDiv.style.display = filter === '' || text.includes(filter) ? '' : 'none';
+                }
+            });
+        });
+
+        // 初始时，如果有数据，显示成功
+        const totalItems = scanResults.localStorage.length + scanResults.sessionStorage.length +
+                           scanResults.cookies.length + scanResults.indexedDB.length +
+                           scanResults.cacheStorage.length + scanResults.serviceWorker.length;
+        if (totalItems === 0) {
+            setStatus('✅ 未发现任何存储数据', 'success');
+            filterBar.style.display = 'none';
+        } else {
+            setStatus(`📋 扫描完成，共 ${totalItems} 项数据，已自动勾选匹配项`, 'info');
+        }
+        log(`扫描完成，共 ${totalItems} 项`, 'info');
+
+        // ---------- 4. 删除功能 ----------
+        deleteBtn.addEventListener('click', async function() {
+            if (deleteBtn.disabled) return;
+            const checked = document.querySelectorAll('.item-checkbox:checked');
+            if (checked.length === 0) return;
+            if (!confirm(`确定要删除这 ${checked.length} 项数据吗？此操作不可撤销！`)) return;
+
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '⏳ 删除中...';
+            setStatus('⏳ 正在删除勾选项...', 'info');
+            let errorCount = 0;
+            let deletedCount = 0;
+
+            // 按类型分组
+            const groups = {};
+            checked.forEach(cb => {
+                const type = cb.dataset.type;
+                const name = cb.dataset.name;
+                if (!groups[type]) groups[type] = [];
+                groups[type].push(name);
+            });
+
+            // 执行删除
+            try {
+                // localStorage
+                if (groups.localStorage) {
+                    for (const key of groups.localStorage) {
+                        try {
+                            localStorage.removeItem(key);
+                            deletedCount++;
+                            log(`✅ 删除 localStorage 键 "${key}"`, 'ok');
+                        } catch (e) {
+                            errorCount++;
+                            log(`❌ 删除 localStorage 键 "${key}" 失败: ${e.message}`, 'err');
+                        }
+                    }
+                }
+
+                // sessionStorage
+                if (groups.sessionStorage) {
+                    for (const key of groups.sessionStorage) {
+                        try {
+                            sessionStorage.removeItem(key);
+                            deletedCount++;
+                            log(`✅ 删除 sessionStorage 键 "${key}"`, 'ok');
+                        } catch (e) {
+                            errorCount++;
+                            log(`❌ 删除 sessionStorage 键 "${key}" 失败: ${e.message}`, 'err');
+                        }
+                    }
+                }
+
+                // Cookies: 只删除匹配项目路径的 cookie（因为无法按名称精确删除不同路径的，但可以删除路径匹配的）
+                if (groups.cookie) {
+                    for (const name of groups.cookie) {
+                        try {
+                            // 尝试删除当前路径和项目路径
+                            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${projectPath};`;
+                            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
+                            deletedCount++;
+                            log(`✅ 删除 Cookie "${name}"`, 'ok');
+                        } catch (e) {
+                            errorCount++;
+                            log(`❌ 删除 Cookie "${name}" 失败: ${e.message}`, 'err');
+                        }
+                    }
+                }
+
+                // IndexedDB
+                if (groups.indexedDB) {
+                    for (const dbName of groups.indexedDB) {
+                        try {
+                            await new Promise((resolve, reject) => {
+                                const req = indexedDB.deleteDatabase(dbName);
+                                req.onsuccess = () => { resolve(); };
+                                req.onerror = () => { reject(req.error); };
+                            });
+                            deletedCount++;
+                            log(`✅ 删除 IndexedDB 数据库 "${dbName}"`, 'ok');
+                        } catch (e) {
+                            errorCount++;
+                            log(`❌ 删除 IndexedDB "${dbName}" 失败: ${e.message}`, 'err');
+                        }
+                    }
+                }
+
+                // CacheStorage
+                if (groups.cacheStorage) {
+                    for (const cacheName of groups.cacheStorage) {
+                        try {
+                            await caches.delete(cacheName);
+                            deletedCount++;
+                            log(`✅ 删除 CacheStorage "${cacheName}"`, 'ok');
+                        } catch (e) {
+                            errorCount++;
+                            log(`❌ 删除 CacheStorage "${cacheName}" 失败: ${e.message}`, 'err');
+                        }
+                    }
+                }
+
+                // Service Worker
+                if (groups.serviceWorker) {
+                    for (const scope of groups.serviceWorker) {
+                        try {
+                            const regs = await navigator.serviceWorker.getRegistrations();
+                            for (const reg of regs) {
+                                if (reg.scope === scope) {
+                                    await reg.unregister();
+                                    deletedCount++;
+                                    log(`✅ 注销 Service Worker (scope: ${scope})`, 'ok');
+                                }
+                            }
+                        } catch (e) {
+                            errorCount++;
+                            log(`❌ 注销 Service Worker "${scope}" 失败: ${e.message}`, 'err');
+                        }
+                    }
+                }
+
+                if (errorCount === 0) {
+                    setStatus(`✅ 成功删除 ${deletedCount} 项数据！`, 'success');
+                } else {
+                    setStatus(`⚠️ 删除完成，成功 ${deletedCount} 项，失败 ${errorCount} 项`, 'error');
+                }
+                deleteBtn.textContent = '✅ 已删除';
+                reloadBtn.style.display = 'inline-block';
+                cancelBtn.textContent = '✖ 关闭页面';
+                log(`🎯 删除流程结束，成功 ${deletedCount}，失败 ${errorCount}`, 'info');
+
+            } catch (e) {
+                setStatus('❌ 删除过程中发生严重错误: ' + e.message, 'error');
+                log('严重错误: ' + e.message, 'err');
+                deleteBtn.textContent = '⚠️ 重试';
+                deleteBtn.disabled = false;
+            }
+        });
+
+        // ---------- 5. 辅助按钮 ----------
+        cancelBtn.addEventListener('click', () => {
+            if (confirm('确定要关闭此页面吗？')) window.close();
+        });
+
+        reloadBtn.addEventListener('click', () => {
+            window.location.href = projectPath;
+        });
+
+        // 如果没有任何数据，隐藏删除按钮
+        if (totalItems === 0) {
+            deleteBtn.style.display = 'none';
+        }
+
+    })();
+</script>
+</body>
+</html>
