@@ -234,7 +234,8 @@ const PROMPTS = {
   clinical_landscape:c=>`你是一个临床研究专家。以下是关于某靶点的临床试验数据（阶段分布、适应症列表），请分析临床开发格局，指出当前阶段分布特征和主要探索方向（中文，150-400字）。\n\n${c}`,
   key_findings:c=>`你是一个生物医药领域的专家。请根据以下文献标题列表，提取最有代表性的3-5个研究发现，逐条列出并简要说明其意义（中文，200-600字）。\n\n${c}`,
   future_outlook:c=>`你是一个药物研发专家。以下是针对某靶点的药物管线数据（已获批和在研药物），请分析其未来发展趋势和值得关注的方向（中文，150-400字）。\n\n${c}`,
-  web_summary:(ctx)=>`你是一名生物医药行业情报分析师，擅长基于结构化检索数据做专业研判。请完全基于下面已核实检索到的数据（文献、临床、药物、专利、靶点功能），不要臆造或引用检索数据之外的新信息，生成一份「综合情报研判」（中文，300-600字），涵盖：\n1. 研究热度与趋势判断\n2. 临床开发格局与关键进展\n3. 药物管线态势（含已获批/在研/活性分子线索）\n4. 专利布局概况与FTO/竞争风险提示\n5. 总体研发建议与后续关注点\n\n检索数据：\n${ctx}`,
+  web_summary:(name,gene,cls)=>`你是一名生物医药行业情报分析师。请利用联网搜索能力，针对以下靶点，搜集并整理最新全网关键情报（中文，400-800字），涵盖以下方面：\n1. 关键里程碑事件：重要的研究发现、学术突破、指南更新等\n2. 重大收购与合作：药企之间的并购、授权引进、战略合作等\n3. 临床试验重大进展：近期成功的 III 期结果、FDA 突破性疗法认定、重大失败或终止的试验及其影响\n4. 监管动态：FDA/EMA/NMPA 批准、加速审批、孤儿药认定等\n5. 竞争格局变化：新进入者、专利到期、生物类似药进展等\n\n请确保每条信息标注来源（如新闻标题或机构名称），并说明该信息对药物研发的潜在影响。\n\n靶点名称: ${name}\n基因符号: ${gene || "—"}\n蛋白类别: ${cls || "—"}`,
+  web_summary_legacy:(ctx)=>`你是一名生物医药行业情报分析师，擅长基于结构化检索数据做专业研判。请完全基于下面已核实检索到的数据（文献、临床、药物、专利、靶点功能），不要臆造或引用检索数据之外的新信息，生成一份「综合情报研判」（中文，300-600字），涵盖：\n1. 研究热度与趋势判断\n2. 临床开发格局与关键进展\n3. 药物管线态势（含已获批/在研/活性分子线索）\n4. 专利布局概况与FTO/竞争风险提示\n5. 总体研发建议与后续关注点\n\n检索数据：\n${ctx}`,
   patent_landscape:(n,txt)=>`你是一名生物医药知识产权分析师。请基于以下围绕靶点「${n}」的专利检索数据，撰写专业专利调研报告（中文，300-700字），涵盖：\n1. 专利布局概况：主要申请人/权利人及活跃度\n2. 申请年份趋势与所处阶段\n3. 主要技术方向（化合物/制剂/用途/制备等）\n4. 值得关注的近期关键专利\n5. FTO/自由实施风险提示与竞争格局研判\n\n检索数据：\n${txt}`
 };
 
@@ -535,6 +536,42 @@ async function llmChat(user,{system,webSearch}={}){
   }
   throw last||new Error("AI 调用失败");
 }
+async function llmChatWithSearch(user,{system}={}){
+  const p=activeProvider(), key=$("apiKey").value.trim();
+  if(!key) throw new Error("请先在设置中填写 "+p.name+" 的 API Key");
+  if(!p.base) throw new Error("自定义接口请先在设置中填写 Base URL");
+  const messages=system?[{role:"system",content:system},{role:"user",content:user}]:[{role:"user",content:user}];
+  const pr=($("corsProxy").value||"").trim();
+  const urls=(pr?[pr+p.base.replace(/^https?:\/\//,"")+"/chat/completions"]:[]);
+  urls.push(p.base+"/chat/completions");
+  // 策略 1：使用 web_search: true 参数
+  for(const u of urls){
+    try{
+      const body={model:p.model,messages,temperature:0.5,stream:false,web_search:true};
+      if(p.extra) p.extra(body);
+      const r=await fetch(u,{method:"POST",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok) continue;
+      const t=j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||"";
+      if(t) return t.trim();
+    }catch(e){}
+  }
+  // 策略 2：使用 tools 参数（智谱备用方案）
+  for(const u of urls){
+    try{
+      const body={model:p.model,messages,temperature:0.5,stream:false,
+        tools:[{type:"web_search",web_search:{enable:true}}]};
+      if(p.extra) p.extra(body);
+      const r=await fetch(u,{method:"POST",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok) continue;
+      const t=j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||"";
+      if(t) return t.trim();
+    }catch(e){}
+  }
+  // 策略 3：回退到普通聊天（无联网）
+  return llmChat(user,{system});
+}
 
 /* ── 报告构建 ───────────────────────────────────────────────── */
 function countYear(p){ const m={}; p.forEach(x=>{ if(x.year&&/^\d{4}$/.test(x.year)) m[x.year]=(m[x.year]||0)+1; }); return m; }
@@ -636,8 +673,24 @@ async function enhance(report,cb){
     try{ const t=await llmChat(PROMPTS[f](contextFor(f,report))); if(t) report[f]=t; }catch(e){ if(cb) cb(-1,"AI 分析 "+f+" 失败"); }
   }
   if(STOP) return;
-  if(cb) cb(96,"🧠 AI 综合研判 ...");
-  try{ const t=await llmChat(PROMPTS.web_summary(sysCtx(report))); if(t) report.web_summary=t; }catch(e){ if(cb) cb(-1,"AI 综合研判失败(可关闭 AI 再试)"); }
+  // AI 联网情报分析（仅支持联网的供应商使用）
+  const p=activeProvider();
+  if(p.webSearch){
+    if(cb) cb(95,"🌐 AI 联网情报分析 ...");
+    try{
+      const d=report.detail||{};
+      const t=await llmChatWithSearch(PROMPTS.web_summary(
+        report.targetName,
+        d&&d.geneSymbol,
+        d&&d.proteinClass
+      ));
+      if(t) report.web_summary=t;
+    }catch(e){ if(cb) cb(-1,"AI 联网情报分析失败"); }
+  } else {
+    // 非联网模式：基于已有数据生成综合研判
+    if(cb) cb(96,"🧠 AI 综合研判 ...");
+    try{ const t=await llmChat(PROMPTS.web_summary_legacy(sysCtx(report))); if(t) report.web_summary=t; }catch(e){ if(cb) cb(-1,"AI 综合研判失败"); }
+  }
   if(report.patents&&report.patents.length){
     if(STOP) return;
     if(cb) cb(97,"📜 AI 专利格局解读 ...");
