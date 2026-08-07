@@ -673,9 +673,9 @@ async function enhance(report,cb){
     try{ const t=await llmChat(PROMPTS[f](contextFor(f,report))); if(t) report[f]=t; }catch(e){ if(cb) cb(-1,"AI 分析 "+f+" 失败"); }
   }
   if(STOP) return;
-  // AI 联网情报分析（仅支持联网的供应商使用）
+  // AI 联网情报分析（仅智谱支持联网搜索）
   const p=activeProvider();
-  if(p.webSearch){
+  if(p.webSearch && $("providerSel").value === "zhipu"){
     if(cb) cb(95,"🌐 AI 联网情报分析 ...");
     try{
       const d=report.detail||{};
