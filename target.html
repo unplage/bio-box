@@ -66,7 +66,9 @@
     .empty{ color:#999; font-style:italic; }
     .AI{ background:#fffbe6; border-left:3px solid #f1c40f; padding:.5rem .8rem; border-radius:4px; margin:.5rem 0; white-space:pre-wrap; font-size:.92rem; }
     .note{ background:var(--soft); border-radius:6px; padding:.5rem .9rem; margin-top:.5rem; }
+    .btn-ppt{ background:#D35400; } .btn-ppt:hover:not(:disabled){ background:#BA4A00; }
 </style>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -157,6 +159,7 @@
             <div class="dl">
                 <button class="btn btn-green" id="dlMarkdown">📄 下载 Markdown</button>
                 <button class="btn btn-ghost" id="dlJson">⬇ 下载 JSON</button>
+                <button class="btn btn-ppt" id="dlPPT">📑 下载 PPT</button>
                 <button class="btn btn-ghost" id="copyText">📋 复制 Markdown</button>
             </div>
         </div>
@@ -837,6 +840,174 @@ function download(name,content,type){
 }
 function fname(n){ return String(n||"target").replace(/[\\/:*?"<>|]/g,"_"); }
 
+/* ── PPT 导出 ──────────────────────────────────────────────────────── */
+function generatePPT(r){
+  if(typeof PptxGenJS==="undefined") throw new Error("PptxGenJS 库未加载，请刷新页面重试");
+  const pptx=new PptxGenJS();
+  pptx.layout="LAYOUT_16x9";
+  pptx.author="TargetInfo";
+  pptx.company="";
+  pptx.subject=`靶点 ${r.targetName} 研究报告`;
+  pptx.title=`靶点 ${r.targetName} 研究进展与临床分析报告`;
+
+  const COL={mid:"#2E86C1",dark:"#1B4F72",green:"#27AE60",orange:"#D35400",gray:"#7F8C8D",light:"#ECF0F1",white:"#FFFFFF",txt:"#2C3E50",aiBg:"#fffbe6",aiBd:"#f1c40f"};
+  const FONT="Microsoft YaHei";
+  function addFooter(slide){
+    slide.addText("TargetInfo 靶点调研报告生成器 · "+new Date().toLocaleDateString(),{x:0,y:6.9,w:"100%",h:0.3,fontSize:8,color:COL.gray,fontFace:FONT,align:"center"});
+  }
+  function addHeader(slide,title,icon){
+    slide.addShape(pptx.ShapeType.rect,{x:0,y:0,w:"100%",h:1.0,fill:{color:COL.mid}});
+    slide.addText((icon||"")+" "+title,{x:0.5,y:0.15,w:9,h:0.7,fontSize:28,color:COL.white,fontFace:FONT,bold:true});
+  }
+
+  // ===== Slide 1: 封面 =====
+  const s1=pptx.addSlide();
+  s1.addShape(pptx.ShapeType.rect,{x:0,y:0,w:"100%",h:"100%",fill:{color:COL.dark}});
+  s1.addText("靶点调研报告",{x:1,y:1.5,w:8,h:1.2,fontSize:44,color:COL.white,fontFace:FONT,bold:true,align:"center"});
+  s1.addText(String(r.targetName).toUpperCase(),{x:1,y:2.8,w:8,h:0.9,fontSize:36,color:"#5DADE2",fontFace:FONT,bold:true,align:"center"});
+  s1.addShape(pptx.ShapeType.rect,{x:3.5,y:4.0,w:3,h:0.04,fill:{color:COL.mid}});
+  s1.addText("生成日期："+new Date().toLocaleString(),{x:1,y:4.3,w:8,h:0.5,fontSize:14,color:COL.gray,fontFace:FONT,align:"center"});
+  s1.addText("数据来源：PubMed · ClinicalTrials.gov · Open Targets · USPTO · ChEMBL · HPA",{x:1,y:4.8,w:8,h:0.5,fontSize:11,color:COL.gray,fontFace:FONT,align:"center"});
+
+  // ===== Slide 2: 靶点概述 =====
+  const s2=pptx.addSlide();
+  addHeader(s2,"靶点概述与背景","🧬");
+  const d=r.detail;
+  const lines2=[];
+  if(d&&d.geneSymbol) lines2.push({text:"基因符号：",options:{bold:true}},{text:d.geneSymbol+"\n",options:{}});
+  if(d&&d.proteinClass) lines2.push({text:"蛋白类别：",options:{bold:true}},{text:d.proteinClass+"\n",options:{}});
+  if(d&&d.proteinName) lines2.push({text:"蛋白全名：",options:{bold:true}},{text:d.proteinName+"\n",options:{}});
+  if(d&&d.synonyms&&d.synonyms.length) lines2.push({text:"别　　名：",options:{bold:true}},{text:d.synonyms.slice(0,8).join("、")+"\n",options:{}});
+  if(d&&d.description) lines2.push({text:"功能描述：",options:{bold:true}},{text:d.description+"\n",options:{}});
+  if(d&&d.subcellular) lines2.push({text:"亚细胞定位：",options:{bold:true}},{text:d.subcellular+"\n",options:{}});
+  if(d&&d.proteinFamilies) lines2.push({text:"蛋白家族：",options:{bold:true}},{text:d.proteinFamilies+"\n",options:{}});
+  if(d&&d.tractability&&d.tractability.length) lines2.push({text:"成药性评估：",options:{bold:true}},{text:d.tractability.join(", ")+"\n",options:{}});
+  if(d&&d.relatedDiseases&&d.relatedDiseases.length) lines2.push({text:"相关疾病：",options:{bold:true}},{text:d.relatedDiseases.join(", ")+"\n",options:{}});
+  if(lines2.length) s2.addText(lines2,{x:0.5,y:1.2,w:9,h:4.5,fontSize:13,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.3,valign:"top"});
+  if(r.target_overview) s2.addShape(pptx.ShapeType.rect,{x:0.5,y:5.8,w:9,h:0.04,fill:{color:COL.mid}});
+
+  // ===== Slide 3: 表达谱（如有 HPA 数据）=====
+  const hpa=d&&d.hpa;
+  if(hpa&&(hpa.proteinTissue||hpa.rnaCancer||hpa.subMain||hpa.antibodyN)){
+    const s3=pptx.addSlide();
+    addHeader(s3,"表达谱与抗体可及性","🧬");
+    const rows=[["属性","数值"]];
+    if(hpa.proteinTissue) rows.push(["蛋白组织特异",hpa.proteinTissue+(hpa.proteinTissueScore?" · score "+hpa.proteinTissueScore:"")]);
+    if(hpa.rnaCancer) rows.push(["癌中RNA特异",hpa.rnaCancer+(hpa.rnaCancerScore?" · score "+hpa.rnaCancerScore:"")]);
+    if(hpa.subMain||hpa.subcell) rows.push(["亚细胞定位",hpa.subMain||hpa.subcell]);
+    if(hpa.secretome) rows.push(["分泌(Secretome)",hpa.secretome]);
+    if(hpa.bloodC||hpa.bloodCl) rows.push(["血浆/血液(MS pg/L)",hpa.bloodC||hpa.bloodCl]);
+    if(hpa.antibodyN) rows.push(["可用验证抗体",hpa.antibodyN+"个"+(hpa.antibodyReliab?" · "+hpa.antibodyReliab:"")]);
+    if(rows.length>1){
+      s3.addTable(rows.map((row,i)=>row.map((cell,j)=>({text:cell,options:{fontSize:11,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0,align:j===0?"left":"left",valign:"middle"}}))),{x:0.5,y:1.3,w:9,h:Math.min(rows.length*0.45,4),border:{type:"solid",pt:0.5,color:COL.gray}});
+    }
+    addFooter(s3);
+  }
+
+  // ===== Slide 4: 研究进展 =====
+  const s4=pptx.addSlide();
+  addHeader(s4,"研究进展","📈");
+  if(r.research_progress) s4.addText(r.research_progress,{x:0.5,y:1.2,w:9,h:1.5,fontSize:13,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.3, valign:"top"});
+  const yc=countYear(r.papers);
+  const yrs=Object.keys(yc);
+  if(yrs.length){
+    s4.addText("文献年份分布（共 "+r.papers.length+" 篇）",{x:0.5,y:2.8,w:9,h:0.4,fontSize:12,bold:true,color:COL.txt,fontFace:FONT});
+    const barRows=[["年份","数量",""]].concat(yrs.slice(-10).map(y=>[y,String(yc[y]),""]));
+    s4.addTable(barRows.map((row,i)=>row.map((cell,j)=>({text:cell,options:{fontSize:10,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0||j===1,align:j===2?"left":"center"}}))),{x:0.5,y:3.3,w:9,h:Math.min(barRows.length*0.38,2.5),border:{type:"solid",pt:0.5,color:COL.gray}});
+  }
+  addFooter(s4);
+
+  // ===== Slide 5: 核心文献 =====
+  if(r.papers.length){
+    const s5=pptx.addSlide();
+    addHeader(s5,"核心文献","📚");
+    const topPapers=[...r.papers].sort((a,b)=>(b.year||"0").localeCompare(a.year||"0")).slice(0,8);
+    if(r.key_findings) s5.addText(r.key_findings,{x:0.5,y:1.2,w:9,h:2.0,fontSize:11,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.2, valign:"top"});
+    if(topPapers.length){
+      const pRows=[["序号","标题","期刊","年份"]].concat(topPapers.map((p,i)=>[String(i+1),p.title.slice(0,60),p.journal||"—",p.year||"—"]));
+      s5.addTable(pRows.map((row,i)=>row.map((cell,j)=>({text:cell,options:{fontSize:9,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0}}))),{x:0.3,y:3.3,w:9.4,h:Math.min(pRows.length*0.45,3.2),border:{type:"solid",pt:0.5,color:COL.gray}});
+    }
+    addFooter(s5);
+  }
+
+  // ===== Slide 6: 临床试验概况 =====
+  const s6=pptx.addSlide();
+  addHeader(s6,"临床试验概况","🧪");
+  if(r.clinical_landscape) s6.addText(r.clinical_landscape,{x:0.5,y:1.2,w:9,h:1.5,fontSize:12,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.3, valign:"top"});
+  const ph=countPhase(r.trials);
+  const phK=Object.keys(ph);
+  if(phK.length){
+    s6.addText("阶段分布",{x:0.5,y:2.8,w:4,h:0.35,fontSize:11,bold:true,color:COL.txt,fontFace:FONT});
+    s6.addTable([["阶段","数量"]].concat(phK.map(k=>[k,String(ph[k])])).map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:10,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0,align:"center"}}))),{x:0.5,y:3.2,w:4,h:Math.min((phK.length+1)*0.38,2),border:{type:"solid",pt:0.5,color:COL.gray}});
+  }
+  if(r.trials.length){
+    const tRows=[["NCT","标题","阶段","状态"]].concat(r.trials.slice(0,10).map(t=>[t.id,(t.title||"").slice(0,50),t.phase||"—",t.status||"—"]));
+    s6.addTable(tRows.map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:8,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0}}))),{x:5,y:2.8,w:4.8,h:Math.min(tRows.length*0.38,3.5),border:{type:"solid",pt:0.5,color:COL.gray}});
+  }
+  addFooter(s6);
+
+  // ===== Slide 7: 药物研发管线 =====
+  const s7=pptx.addSlide();
+  addHeader(s7,"药物研发管线","💊");
+  if(r.future_outlook) s7.addText(r.future_outlook,{x:0.5,y:1.2,w:9,h:1.2,fontSize:12,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.3, valign:"top"});
+  if(r.drugs.length){
+    const dRows=[["药物","公司","阶段","机制","适应症"]].concat(r.drugs.slice(0,12).map(d=>[d.name,d.company||"—",d.phase||"—",(d.mechanism||"").slice(0,40),d.disease||"—"]));
+    s7.addTable(dRows.map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:9,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0}}))),{x:0.3,y:2.6,w:9.4,h:Math.min(dRows.length*0.42,3.8),border:{type:"solid",pt:0.5,color:COL.gray}});
+  } else {
+    s7.addText("暂未从 Open Targets 获取到药物信息。",{x:0.5,y:2.6,w:9,h:0.5,fontSize:11,color:COL.gray,fontFace:FONT,italic:true});
+  }
+  addFooter(s7);
+
+  // ===== Slide 8: 专利调研 =====
+  const s8=pptx.addSlide();
+  addHeader(s8,"专利调研","📜");
+  if(r.patent_landscape){
+    s8.addShape(pptx.ShapeType.rect,{x:0.5,y:1.2,w:9,h:2.5,fill:{color:COL.aiBg},line:{color:COL.aiBd,width:2}});
+    s8.addText(r.patent_landscape,{x:0.7,y:1.3,w:8.6,h:2.3,fontSize:11,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.2, valign:"top"});
+  }
+  if(r.patents.length){
+    const ptRows=[["专利号","标题","申请人","年份"]].concat(r.patents.slice(0,12).map(p=>[p.number||"—",(p.title||"").slice(0,50),(p.assignee||"—").slice(0,25),p.year||"—"]));
+    s8.addTable(ptRows.map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:8,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0}}))),{x:0.3,y:3.9,w:9.4,h:Math.min(ptRows.length*0.35,2.8),border:{type:"solid",pt:0.5,color:COL.gray}});
+  }
+  addFooter(s8);
+
+  // ===== Slide 9: AI 综合情报研判 =====
+  if(r.web_summary){
+    const s9=pptx.addSlide();
+    addHeader(s9,"AI 综合情报研判","🧠");
+    s9.addShape(pptx.ShapeType.rect,{x:0.5,y:1.2,w:9,h:5.0,fill:{color:COL.aiBg},line:{color:COL.aiBd,width:2}});
+    s9.addText(r.web_summary,{x:0.7,y:1.3,w:8.6,h:4.8,fontSize:12,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.3, valign:"top"});
+    addFooter(s9);
+  }
+
+  // ===== Slide 10: 靶向活性分子（ChEMBL）=====
+  if(r.molecules&&r.molecules.length){
+    const s10=pptx.addSlide();
+    addHeader(s10,"靶向活性分子（ChEMBL）","🔬");
+    s10.addText("来自 ChEMBL 的高活性化合物线索（pChEMBL 为活性指数，越大活性越强）",{x:0.5,y:1.2,w:9,h:0.4,fontSize:10,color:COL.gray,fontFace:FONT});
+    const mRows=[["分子/化合物","ChEMBL ID","pChEMBL"]].concat(r.molecules.slice(0,15).map(m=>[m.name||"—",m.chembl||"—",m.pchembl||"—"]));
+    s10.addTable(mRows.map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:10,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0,align:"center"}}))),{x:0.5,y:1.8,w:9,h:Math.min(mRows.length*0.4,4.5),border:{type:"solid",pt:0.5,color:COL.gray}});
+    addFooter(s10);
+  }
+
+  // ===== Slide 11: 数据来源与致谢 =====
+  const s11=pptx.addSlide();
+  addHeader(s11,"数据来源与致谢","📋");
+  s11.addText([
+    {text:"文献检索：",options:{bold:true}},{text:"PubMed (NCBI)\n",options:{}},
+    {text:"临床试验：",options:{bold:true}},{text:"ClinicalTrials.gov (v2 API)\n",options:{}},
+    {text:"靶点信息：",options:{bold:true}},{text:"Open Targets Platform (GraphQL) + UniProt + Human Protein Atlas\n",options:{}},
+    {text:"药物管线：",options:{bold:true}},{text:"Open Targets Drug & Clinical Candidates\n",options:{}},
+    {text:"活性分子：",options:{bold:true}},{text:"ChEMBL (EBI)\n",options:{}},
+    {text:"专利数据：",options:{bold:true}},{text:"USPTO / PatentsView / Lens.org\n",options:{}},
+    {text:"AI 分析：",options:{bold:true}},{text:"DeepSeek / 小米MiMo / 智谱GLM / 自定义兼容接口\n\n",options:{}},
+    {text:"报告由 TargetInfo 靶点调研报告生成器 自动生成",options:{bold:true,color:COL.mid}}
+  ],{x:0.5,y:1.3,w:9,h:4.5,fontSize:12,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.5, valign:"top"});
+  addFooter(s11);
+
+  return pptx.writeFile({fileName:fname(r.targetName)+"_靶点调研报告.pptx"});
+}
+
 /* ── 初始化 ─────────────────────────────────────────────────────────── */
 function init(){
   const sel=$("providerSel"), ms=$("modelSel"), mList=$("modelList");
@@ -883,6 +1054,7 @@ function init(){
   $("targetInput").addEventListener("keydown",e=>{ if(e.key==="Enter")run(); });
   $("dlMarkdown").addEventListener("click",()=>REPORT&&download(fname(REPORT.targetName)+"_报告.md",markdown(REPORT)));
   $("dlJson").addEventListener("click",()=>REPORT&&download(fname(REPORT.targetName)+"_数据.json",JSON.stringify(REPORT,null,2),"application/json"));
+  $("dlPPT").addEventListener("click",async()=>{ if(!REPORT) return; try{ $("dlPPT").disabled=true; $("dlPPT").textContent="⏳ 生成中…"; await generatePPT(REPORT); }catch(e){ alert("PPT 生成失败: "+e.message); } finally{ $("dlPPT").disabled=false; $("dlPPT").textContent="📑 下载 PPT"; } });
   $("copyText").addEventListener("click",()=>REPORT&&navigator.clipboard.writeText(markdown(REPORT)).then(()=>alert("已复制 Markdown 到剪贴板")).catch(()=>{}));
 }
 document.addEventListener("DOMContentLoaded",init);
