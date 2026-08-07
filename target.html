@@ -387,7 +387,7 @@ async function getUniProt(gene){
   const u="https://rest.uniprot.org/uniprotkb/search?"+new URLSearchParams({
     query:`gene:${gene} AND organism_id:9606`,
     format:"json", size:"5",
-    fields:"accession,protein_name,cc_subcellular_location,cc_function,protein_families"}).toString();
+    fields:"accession,protein_name,cc_subcellular_location,cc_function,protein_families,sequence"}).toString();
   const d=await reqJson(u);
   const res=(d&&d.results)||[];
   if(!res.length) return null;
@@ -396,22 +396,55 @@ async function getUniProt(gene){
   const val=(type,key)=>comments.filter(c=>c.commentType===type)
     .map(c=>(c[key]||[]).map(s=>typeof s==="object"&&s.location?s.location.value:(s&&(s.value!==undefined?s.value:s))).filter(Boolean).join("; ")).filter(Boolean);
   const fam=(r0.proteinFamilies||[]).map(f=>f.value).filter(Boolean);
+  const seq=r0.sequence||{};
   return {
     accession:r0.primaryAccession||"",
     proteinName:(r0.proteinDescription&&r0.proteinDescription.recommendedName&&r0.proteinDescription.recommendedName.fullName&&r0.proteinDescription.recommendedName.fullName.value)||(r0.proteinDescription&&r0.proteinDescription.submissionNames&&r0.proteinDescription.submissionNames[0]&&r0.proteinDescription.submissionNames[0].fullName&&r0.proteinDescription.submissionNames[0].fullName.value)||"",
     subcellular:val("SUBCELLULAR LOCATION","subcellularLocations").join("; ")||"",
     func:val("FUNCTION","text").join(" ")||"",
-    proteinFamilies:fam.join("; ")
+    proteinFamilies:fam.join("; "),
+    sequence:seq.value||"",
+    sequenceLength:seq.length||0
   };
 }
 
 /* ── PDB（蛋白质3D结构）────────────────────────────────────── */
 async function getPDB(gene,uniprotAcc){
   if(!gene&&!uniprotAcc) return [];
-  const q=uniprotAcc||gene;
-  const gql=`query($q:String!){entries(query:$q,first:5){rcsb_id title exptl{method} refine{ls_d_res_high} rcsb_entry_info{molecular_weight} rcsb_primary_citation{year pdbx_database_id_PubMed pdbx_database_id_DOI}}}`;
   try{
-    const d=await reqJson("https://data.rcsb.org/graphql",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:gql,variables:{q}})});
+    // Step 1: 使用 Search API 搜索 PDB 结构
+    const nodes=[];
+    if(uniprotAcc){
+      nodes.push({type:"terminal",service:"text",parameters:{
+        attribute:"rcsb_polymer_entity_container_identifiers.reference_sequence_identifiers.database_accession",
+        operator:"exact_match",value:uniprotAcc,
+        negation:false}});
+    }
+    if(gene){
+      nodes.push({type:"terminal",service:"text",parameters:{
+        attribute:"rcsb_polymer_entity_container_identifiers.reference_sequence_identifiers.database_name",
+        operator:"exact_match",value:"UniProt",
+        negation:false}});
+    }
+    if(!nodes.length) return [];
+    const searchBody={query:{type:"group",logical_operator:"and",nodes:nodes},
+      return_type:"entry",
+      request_options:{results_content_type:["experimental"],
+        sort:[{sort_by:"score",direction:"desc"}],
+        paginate:{start:0,rows:10}}};
+    const searchData=await reqJson("https://search.rcsb.org/rcsbsearch/v2/query",
+      {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(searchBody)});
+    const pdbIds=(searchData.result_set||[]).map(r=>r.identifier).filter(Boolean);
+    if(!pdbIds.length) return [];
+    // Step 2: 使用 GraphQL 获取详细信息
+    const gql=`query($ids:[String!]!]{
+      entries(entry_ids:$ids){
+        rcsb_id title exptl{method} refine{ls_d_res_high}
+        rcsb_primary_citation{year pdbx_database_id_PubMed pdbx_database_id_DOI}
+      }
+    }`;
+    const d=await reqJson("https://data.rcsb.org/graphql",
+      {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:gql,variables:{ids:pdbIds}})});
     const entries=d&&d.data&&d.data.entries||[];
     return entries.map(e=>({
       pdbId:e.rcsb_id||"", title:e.title||"",
@@ -649,6 +682,7 @@ function contextFor(field,r){
     if(d.subcellular) parts.push("亚细胞定位: "+d.subcellular);
     if(d.tractability&&d.tractability.length) parts.push("成药性评估: "+d.tractability.join(","));
     if(d.pdb&&d.pdb.length) parts.push("PDB结构: "+d.pdb.map(p=>p.pdbId+" ("+p.method+")").join("; "));
+    if(d.sequence) parts.push("氨基酸序列长度: "+(d.sequenceLength||d.sequence.length)+" aa");
     if(d.synonyms&&d.synonyms.length) parts.push("别名: "+d.synonyms.slice(0,10).join("; "));
     if(d.hpa&&hpaLines(d.hpa).length) parts.push("HPA表达谱: "+hpaLines(d.hpa).join("；"));
   }
@@ -678,6 +712,7 @@ function sysCtx(r){
     if(d.subcellular) parts.push("亚细胞定位: "+d.subcellular);
     if(d.tractability&&d.tractability.length) parts.push("成药性: "+d.tractability.join(","));
     if(d.pdb&&d.pdb.length) parts.push("PDB结构: "+d.pdb.map(p=>p.pdbId).join(", "));
+    if(d.sequence) parts.push("氨基酸序列长度: "+(d.sequenceLength||d.sequence.length)+" aa");
     if(d.hpa&&d.hpa.link) parts.push("HPA链接: "+d.hpa.link);
     if(d.relatedDiseases&&d.relatedDiseases.length) parts.push("相关疾病: "+d.relatedDiseases.join(", "));
   }
@@ -814,9 +849,17 @@ function render(r,errs){
   const a=addPanel("🧬 靶点概述与背景");
   if(d&&d.geneSymbol){
     a.body.insertAdjacentHTML("beforeend",`<p><b>基因符号：</b>${esc(d.geneSymbol)} &nbsp; 蛋白类别：${esc(d.proteinClass||"—")}</p>`);
+    if(d.proteinName)a.body.insertAdjacentHTML("beforeend",`<p><b>蛋白全名：</b>${esc(d.proteinName)}</p>`);
+    if(d.accession)a.body.insertAdjacentHTML("beforeend",`<p><b>UniProt：</b><a href="https://www.uniprot.org/uniprotkb/${esc(d.accession)}" target="_blank" style="color:var(--mid)">${esc(d.accession)}</a></p>`);
     if(d.synonyms&&d.synonyms.length)a.body.insertAdjacentHTML("beforeend",`<p>别　名：${d.synonyms.slice(0,8).map(esc).join("、")}</p>`);
     if(d.description)a.body.insertAdjacentHTML("beforeend",`<p>功能描述：${esc(d.description)}</p>`);
     if(d.relatedDiseases&&d.relatedDiseases.length)a.body.insertAdjacentHTML("beforeend",`<p>相关疾病：${d.relatedDiseases.map(s=>`<span style="display:inline-block;background:#e8eefc;color:#3a5bb0;border-radius:10px;padding:0 .5rem;font-size:.78rem;margin:.15rem .2rem 0 0">${esc(s)}</span>`).join("")}</p>`);
+    if(d.sequence){
+      const seq=d.sequence;
+      const displaySeq=seq.length>120?seq.slice(0,120)+"…":seq;
+      a.body.insertAdjacentHTML("beforeend",`<p style="margin-top:.5rem"><b>氨基酸序列（${d.sequenceLength||seq.length} aa）：</b></p>`);
+      a.body.insertAdjacentHTML("beforeend",`<div style="background:#f8f9fa;border:1px solid var(--border);border-radius:6px;padding:.5rem;font-family:monospace;font-size:.8rem;word-break:break-all;max-height:120px;overflow-y:auto">${esc(displaySeq)}</div>`);
+    }
   }
   a.body.insertAdjacentHTML("beforeend",`<div class="note">${esc(r.target_overview).replace(/\\n/g,"<br>")}</div>`);
   a.open();
@@ -911,7 +954,9 @@ function render(r,errs){
 function markdown(r){
   let m=`# 靶点 ${String(r.targetName).toUpperCase()} 研究进展与临床分析报告\n\n`;
   m+=`> 生成：${new Date().toLocaleString()}　数据源：PubMed · ClinicalTrials.gov · Open Targets · USPTO\n\n`;
-  m+=`## 一、靶点概述\n${r.target_overview}\n\n## 二、研究进展\n${r.research_progress}\n\n## 三、核心文献\n${r.key_findings}\n\n## 四、临床概况\n${r.clinical_landscape}\n\n`;
+  m+=`## 一、靶点概述\n${r.target_overview}\n\n`;
+  if(r.detail&&r.detail.sequence) m+=`### 氨基酸序列（${r.detail.sequenceLength||r.detail.sequence.length} aa）\n\`\`\`\n${r.detail.sequence}\n\`\`\`\n\n`;
+  m+=`## 二、研究进展\n${r.research_progress}\n\n## 三、核心文献\n${r.key_findings}\n\n## 四、临床概况\n${r.clinical_landscape}\n\n`;
   m+=`## 五、药物展望\n${r.future_outlook}\n\n`;
   if(r.papers.length){ m+=`## 文献（${r.papers.length}篇）\n`; r.papers.forEach((p,i)=>m+=`${i+1}. ${p.title} — ${p.journal} (${p.year})\n`); m+="\n"; }
   if(r.trials.length){ m+=`## 临床试验（${r.trials.length}项）\n`; r.trials.forEach(t=>m+=`- ${t.id} | ${t.title} | ${t.phase} | ${t.status}\n`); m+="\n"; }
@@ -976,6 +1021,12 @@ function generatePPT(r){
   if(d&&d.proteinFamilies) lines2.push({text:"蛋白家族：",options:{bold:true}},{text:d.proteinFamilies+"\n",options:{}});
   if(d&&d.tractability&&d.tractability.length) lines2.push({text:"成药性评估：",options:{bold:true}},{text:d.tractability.join(", ")+"\n",options:{}});
   if(d&&d.relatedDiseases&&d.relatedDiseases.length) lines2.push({text:"相关疾病：",options:{bold:true}},{text:d.relatedDiseases.join(", ")+"\n",options:{}});
+  if(d&&d.sequence){
+    const seqLen=d.sequenceLength||d.sequence.length;
+    const displaySeq=d.sequence.length>200?d.sequence.slice(0,200)+"…":d.sequence;
+    lines2.push({text:"氨基酸序列（"+seqLen+" aa）：",options:{bold:true}},{text:"\n",options:{}});
+    lines2.push({text:displaySeq,options:{fontSize:9,fontFace:"Courier New"}});
+  }
   if(lines2.length) s2.addText(lines2,{x:0.5,y:1.2,w:9,h:4.5,fontSize:13,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.3,valign:"top"});
   if(r.target_overview) s2.addShape(pptx.ShapeType.rect,{x:0.5,y:5.8,w:9,h:0.04,fill:{color:COL.mid}});
 
@@ -1147,6 +1198,7 @@ function generateWord(r){
     if(d.proteinFamilies) html+=`<p><b>蛋白家族：</b>${esc(d.proteinFamilies)}</p>`;
     if(d.tractability&&d.tractability.length) html+=`<p><b>成药性评估：</b>${d.tractability.map(esc).join(", ")}</p>`;
     if(d.relatedDiseases&&d.relatedDiseases.length) html+=`<p><b>相关疾病：</b>${d.relatedDiseases.map(esc).join(", ")}</p>`;
+    if(d.sequence) html+=`<p><b>氨基酸序列（${d.sequenceLength||d.sequence.length} aa）：</b></p><div style="background:#f8f9fa;border:1px solid #bdc3c7;border-radius:6px;padding:8px;font-family:monospace;font-size:9pt;word-break:break-all;max-height:150px;overflow-y:auto">${esc(d.sequence)}</div>`;
   }
   html+=`<div class="ai-box">${esc(r.target_overview).replace(/\n/g,"<br>")}</div>`;
 
