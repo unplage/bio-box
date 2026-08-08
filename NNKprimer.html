@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NNK Primer Generator</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        background: #f0f2f5;
+        display: flex; justify-content: center;
+        padding: 1.5rem 1rem; min-height: 100vh;
+    }
+    .container {
+        background: #fff; max-width: 900px; width: 100%;
+        border-radius: 12px; padding: 1.8rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    h1 { color: #2c3e50; margin-bottom: .3rem; font-size: 1.5rem; }
+    .sub { color: #7f8c8d; font-size: .88rem; margin-bottom: 1.2rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-bottom: 1rem; }
+    @media(max-width:600px){ .grid { grid-template-columns: 1fr; } }
+    .field label { display: block; font-weight: 600; font-size: .85rem; margin-bottom: .25rem; color: #2c3e50; }
+    .field input {
+        width: 100%; padding: .55rem .8rem;
+        border: 1px solid #ccd4dd; border-radius: 6px; font-size: .95rem;
+    }
+    .field .hint { font-size: .75rem; color: #999; margin-top: .2rem; }
+    .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+    .btn {
+        padding: .55rem 1.5rem; border: none; border-radius: 6px;
+        font-size: .95rem; font-weight: 600; cursor: pointer; color: #fff;
+        background: #2e86c1; transition: .15s;
+    }
+    .btn:hover { background: #2874a6; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-dl { background: #27ae60; }
+    .btn-dl:hover { background: #229954; }
+    .stats {
+        display: flex; gap: .8rem; margin: 1rem 0; flex-wrap: wrap;
+    }
+    .stat {
+        background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 8px;
+        padding: .6rem 1rem; text-align: center; min-width: 100px;
+    }
+    .stat b { display: block; font-size: 1.4rem; color: #2e86c1; }
+    .stat span { font-size: .8rem; color: #7f8c8d; }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: .8rem; }
+    th, td { border: 1px solid #e2e8f0; padding: .45rem .6rem; text-align: left; }
+    th { background: #2e86c1; color: #fff; font-weight: 600; white-space: nowrap; }
+    tr:nth-child(even) td { background: #f8f9fa; }
+    .empty { color: #999; font-style: italic; margin-top: 1rem; }
+    .error { background: #fdecea; border: 1px solid #f5c6cb; color: #721c24;
+             padding: .6rem 1rem; border-radius: 6px; margin-top: .8rem; font-size: .9rem; }
+    textarea {
+        width: 100%; min-height: 200px; padding: .6rem; font-family: monospace;
+        font-size: .85rem; border: 1px solid #ccd4dd; border-radius: 6px;
+        resize: vertical; background: #f8f9fa;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>🧬 NNK Primer Generator</h1>
+    <p class="sub">输入 DNA 序列和参数，生成 NNK 突变引物组合</p>
+
+    <div class="grid">
+        <div class="field">
+            <label>Upper Prefix（上游前缀）</label>
+            <input type="text" id="upperInput" placeholder="例如：gccATG">
+            <div class="hint">将转为小写拼接到引物5'端</div>
+        </div>
+        <div class="field">
+            <label>Sequence（编码区序列）</label>
+            <input type="text" id="seqInput" placeholder="例如：ATGTGGTCAGCG（长度须为3的倍数）">
+        </div>
+        <div class="field">
+            <label>Number of Positions（突变位点数）</label>
+            <input type="number" id="pointInput" min="1" placeholder="例如：2">
+            <div class="hint">范围：1 ~ 密码子数</div>
+        </div>
+        <div class="field">
+            <label>Later Suffix（下游后缀）</label>
+            <input type="text" id="laterInput" placeholder="例如：tta">
+            <div class="hint">将转为小写拼接到引物3'端</div>
+        </div>
+    </div>
+
+    <div class="row">
+        <button class="btn" id="generateBtn" onclick="doGenerate()">Generate</button>
+        <button class="btn btn-dl" id="downloadBtn" onclick="doDownload()" style="display:none;">下载 primer_list.txt</button>
+    </div>
+
+    <div id="errorArea"></div>
+    <div class="stats" id="statsArea" style="display:none;"></div>
+    <div id="resultArea"></div>
+</div>
+
+<script>
+"use strict";
+
+function combinations(arr, k) {
+    const result = [];
+    function backtrack(start, combo) {
+        if (combo.length === k) { result.push([...combo]); return; }
+        for (let i = start; i < arr.length; i++) {
+            combo.push(arr[i]);
+            backtrack(i + 1, combo);
+            combo.pop();
+        }
+    }
+    backtrack(0, []);
+    return result;
+}
+
+let lastPrimers = [];
+
+function generatePrimers(upper, seq, point, later) {
+    const primers = [];
+    if (seq.length % 3 !== 0) return { error: "Sequence length must be a multiple of 3." };
+    const aaNum = seq.length / 3;
+    if (point < 1 || point > aaNum) {
+        return { error: "Number of positions must be between 1 and " + aaNum + " (number of codons)." };
+    }
+    const indices = Array.from({ length: aaNum }, (_, i) => i);
+    const combos = combinations(indices, point);
+    for (const c of combos) {
+        let primer = seq;
+        for (const idx of c) {
+            primer = primer.substring(0, 3 * idx) + "NNK" + primer.substring(3 * idx + 3);
+        }
+        primer = upper.toLowerCase() + primer + later.toLowerCase();
+        primers.push(primer);
+    }
+    return { primers };
+}
+
+function doGenerate() {
+    const upper = document.getElementById("upperInput").value.trim();
+    const seq = document.getElementById("seqInput").value.trim().toUpperCase();
+    const pointText = document.getElementById("pointInput").value.trim();
+    const later = document.getElementById("laterInput").value.trim();
+
+    const errArea = document.getElementById("errorArea");
+    const statsArea = document.getElementById("statsArea");
+    const resultArea = document.getElementById("resultArea");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    errArea.innerHTML = "";
+    statsArea.style.display = "none";
+    resultArea.innerHTML = "";
+    downloadBtn.style.display = "none";
+
+    if (!seq) { errArea.innerHTML = '<div class="error">请输入 Sequence（编码区序列）。</div>'; return; }
+    if (!pointText) { errArea.innerHTML = '<div class="error">请输入 Number of Positions（突变位点数）。</div>'; return; }
+
+    const point = parseInt(pointText, 10);
+    if (isNaN(point)) { errArea.innerHTML = '<div class="error">Number of Positions 必须为整数。</div>'; return; }
+
+    const result = generatePrimers(upper, seq, point, later);
+    if (result.error) {
+        errArea.innerHTML = '<div class="error">' + result.error + '</div>';
+        return;
+    }
+
+    lastPrimers = result.primers;
+
+    const aaNum = seq.length / 3;
+    statsArea.style.display = "flex";
+    statsArea.innerHTML =
+        '<div class="stat"><b>' + seq.length + '</b><span>序列长度 (bp)</span></div>' +
+        '<div class="stat"><b>' + aaNum + '</b><span>密码子数</span></div>' +
+        '<div class="stat"><b>' + point + '</b><span>突变位点</span></div>' +
+        '<div class="stat"><b>' + lastPrimers.length + '</b><span>引物总数</span></div>';
+
+    if (lastPrimers.length === 0) {
+        resultArea.innerHTML = '<p class="empty">未生成引物。</p>';
+    } else if (lastPrimers.length <= 200) {
+        let html = '<table><thead><tr><th>#</th><th>Primer</th></tr></thead><tbody>';
+        lastPrimers.forEach((p, i) => {
+            html += '<tr><td>' + (i + 1) + '</td><td style="font-family:monospace">' + p + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        resultArea.innerHTML = html;
+    } else {
+        resultArea.innerHTML = '<textarea readonly id="previewArea">' + lastPrimers.join('\n') + '</textarea>';
+    }
+
+    downloadBtn.style.display = "inline-block";
+}
+
+function doDownload() {
+    if (!lastPrimers.length) return;
+    const content = lastPrimers.join("\n") + "\n";
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "primer_list.txt";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+</script>
+</body>
+</html>

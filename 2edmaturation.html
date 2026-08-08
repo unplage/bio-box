@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2ED Maturation - Reverse Primer Tm Calculator</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        background: #f0f2f5;
+        display: flex; justify-content: center;
+        padding: 1.5rem 1rem; min-height: 100vh;
+    }
+    .container {
+        background: #fff; max-width: 1000px; width: 100%;
+        border-radius: 12px; padding: 1.8rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    h1 { color: #2c3e50; margin-bottom: .3rem; font-size: 1.5rem; }
+    .sub { color: #7f8c8d; font-size: .88rem; margin-bottom: 1.2rem; }
+    .section { margin-bottom: 1.2rem; }
+    .section-title { font-weight: 600; color: #2e86c1; margin-bottom: .5rem; font-size: .95rem; }
+    textarea {
+        width: 100%; min-height: 120px; padding: .6rem; font-family: monospace;
+        font-size: .85rem; border: 1px solid #ccd4dd; border-radius: 6px;
+        resize: vertical; background: #f8f9fa;
+    }
+    .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
+    .btn {
+        padding: .55rem 1.5rem; border: none; border-radius: 6px;
+        font-size: .95rem; font-weight: 600; cursor: pointer; color: #fff;
+        background: #2e86c1; transition: .15s;
+    }
+    .btn:hover { background: #2874a6; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-green { background: #27ae60; }
+    .btn-green:hover { background: #229954; }
+    .btn-orange { background: #e67e22; }
+    .btn-orange:hover { background: #d35400; }
+    .stats {
+        display: flex; gap: .8rem; margin: 1rem 0; flex-wrap: wrap;
+    }
+    .stat {
+        background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 8px;
+        padding: .6rem 1rem; text-align: center; min-width: 100px;
+    }
+    .stat b { display: block; font-size: 1.4rem; color: #2e86c1; }
+    .stat span { font-size: .8rem; color: #7f8c8d; }
+    table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-top: .8rem; }
+    th, td { border: 1px solid #e2e8f0; padding: .4rem .5rem; text-align: left; }
+    th { background: #2e86c1; color: #fff; font-weight: 600; white-space: nowrap; }
+    tr:nth-child(even) td { background: #f8f9fa; }
+    .tm-good { color: #27ae60; font-weight: 600; }
+    .tm-warn { color: #e67e22; font-weight: 600; }
+    .tm-bad { color: #e74c3c; font-weight: 600; }
+    .error { background: #fdecea; border: 1px solid #f5c6cb; color: #721c24;
+             padding: .6rem 1rem; border-radius: 6px; margin-top: .8rem; font-size: .9rem; }
+    .empty { color: #999; font-style: italic; margin-top: 1rem; }
+    .help { background: #e8f4fc; border-left: 3px solid #2e86c1; padding: .6rem .8rem;
+            border-radius: 4px; margin-bottom: 1rem; font-size: .85rem; color: #2c3e50; }
+    .help code { background: #d6eaf8; padding: .1rem .3rem; border-radius: 3px; font-family: monospace; }
+    .tabs { display: flex; gap: 0; margin-bottom: 0; }
+    .tab {
+        padding: .5rem 1rem; cursor: pointer; font-weight: 600; font-size: .88rem;
+        border: 1px solid #e2e8f0; border-bottom: none; border-radius: 6px 6px 0 0;
+        background: #f8f9fa; color: #7f8c8d; transition: .15s;
+    }
+    .tab.active { background: #fff; color: #2e86c1; border-color: #2e86c1; }
+    .tab-content {
+        border: 1px solid #e2e8f0; border-radius: 0 6px 6px 6px;
+        padding: 1rem; display: none; background: #fff;
+    }
+    .tab-content.active { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>🧬 2ED Maturation - Reverse Primer Generator</h1>
+    <p class="sub">输入含 NNK 的序列，自动生成反向引物并计算24bp截取序列的Tm值</p>
+
+    <div class="help">
+        <b>使用说明：</b>在下方粘贴 DNA 序列（每行一条），序列中需包含 <code>NNK</code>。
+        程序将截取 NNK 前24个碱基计算Tm值，并生成从截取起始位到序列末尾的反向互补序列。
+    </div>
+
+    <div class="section">
+        <div class="section-title">📥 输入序列（每行一条，须含 NNK）</div>
+        <textarea id="inputArea" placeholder="粘贴序列，例如：&#10;GCCATGNNKTGGTCAGCTAGCTAG&#10;TTAGCCATGAAANNKCGATCGATCG"></textarea>
+    </div>
+
+    <div class="row">
+        <button class="btn" id="processBtn" onclick="doProcess()">Process</button>
+        <button class="btn btn-green" id="dlPrimersBtn" onclick="downloadPrimers()" style="display:none;">下载反向引物 (primers.txt)</button>
+        <button class="btn btn-orange" id="dlTmBtn" onclick="downloadTm()" style="display:none;">下载Tm数据 (tm_values.txt)</button>
+    </div>
+
+    <div id="errorArea"></div>
+    <div class="stats" id="statsArea" style="display:none;"></div>
+
+    <div class="tabs" id="tabsArea" style="display:none;">
+        <div class="tab active" onclick="switchTab(0)">反向引物</div>
+        <div class="tab" onclick="switchTab(1)">Tm 值 + 截取序列</div>
+    </div>
+    <div class="tab-content active" id="tab0"></div>
+    <div class="tab-content" id="tab1"></div>
+</div>
+
+<script>
+"use strict";
+
+/* ── Tm 计算（移植自 snapgene_tm.py）─────────────────────────── */
+const CALIBRATION = {
+    salt_correction_factor: 1.6,
+    terminal_AT_penalty: 2.497083789430314,
+    entropy_scaling_factor: 0.9675869088668494,
+    initiation_adjustment: -0.0007103390016273732
+};
+
+const NN_DH = {
+    'AA':-7.6,'TT':-7.6,'AT':-7.2,'TA':-7.2,'CA':-8.5,'TG':-8.5,'GT':-8.4,'AC':-8.4,
+    'CT':-7.8,'AG':-7.8,'GA':-8.2,'TC':-8.2,'CG':-10.6,'GC':-10.6,'GG':-8.0,'CC':-8.0
+};
+const NN_DS = {
+    'AA':-21.3,'TT':-21.3,'AT':-20.4,'TA':-20.4,'CA':-22.7,'TG':-22.7,'GT':-22.4,'AC':-22.4,
+    'CT':-21.0,'AG':-21.0,'GA':-22.2,'TC':-22.2,'CG':-27.2,'GC':-27.2,'GG':-19.9,'CC':-19.9
+};
+
+function calculateTm(sequence, naConc, primerConc, annealingMode) {
+    naConc = naConc || 50.0;
+    primerConc = primerConc || 0.25;
+    annealingMode = annealingMode || false;
+
+    const seq = sequence.toUpperCase().replace(/\s/g, '');
+    const n = seq.length;
+    if (n < 4) throw new Error("序列太短 (" + n + " bp)，至少需要4bp");
+
+    let dH = 0.2 + CALIBRATION.initiation_adjustment * 0.05;
+    let dS = -5.7 * CALIBRATION.entropy_scaling_factor;
+
+    for (let i = 0; i < n - 1; i++) {
+        const nn = seq.substring(i, i + 2);
+        dH += NN_DH[nn];
+        dS += NN_DS[nn] * CALIBRATION.entropy_scaling_factor;
+    }
+
+    if ('AT'.includes(seq[n - 1])) {
+        dH += CALIBRATION.terminal_AT_penalty;
+        dS += 6.9;
+    }
+
+    const monovalentM = naConc / 1000.0;
+    const saltEffect = 0.368 * (n - 1) * Math.log(monovalentM) * CALIBRATION.salt_correction_factor;
+    dS += saltEffect;
+
+    const R = 1.987;
+    const Ct = primerConc * 1e-6;
+    const symFactor = annealingMode ? 1 : 4;
+    const denominator = dS + R * Math.log(Ct / symFactor);
+
+    let tm;
+    if (denominator >= 0) {
+        const gcCount = (seq.match(/[GC]/g) || []).length;
+        tm = 2 * (n - gcCount) + 4 * gcCount;
+    } else {
+        tm = (dH * 1000) / denominator - 273.15;
+    }
+    return Math.round(tm * 100) / 100;
+}
+
+/* ── 反向互补 ────────────────────────────────────────────────── */
+function reverseComplement(dna) {
+    const comp = {A:'T',T:'A',C:'G',G:'C',a:'t',t:'a',c:'g',g:'c',N:'N',K:'M',M:'K'};
+    let rc = '';
+    for (let i = dna.length - 1; i >= 0; i--) {
+        rc += comp[dna[i]] || dna[i];
+    }
+    return rc;
+}
+
+/* ── 主处理逻辑 ──────────────────────────────────────────────── */
+let lastPrimers = [];
+let lastTmData = [];
+
+function doProcess() {
+    const input = document.getElementById("inputArea").value.trim();
+    const errArea = document.getElementById("errorArea");
+    const statsArea = document.getElementById("statsArea");
+    const tabsArea = document.getElementById("tabsArea");
+    const dlPrimersBtn = document.getElementById("dlPrimersBtn");
+    const dlTmBtn = document.getElementById("dlTmBtn");
+
+    errArea.innerHTML = "";
+    statsArea.style.display = "none";
+    tabsArea.style.display = "none";
+    dlPrimersBtn.style.display = "none";
+    dlTmBtn.style.display = "none";
+    document.getElementById("tab0").innerHTML = "";
+    document.getElementById("tab1").innerHTML = "";
+
+    if (!input) {
+        errArea.innerHTML = '<div class="error">请粘贴 DNA 序列。</div>';
+        return;
+    }
+
+    const lines = input.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    lastPrimers = [];
+    lastTmData = [];
+    const warnings = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const nnkPos = line.indexOf('NNK');
+        if (nnkPos === -1) {
+            warnings.push("第 " + (i + 1) + " 条序列未找到 NNK: " + line.substring(0, 30) + (line.length > 30 ? "..." : ""));
+            continue;
+        }
+
+        // 截取 NNK 前24个碱基
+        const start = Math.max(0, nnkPos - 24);
+        const truncatedSeq = line.substring(start, nnkPos);
+        const tm = calculateTm(truncatedSeq);
+
+        // 截取完整序列（从start到末尾）
+        const fullSeq = line.substring(start);
+        const rc = reverseComplement(fullSeq);
+
+        lastPrimers.push(rc);
+        lastTmData.push({ tm, truncatedSeq, fullSeq, rc, source: line });
+    }
+
+    if (warnings.length) {
+        errArea.innerHTML = '<div class="error">' + warnings.join('<br>') + '</div>';
+    }
+
+    if (lastPrimers.length === 0) {
+        statsArea.style.display = "none";
+        return;
+    }
+
+    // Stats
+    const tmValues = lastTmData.map(d => d.tm);
+    const avgTm = (tmValues.reduce((a, b) => a + b, 0) / tmValues.length).toFixed(2);
+    const minTm = Math.min(...tmValues).toFixed(2);
+    const maxTm = Math.max(...tmValues).toFixed(2);
+
+    statsArea.style.display = "flex";
+    statsArea.innerHTML =
+        '<div class="stat"><b>' + lastPrimers.length + '</b><span>引物总数</span></div>' +
+        '<div class="stat"><b>' + avgTm + '°C</b><span>平均 Tm</span></div>' +
+        '<div class="stat"><b>' + minTm + '°C</b><span>最低 Tm</span></div>' +
+        '<div class="stat"><b>' + maxTm + '°C</b><span>最高 Tm</span></div>';
+
+    // Tab 0: primers
+    let html0 = '<table><thead><tr><th>#</th><th>反向引物序列</th></tr></thead><tbody>';
+    lastPrimers.forEach((p, i) => {
+        html0 += '<tr><td>' + (i + 1) + '</td><td style="font-family:monospace">' + p + '</td></tr>';
+    });
+    html0 += '</tbody></table>';
+    document.getElementById("tab0").innerHTML = html0;
+
+    // Tab 1: Tm details
+    let html1 = '<table><thead><tr><th>#</th><th>Tm (°C)</th><th>24bp 截取序列</th><th>反向引物</th></tr></thead><tbody>';
+    lastTmData.forEach((d, i) => {
+        const tmClass = d.tm >= 55 && d.tm <= 65 ? 'tm-good' : (d.tm >= 50 && d.tm < 70 ? 'tm-warn' : 'tm-bad');
+        html1 += '<tr><td>' + (i + 1) + '</td>' +
+            '<td class="' + tmClass + '">' + d.tm + '</td>' +
+            '<td style="font-family:monospace;font-size:.8rem">' + d.truncatedSeq + '</td>' +
+            '<td style="font-family:monospace;font-size:.8rem">' + d.rc + '</td></tr>';
+    });
+    html1 += '</tbody></table>';
+    document.getElementById("tab1").innerHTML = html1;
+
+    tabsArea.style.display = "flex";
+    dlPrimersBtn.style.display = "inline-block";
+    dlTmBtn.style.display = "inline-block";
+}
+
+function switchTab(idx) {
+    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+    document.querySelectorAll('.tab-content').forEach((c, i) => c.classList.toggle('active', i === idx));
+}
+
+function downloadPrimers() {
+    if (!lastPrimers.length) return;
+    const content = lastPrimers.join('\n') + '\n';
+    downloadFile('primer_list.txt', content);
+}
+
+function downloadTm() {
+    if (!lastTmData.length) return;
+    const content = lastTmData.map(d => d.tm + ' ' + d.truncatedSeq).join('\n') + '\n';
+    downloadFile('tm_values.txt', content);
+}
+
+function downloadFile(name, content) {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+</script>
+</body>
+</html>

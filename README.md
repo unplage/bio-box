@@ -11,6 +11,9 @@
 |:---|:---|:---|
 | 🎯 靶点调研报告生成器 | `target.html` | PWA Web 应用，一键生成靶点调研报告 |
 | 🧹 精准数据清理工具 | `clear.html` | Web 应用，用于清理和标准化数据 |
+| 🧬 BsaI 酶切位点重复分析 | `bsaitest.html` | 分析4-mer在 BsaI 位点数据库中的出现频率 |
+| 🧪 NNK 引物生成器 | `NNKprimer.html` | 输入编码区序列，生成 NNK 突变引物组合 |
+| 🔬 2ED Maturation 反向引物 | `2edmaturation.html` | 截取 NNK 前24bp 计算 Tm，生成反向互补引物 |
 | 📊 CDR 序列提取工具 | `CDR-extract-V1.2.1-260618.py` | 从 Excel/CSV 提取 CDR 序列 |
 | 🔍 CDR3/CDR2/CDR1 搜索工具 | `igblast-solo-SQLite260618-V1.3.2.py` | SQLite 数据库搜索 CDR 区域 |
 | 🧮 引物 Tm 值计算器 | `primer_Tm-calculator.py` | 批量计算引物 Tm 值 |
@@ -155,6 +158,56 @@ start target.html
 
 ---
 
+## 🧬 BsaI 酶切位点重复分析
+
+`bsaitest.html` 分析 DNA 序列中每个4-mer在 BsaI 位点数据库中的出现频率。
+
+### 功能
+
+- 输入 DNA 序列，滑动4字符窗口提取所有4-mer
+- 统计每个4-mer及其反向互补在数据库中的出现次数
+- 显示所有位点（含0次），支持下载结果
+
+### 使用
+
+直接用浏览器打开 `bsaitest.html`，输入序列点击「分析」即可。
+
+---
+
+## 🧪 NNK 引物生成器
+
+`NNKprimer.html` 输入编码区序列，自动生成 NNK 突变引物组合。
+
+### 功能
+
+- 输入 Upper Prefix、编码区序列、突变位点数、Later Suffix
+- 使用组合数学生成所有可能的 NNK 替换位置
+- 支持下载 `primer_list.txt`
+
+### 使用
+
+直接用浏览器打开 `NNKprimer.html`，填写参数点击「Generate」即可。
+
+---
+
+## 🔬 2ED Maturation 反向引物生成器
+
+`2edmaturation.html` 处理含 NNK 的序列，自动生成反向引物并计算 Tm 值。
+
+### 功能
+
+- 输入含 NNK 的 DNA 序列（每行一条）
+- 截取 NNK 前24个碱基，使用 SantaLucia 2004 热力学参数计算 Tm
+- 生成从截取起始位到序列末尾的反向互补序列
+- 支持下载 `primer_list.txt` 和 `tm_values.txt`
+
+### Tm 计算参数
+
+- 校准基于56条序列（RMSE: 1.16°C）
+- 默认条件：Na⁺ 50mM，引物浓度 0.25µM
+
+---
+
 ## 🧹 精准数据清理工具
 
 `clear.html` 是一个 Web 数据清理工具，用于：
@@ -222,6 +275,13 @@ python primer_Tm-calculator.py
 ---
 
 ## 📝 更新日志
+
+### v2.1 (2026-08-08)
+
+- ✨ 新增 `bsaitest.html` - BsaI 酶切位点重复分析
+- ✨ 新增 `NNKprimer.html` - NNK 引物生成器
+- ✨ 新增 `2edmaturation.html` - 2ED Maturation 反向引物生成器
+- 🐛 修复 `target.html` PDB 搜索查询逻辑
 
 ### v2.0 (2026-08-07)
 
