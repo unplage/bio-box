@@ -415,19 +415,25 @@ async function getPDB(gene,uniprotAcc){
     // Step 1: 使用 Search API 搜索 PDB 结构
     const nodes=[];
     if(uniprotAcc){
+      // 按 UniProt 登录号搜索（官方推荐模式：database_accession + database_name = "UniProt"）
       nodes.push({type:"terminal",service:"text",parameters:{
         attribute:"rcsb_polymer_entity_container_identifiers.reference_sequence_identifiers.database_accession",
         operator:"exact_match",value:uniprotAcc,
         negation:false}});
-    }
-    if(gene){
       nodes.push({type:"terminal",service:"text",parameters:{
         attribute:"rcsb_polymer_entity_container_identifiers.reference_sequence_identifiers.database_name",
         operator:"exact_match",value:"UniProt",
         negation:false}});
+    } else if(gene){
+      // 仅按基因名搜索（使用 organism gene name 属性，区分大小写）
+      nodes.push({type:"terminal",service:"text",parameters:{
+        attribute:"rcsb_entity_source_organism.rcsb_gene_name.value",
+        operator:"exact_match",value:gene,
+        case_sensitive:true,
+        negation:false}});
     }
     if(!nodes.length) return [];
-    const searchBody={query:{type:"group",logical_operator:"and",nodes:nodes},
+    const searchBody={query:nodes.length===1?nodes[0]:{type:"group",logical_operator:"and",nodes:nodes},
       return_type:"entry",
       request_options:{results_content_type:["experimental"],
         sort:[{sort_by:"score",direction:"desc"}],
