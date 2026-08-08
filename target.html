@@ -148,6 +148,37 @@
                     </div>
                     <div class="hint">Google Patents 免 Key 但需跨域代理，内置自动尝试 r.jina.ai 兜底，失败会自动回退免Key MCP；Espacenet 需在 data.epo.org 免费注册申请，Key 填「client_id client_secret」；USPTO/Lens 需 Key；MCP 为 streamable-HTTP 端点，可选 Bearer Key。</div>
                 </div>
+                <div>
+                    <span class="lbl">文献年份范围</span>
+                    <select id="yearRange" class="grow">
+                        <option value="20">近20年（默认）</option>
+                        <option value="10">近10年</option>
+                        <option value="5">近5年</option>
+                        <option value="0">全部年份</option>
+                    </select>
+                    <div class="hint">控制 PubMed 文献检索的时间窗口。</div>
+                </div>
+                <div>
+                    <span class="lbl">NCBI E-utilities Key（可选）</span>
+                    <input type="password" id="ncbiKey" placeholder="NCBI API Key（提升 PubMed 配额，可留空）">
+                    <div class="hint">在 https://www.ncbi.nlm.nih.gov/account/settings/ 免费申请。</div>
+                </div>
+            </div>
+            <div class="grid2">
+                <div>
+                    <span class="lbl">临床国际覆盖</span>
+                    <div class="chk">
+                        <label><input type="checkbox" id="intlTrials"> 🌍 追加 EU CTIS / WHO ICTRP（实验性，默认关）</label>
+                    </div>
+                    <div class="hint">主检索始终含 ClinicalTrials.gov 的试验国家字段；开启后额外尝试 EU/WHO 源，失败自动跳过。</div>
+                </div>
+                <div>
+                    <span class="lbl">AI 与保存</span>
+                    <div class="chk">
+                        <label><input type="checkbox" id="aiCites" checked> 📚 AI 结构化引用（论断带来源）</label>
+                        <label><input type="checkbox" id="saveHist" checked> 🕘 完成后自动保存历史</label>
+                    </div>
+                </div>
             </div>
             <div style="margin-top:.8rem;">
                 <label class="chk"><input type="checkbox" id="useLLM" checked> 🧠 用 AI 基于已检索数据增强报告、做综合研判与专利解读</label>
@@ -173,10 +204,38 @@
                 <button class="btn btn-ghost" id="dlJson">⬇ 下载 JSON</button>
                 <button class="btn btn-ppt" id="dlPPT">📑 下载 PPT</button>
                 <button class="btn btn-word" id="dlWord">📝 下载 Word</button>
+                <button class="btn btn-ghost" id="dlHtml">🖥 下载 HTML</button>
+                <button class="btn btn-ghost" id="printBtn">🖨 打印/PDF</button>
                 <button class="btn btn-ghost" id="copyText">📋 复制 Markdown</button>
+                <button class="btn btn-ghost" id="saveBtn">💾 保存历史</button>
             </div>
         </div>
+        <div class="card">
+            <div class="lbl" style="margin-top:0;">💬 追问（基于本报告语义检索 + AI）</div>
+            <div class="row" style="flex-wrap:nowrap;">
+                <input type="text" id="askInput" class="grow" placeholder="例如：哪些临床试验失败？主要申请人是谁？">
+                <button class="btn btn-ghost" id="askBtn" style="flex:0 0 auto;">追问</button>
+            </div>
+            <div id="askResult" class="note" style="display:none;"></div>
+        </div>
         <div id="sections"></div>
+    </div>
+
+    <div class="card">
+        <div class="row">
+            <h2 style="font-size:1.1rem;color:var(--mid);margin:0">🕘 历史报告（IndexedDB 本地保存）</h2>
+            <div class="grow"></div>
+            <button class="btn btn-ghost" id="histRefresh">🔄 刷新</button>
+            <button class="btn btn-ghost" id="histCompare">📊 对比所选</button>
+            <button class="btn btn-ghost" id="histClear">🗑 清空</button>
+        </div>
+        <div id="histWrap" class="hidden">
+            <table id="histTable" style="margin-top:.6rem;">
+                <thead><tr><th>选择</th><th>靶点</th><th>生成时间</th><th>文献</th><th>临床</th><th>药物</th><th>专利</th><th>AI增强</th><th>操作</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="empty" id="histEmpty" style="margin-top:.5rem;">暂无历史报告。</div>
     </div>
 
     <footer>
@@ -230,6 +289,152 @@ async function reqJson(url,opts){
   return j;
 }
 
+/* ── 靶点名解析（基因 + 可选突变）──────────────────────── */
+function parseTarget(name){
+  const raw=String(name||"").trim();
+  // 匹配 Gene + 突变：EGFR T790M / KRAS G12C / BRAF-V600E / EGFR.T790M / PIK3CA H1047R
+  const m=raw.match(/^([A-Za-z][A-Za-z0-9\-]*)[\s+\-._]+([A-Za-z]{1,3}\d{1,4}[A-Za-z]{0,2})$/);
+  if(m&&/^[A-Za-z]{1,3}\d/.test(m[2])) return {gene:m[1], mutation:m[2], raw};
+  return {gene:raw, mutation:"", raw};
+}
+/* ── 指数退避请求（含重试；429/5xx 重试）─────────────── */
+async function qFetch(url,opts,{retries=3,baseDelay=1000,signal}={}){
+  let last;
+  for(let i=0;i<=retries;i++){
+    if(STOP) throw new Error("已取消");
+    try{
+      const r=await fetch(url,opts);
+      const retryable=r.status===429||r.status>=500;
+      if(!retryable) return r;
+      last=new Error("HTTP "+r.status);
+    }catch(e){ last=e; }
+    if(i<retries){ await new Promise(res=>setTimeout(res,baseDelay*Math.pow(2,i))); }
+  }
+  throw last||new Error("请求失败");
+}
+
+/* ── 本地历史与缓存（IndexedDB，失败降级 localStorage）────── */
+let _DB=null, _DBFailed=false;
+function dbReq(store,mode,fn){
+  return new Promise((resolve,reject)=>{
+    const tx=_DB.transaction(store,mode);
+    const req=fn(tx.objectStore(store));
+    tx.oncomplete=()=>resolve(req.result);
+    tx.onerror=()=>reject(tx.error||new Error("DB error"));
+    tx.onabort=()=>reject(tx.error||new Error("DB aborted"));
+  });
+}
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    if(_DB) return resolve(_DB);
+    if(_DBFailed) return reject(new Error("IndexedDB 不可用"));
+    if(!(window.indexedDB)){ _DBFailed=true; reject(new Error("IndexedDB 不可用")); return; }
+    const req=window.indexedDB.open("targetinfo",1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains("reports")){
+        const os=db.createObjectStore("reports",{keyPath:"id"});
+        os.createIndex("created","created");
+      }
+      if(!db.objectStoreNames.contains("cache")){
+        db.createObjectStore("cache",{keyPath:"key"});
+      }
+    };
+    req.onsuccess=()=>{ _DB=req.result; resolve(_DB); };
+    req.onerror=()=>{ _DBFailed=true; reject(req.error||new Error("openDB error")); };
+  });
+}
+function dbGet(store,key){
+  if(_DB) return dbReq(store,"readonly",os=>os.get(key));
+  return Promise.reject(new Error("DB closed"));
+}
+function dbPut(store,obj){
+  if(_DB) return dbReq(store,"readwrite",os=>os.put(obj));
+  return Promise.reject(new Error("DB closed"));
+}
+function dbDel(store,key){
+  if(_DB) return dbReq(store,"readwrite",os=>os.delete(key));
+  return Promise.reject(new Error("DB closed"));
+}
+function dbAll(store){
+  if(_DB) return dbReq(store,"readonly",os=>os.getAll());
+  return Promise.reject(new Error("DB closed"));
+}
+function dbClear(store){
+  if(_DB) return dbReq(store,"readwrite",os=>os.clear());
+  return Promise.reject(new Error("DB closed"));
+}
+async function saveReport(report,errs){
+  const rec={id:(report.targetName||"target")+"_"+Date.now(), target:report.targetName,
+    createdAt:Date.now(), errs:errs||[], report,
+    counts:{papers:(report.papers||[]).length,trials:(report.trials||[]).length,
+      drugs:(report.drugs||[]).length,patents:(report.patents||[]).length},
+    aiEnhanced:!!report.patent_landscape||!!report.web_summary};
+  try{ await openDB(); await dbPut("reports",rec); return rec; }
+  catch(e){
+    // 降级：localStorage 存 meta+md
+    try{
+      const md=markdown(report);
+      const meta={id:rec.id,target:rec.target,createdAt:rec.createdAt,counts:rec.counts,aiEnhanced:rec.aiEnhanced,md};
+      const list=JSON.parse(localStorage.getItem("tr-hist")||"[]");
+      list.unshift(meta); localStorage.setItem("tr-hist",JSON.stringify(list.slice(0,30)));
+      return meta;
+    }catch(e2){ return null; }
+  }
+}
+async function listReports(){
+  try{ await openDB(); const all=await dbAll("reports");
+    return all.sort((a,b)=>b.createdAt-a.createdAt).map(r=>({id:r.id,target:r.target,createdAt:r.createdAt,counts:r.counts,aiEnhanced:r.aiEnhanced}));
+  }catch(e){
+    try{ return JSON.parse(localStorage.getItem("tr-hist")||"[]"); }catch(e2){ return []; }
+  }
+}
+async function loadReport(id){
+  try{ await openDB(); const r=await dbGet("reports",id); return r&&r.report||null; }
+  catch(e){
+    try{ const list=JSON.parse(localStorage.getItem("tr-hist")||"[]"); const m=list.find(x=>x.id===id);
+      if(!m) return null;
+      return {targetName:m.target,papers:[],trials:[],drugs:[],patents:[],molecules:[],target_overview:"",research_progress:"",clinical_landscape:"",key_findings:"",future_outlook:"",web_summary:m.aiEnhanced?"（历史降级记录，无完整数据）":"",patent_landscape:"",_histMD:m.md};
+    }catch(e2){ return null; }
+  }
+}
+async function deleteReport(id){
+  try{ await openDB(); await dbDel("reports",id); return true; }
+  catch(e){
+    try{ const list=JSON.parse(localStorage.getItem("tr-hist")||"[]");
+      localStorage.setItem("tr-hist",JSON.stringify(list.filter(x=>x.id!==id))); return true; }catch(e2){ return false; }
+  }
+}
+async function clearAllReports(){
+  try{ await openDB(); await dbClear("reports"); return true; }
+  catch(e){ try{ localStorage.removeItem("tr-hist"); return true; }catch(e2){ return false; } }
+}
+/* 缓存：key=源+靶点，TTL 24h */
+async function cacheGet(key){
+  try{ await openDB(); const r=await dbGet("cache",key);
+    if(r&&r.cachedAt&&(Date.now()-r.cachedAt<24*3600*1000)) return r.value;
+    return null; }catch(e){ return null; }
+}
+async function cacheSet(key,value){
+  try{ await openDB(); await dbPut("cache",{key,cachedAt:Date.now(),value}); }catch(e){}
+}
+/* 简单并发限制器（≤4 并行） */
+function makeLimiter(max){
+  let active=0; const queue=[];
+  function next(){ if(active>=max||!queue.length) return; active++; const {fn,res,rej}=queue.shift();
+    Promise.resolve().then(fn).then(v=>{active--; res(v); next();},e=>{active--; rej(e); next();}); }
+  return fn=>new Promise((res,rej)=>{ queue.push({fn,res,rej}); next(); });
+}
+const limiter=makeLimiter(4);
+/* 带缓存的源检索包装 */
+async function cachedSearch(key,fn){
+  const cached=await cacheGet(key).catch(()=>null);
+  if(cached) return {data:cached, cached:true};
+  const data=await limiter(fn);
+  await cacheSet(key,data).catch(()=>{});
+  return {data, cached:false};
+}
+
 /* ── LLM 供应商（OpenAI 兼容）──────────────────────────────── */
 const PROVIDERS = {
   deepseek:{ name:"DeepSeek", base:"https://api.deepseek.com/v1",
@@ -269,25 +474,33 @@ function expandTerms(t){
 }
 
 /* ── PubMed ─────────────────────────────────────────────────── */
+function ncbiKey(){ return ($("ncbiKey")?$("ncbiKey").value:"").trim(); }
+function ncbiParams(extra){
+  const k=ncbiKey(); return Object.assign({},extra, k?{api_key:k}:{});
+}
+async function esearchPubMed(term,maxResults){
+  const yrRaw=($("yearRange")?$("yearRange").value:"20")||"20";
+  const now=new Date().getFullYear();
+  const base={db:"pubmed",term,retmax:maxResults,retmode:"json",sort:"relevance"};
+  if(yrRaw&&yrRaw!=="0"){ base.mindate=now-Number(yrRaw); base.maxdate=now; base.datetype="pdat"; }
+  const u="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"+new URLSearchParams(ncbiParams(base)).toString();
+  const r=await qFetch(u,{},{retries:2});
+  if(!r.ok) throw new Error("PubMed esearch HTTP "+r.status);
+  const j=await r.json().catch(()=>null);
+  return (j&&j.esearchresult&&j.esearchresult.idlist)||[];
+}
 async function searchPapers(target,maxResults){
   const terms=expandTerms(target);
   const q=terms.map(x=>"("+x+"[Title/Abstract])").join(" OR ");
-  const now=new Date().getFullYear();
   let idList=[];
-  const esearch=async term=>{
-    const u="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"+new URLSearchParams({
-      db:"pubmed",term,retmax:maxResults,retmode:"json",sort:"relevance",
-      mindate:now-20,maxdate:now,datetype:"pdat"}).toString();
-    const r=await reqJson(u); return (r.esearchresult&&r.esearchresult.idlist)||[];
-  };
   try{
-    idList=await esearch(`(${q}) AND (review[pt] OR clinical trial[pt] OR systematic review[pt])`);
-    if(!idList.length) idList=await esearch(`(${q})`);
+    idList=await esearchPubMed(`(${q}) AND (review[pt] OR clinical trial[pt] OR systematic review[pt])`,maxResults);
+    if(!idList.length) idList=await esearchPubMed(`(${q})`,maxResults);
   }catch(e){ return []; }
   if(!idList.length) return [];
-  const u="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?"+new URLSearchParams({
-    db:"pubmed",id:idList.join(","),retmode:"xml",rettype:"abstract"}).toString();
-  const r=await withFetch(u);
+  const u="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?"+new URLSearchParams(ncbiParams({
+    db:"pubmed",id:idList.join(","),retmode:"xml",rettype:"abstract"})).toString();
+  const r=await qFetch(u,{},{retries:2});
   if(!r.ok) throw new Error("PubMed efetch HTTP "+r.status);
   const xml=await r.text();
   return parsePubMedXML(xml);
@@ -307,8 +520,16 @@ function parsePubMedXML(xml){
       if(ab) ab.querySelectorAll("AbstractText").forEach(t=>{ const l=t.getAttribute("Label"); a+=(l?l+": ":"")+t.textContent+" "; });
       const authors=[]; article.querySelectorAll("AuthorList > Author").forEach(x=>{ const ln=(x.querySelector("LastName")||{}).textContent||""; const fn=(x.querySelector("ForeName")||{}).textContent||""; if(ln) authors.push(ln+(fn?" "+fn:"")); });
       const kw=[]; ml.querySelectorAll("KeywordList Keyword").forEach(k=>{ if(k.textContent) kw.push(k.textContent); });
+      const mesh=[]; ml.querySelectorAll("MeshHeading").forEach(mh=>{
+        const d=mh.querySelector("DescriptorName"); const dName=d&&d.textContent||"";
+        const qs=[]; mh.querySelectorAll("QualifierName").forEach(q=>{ if(q.textContent) qs.push(q.textContent); });
+        if(dName) mesh.push(qs.length?dName+" / "+qs.join(" / "):dName);
+      });
+      const pubType=[]; ml.querySelectorAll("PublicationType").forEach(pt=>{ if(pt.textContent) pubType.push(pt.textContent); });
+      const journalCountry=((ml.querySelector("MedlineJournalInfo Country")||{}).textContent)||"";
       let doi=""; art.querySelectorAll("ArticleIdList ArticleId").forEach(a=>{ if(a.getAttribute("IdType")==="doi") doi=a.textContent; });
-      out.push({pmid,title,journal,year,doi,authors:authors.slice(0,5),abstract:a.trim().slice(0,2000),keywords:kw.slice(0,10)});
+      out.push({pmid,title,journal,year,doi,authors:authors.slice(0,5),abstract:a.trim().slice(0,2000),
+        keywords:kw.slice(0,10), mesh:mesh.slice(0,8), pubType:pubType.slice(0,6), journalCountry});
     }catch(e){}
   });
   return out.filter(p=>p.title);
@@ -318,7 +539,7 @@ function parsePubMedXML(xml){
 async function searchTrials(target,maxResults){
   const u="https://clinicaltrials.gov/api/v2/studies?"+new URLSearchParams({
     "query.term":expandTerms(target).join(" OR "),pageSize:Math.min(maxResults,100),format:"json",
-    fields:"NCTId|BriefTitle|OverallStatus|Phase|Condition|InterventionType|InterventionName|LeadSponsorName|StartDate|CompletionDate|BriefSummary|EnrollmentCount",
+    fields:"NCTId|BriefTitle|OverallStatus|Phase|Condition|InterventionType|InterventionName|LeadSponsorName|StartDate|CompletionDate|BriefSummary|EnrollmentCount|LocationCountry",
     "filter.overallStatus":"ACTIVE_NOT_RECRUITING|COMPLETED|RECRUITING|NOT_YET_RECRUITING|ENROLLING_BY_INVITATION|AVAILABLE"}).toString();
   const data=await reqJson(u);
   const PHASE_MAP={"EARLY_PHASE1":"Phase 1(早期)","PHASE1":"Phase 1","PHASE2":"Phase 2","PHASE3":"Phase 3","PHASE4":"Phase 4"};
@@ -328,6 +549,7 @@ async function searchTrials(target,maxResults){
     const st=s.statusSection||{};
     const idm=p.identificationModule||{}, dm=p.designModule||{}, sm=p.statusModule||{};
     const phRaw=(dm.phases&&dm.phases[0])||"";
+    const cc=(p.contactsLocationsModule&&p.contactsLocationsModule.locations||[]).map(l=>l.country).filter(Boolean);
     return {
       id:(idm.nctId)||"", title:(idm.briefTitle)||"", phase:PHASE_MAP[phRaw]||phRaw||"",
       status:st.overallStatus||(sm.overallStatus)||"",
@@ -337,9 +559,52 @@ async function searchTrials(target,maxResults){
       startDate:(sm.startDateStruct&&sm.startDateStruct.date)||fmt(sm.startDate)||"",
       completionDate:(sm.completionDateStruct&&sm.completionDateStruct.date)||fmt(sm.completionDate)||"",
       briefSummary:(p.descriptionModule&&p.descriptionModule.briefSummary||"").slice(0,1000),
-      enrollment:(dm.enrollmentInfo&&dm.enrollmentInfo.count)||0
+      enrollment:(dm.enrollmentInfo&&dm.enrollmentInfo.count)||0,
+      countries:[...new Set(cc)].slice(0,10),
+      source:"ClinicalTrials.gov"
     };
   });
+}
+/* 实验性国际源（EU CTIS / WHO ICTRP）：失败即返回 []，绝不中断主流程 */
+async function searchEUCtis(target){
+  try{
+    const u="https://www.clinicaltrialsregister.eu/ctr-search/rest/search?query="+encodeURIComponent(expandTerms(target).join(" OR "))+"&num=10";
+    const r=await qFetch(u,{headers:{Accept:"application/json"}},{retries:1});
+    if(!r.ok) return [];
+    const d=await r.json().catch(()=>null);
+    const arr=(d&&(d.eudractNumber||[]))||[];
+    if(!arr.length) return [];
+    return arr.map(x=>({id:typeof x==="string"?x:(x&&x.value)||"", title:"EU CTIS 试验",
+      phase:"", status:"", conditions:[], interventions:[], sponsor:"",
+      startDate:"", completionDate:"", briefSummary:"", enrollment:0,
+      countries:["EU"], source:"EUCtis"})).filter(t=>t.id).slice(0,10);
+  }catch(e){ return []; }
+}
+async function searchICTRP(target){
+  try{
+    const u="https://trialsearch.who.int/api/v4/0/api/1/search/trials?query="+encodeURIComponent(target)+"&size=10";
+    const r=await qFetch(u,{headers:{Accept:"application/json"}},{retries:1});
+    if(!r.ok) return [];
+    const d=await r.json().catch(()=>null);
+    const arr=(d&&d.trials)||(d&&d.data&&d.data.trials)||[];
+    if(!arr.length) return [];
+    return arr.map(x=>({id:(x.trialID||x.trial_id||x.sourceId||""), title:(x.title||x.trial_name||""),
+      phase:(x.phase||"").join?((x.phase||[]).join(", ")):(x.phase||""),
+      status:(x.recruitment_status||x.status||""),
+      conditions:[x.condition||""].filter(Boolean), interventions:(x.intervention||[]).filter(Boolean),
+      sponsor:(x.sponsor||x.primary_sponsor||""), startDate:x.recruitment_start_date||"",
+      completionDate:x.recruitment_end_date||"", briefSummary:(x.summary||"").slice(0,500), enrollment:0,
+      countries:[x.countries||""].filter(Boolean), source:"WHO ICTRP"})).filter(t=>t.id||t.title).slice(0,10);
+  }catch(e){ return []; }
+}
+async function searchTrialsIntl(target,maxResults){
+  const nct=await searchTrials(target,maxResults);
+  if(!($("intlTrials")&&$("intlTrials").checked)) return nct;
+  const [eu,who]=await Promise.all([searchEUCtis(target).catch(()=>[]), searchICTRP(target).catch(()=>[])]);
+  const seen=new Set(nct.map(t=>t.id));
+  const extra=[];
+  eu.concat(who).forEach(t=>{ if(t.id&&!seen.has(t.id)){ seen.add(t.id); extra.push(t); } });
+  return nct.concat(extra);
 }
 
 /* ── Open Targets GraphQL ───────────────────────────────────── */
@@ -398,16 +663,32 @@ async function enrichCompany(drugs){
 }
 
 /* ── UniProt（蛋白功能/定位）───────────────────────────────── */
-async function getUniProt(gene){
-  if(!gene) return null;
+function uniProtPick(res,gene){
+  const human=res.filter(x=>x.organism&&x.organism.scientificName==="Homo sapiens");
+  const pool=human.length?human:res;
+  const rev=pool.find(x=>/reviewed/i.test(String(x.entryType||"")))||pool[0];
+  return rev;
+}
+async function uniProtSearch(query,size){
   const u="https://rest.uniprot.org/uniprotkb/search?"+new URLSearchParams({
-    query:`gene:${gene} AND organism_id:9606`,
-    format:"json", size:"5",
+    query,format:"json",size:String(size||"5"),
     fields:"accession,protein_name,cc_subcellular_location,cc_function,protein_families,sequence"}).toString();
   const d=await reqJson(u);
-  const res=(d&&d.results)||[];
+  return (d&&d.results)||[];
+}
+async function getUniProt(gene,aliases){
+  if(!gene) return null;
+  let res=[];
+  try{ res=await uniProtSearch(`gene:${gene} AND organism_id:9606`,5); }catch(e){}
+  if(!res.length&&Array.isArray(aliases)&&aliases.length){
+    for(const al of aliases.slice(0,3)){
+      if(!al) continue;
+      try{ res=await uniProtSearch(`gene_name:${al} AND organism_id:9606`,5); }catch(e){}
+      if(res.length) break;
+    }
+  }
   if(!res.length) return null;
-  const r0=res.find(x=>/reviewed/i.test(String(x.entryType||"")))||res[0];
+  const r0=uniProtPick(res,gene);
   const comments=r0.comments||[];
   const val=(type,key)=>comments.filter(c=>c.commentType===type)
     .map(c=>(c[key]||[]).map(s=>typeof s==="object"&&s.location?s.location.value:(s&&(s.value!==undefined?s.value:s))).filter(Boolean).join("; ")).filter(Boolean);
@@ -500,7 +781,11 @@ async function getHPA(gene){
   const u="https://www.proteinatlas.org/api/search_download.php?"+new URLSearchParams({
     search:gene, format:"json", columns:cols, compress:"no"}).toString();
   const d=await reqJson(u);
-  const o=(Array.isArray(d)?d[0]:{})||{};
+  const arr=Array.isArray(d)?d:[];
+  if(!arr.length) return null;
+  const gl=String(gene).toLowerCase();
+  const o=arr.find(x=>x&&String(x["Gene"]||"").toLowerCase()===gl)
+    ||arr.find(x=>x&&(x["Gene"]||x["Protein class"]))||arr[0];
   if(!o||(!o["Gene"]&&!o["Protein class"])) return null;
   const L=k=>{ const v=o[k]; return Array.isArray(v)?v.filter(Boolean).join("; "):String(v==null?"":v); };
   return {
@@ -527,19 +812,40 @@ async function getChEMBL(name){
   const t=targets.find(x=>x.organism==="Homo sapiens")||targets[0];
   if(!t||!t.target_chembl_id) return [];
   const u="https://www.ebi.ac.uk/chembl/api/data/activity?"+new URLSearchParams({
-    target_chembl_id:t.target_chembl_id,limit:"40",offset:"0"}).toString();
+    target_chembl_id:t.target_chembl_id,limit:"100",offset:"0"}).toString();
   const dm=await reqJson(u,{headers:{Accept:"application/json"}});
   const acts=(dm&&dm.activities)||[];
   const map={};
+  const TYPE_ORDER=["IC50","EC50","Ki","Kd","CC50","GI50","ED50"];
   acts.forEach(a=>{
     const mid=a.molecule_chembl_id; if(!mid) return;
     const pc=parseFloat(a.pchembl_value);
+    const stype=String(a.standard_type||"").toUpperCase();
+    const sval=a.standard_value!=null?parseFloat(a.standard_value):NaN;
+    const rec={stype, sval:isNaN(sval)?null:sval, units:a.standard_units||"",
+      pchembl:isNaN(pc)?null:pc, assay_type:a.assay_type||""};
     const prev=map[mid];
-    if(!prev||(!isNaN(pc)&&(prev.potency==null||pc>prev.potency))) map[mid]={potency:isNaN(pc)?null:pc, chembl:mid, name:a.molecule_pref_name||""};
+    if(!prev){
+      map[mid]={potency:isNaN(pc)?null:pc, chembl:mid, name:a.molecule_pref_name||"",
+        details:stype&&!isNaN(sval)?[rec]:[]};
+      return;
+    }
+    if(!isNaN(pc)&&(prev.potency==null||pc>prev.potency)){ prev.potency=pc; prev.name=a.molecule_pref_name||prev.name; }
+    if(stype&&!isNaN(sval)){
+      const ex=prev.details.find(d=>d.stype===stype);
+      if(!ex) prev.details.push(rec);
+      else if(pc&&!isNaN(pc)&&pc>(ex.pchembl||0)) prev.details[prev.details.indexOf(ex)]=rec;
+    }
   });
-  return Object.values(map).sort((a,b)=>(a.potency==null? -1 : a.potency)<(b.potency==null? -1: b.potency)?1:-1)
-    .map(x=>({name:x.name||x.chembl||"",chembl:x.chembl,pchembl:x.potency==null?"":x.potency.toFixed(2),targetChembl:t.target_chembl_id}))
-    .slice(0,8);
+  const out=Object.values(map).sort((a,b)=>(a.potency==null? -1 : a.potency)<(b.potency==null? -1: b.potency)?1:-1)
+    .map(x=>{
+      const dArr=x.details.sort((a,b)=>TYPE_ORDER.indexOf(a.stype)-TYPE_ORDER.indexOf(b.stype));
+      const best=dArr[0];
+      return {name:x.name||x.chembl||"",chembl:x.chembl,pchembl:x.potency==null?"":x.potency.toFixed(2),targetChembl:t.target_chembl_id,
+        bestType:best?best.stype:"", bestVal:best?(best.sval!=null?best.sval+(best.units?" "+best.units:""):""):"",
+        details:dArr.slice(0,8).map(d=>({type:d.stype,val:d.sval!=null?(String(d.sval)+(d.units?" "+d.units:"")):"",pchembl:d.pchembl!=null?d.pchembl.toFixed(2):""}))};
+    }).slice(0,8);
+  return out;
 }
 
 /* ── 专利调研 ───────────────────────────────────────────────── */
@@ -1031,6 +1337,52 @@ async function llmChat(user,{system,webSearch}={}){
   }
   throw last||new Error("AI 调用失败");
 }
+/* 结构化 JSON 输出：优先 response_format，失败回退纯文本解析 */
+async function llmJson(user,{system}={}){
+  const p=activeProvider(), key=$("apiKey").value.trim();
+  if(!key) throw new Error("请先在设置中填写 "+p.name+" 的 API Key");
+  if(!p.base) throw new Error("自定义接口请先在设置中填写 Base URL");
+  const messages=system?[{role:"system",content:system},{role:"user",content:user}]:[{role:"user",content:user}];
+  const pr=($("corsProxy").value||"").trim();
+  const urls=(pr?[pr+p.base.replace(/^https?:\/\//,"")+"/chat/completions"]:[]);
+  urls.push(p.base+"/chat/completions");
+  let last;
+  // 策略 1：response_format json_object
+  for(const u of urls){
+    try{
+      const body={model:p.model,messages,temperature:0.4,stream:false,response_format:{type:"json_object"}};
+      const r=await fetch(u,{method:"POST",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok) continue;
+      const t=j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||"";
+      const cleaned=String(t).replace(/^```json\s*/,"").replace(/```\s*$/,"").trim();
+      try{ const o=JSON.parse(cleaned); if(o&&typeof o==="object") return o; }catch(e){}
+    }catch(e){ last=e; }
+  }
+  // 策略 2：普通聊天，提示返回 JSON
+  for(const u of urls){
+    try{
+      const body={model:p.model,messages,temperature:0.4,stream:false};
+      const r=await fetch(u,{method:"POST",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok) continue;
+      const t=j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||"";
+      const m=t.match(/\{[\s\S]*\}/);
+      if(m){ try{ const o=JSON.parse(m[0]); if(o&&typeof o==="object") return o; }catch(e){} }
+    }catch(e){ last=e; }
+  }
+  throw last||new Error("AI 结构化输出失败");
+}
+function extractRefs(str){
+  if(!str) return [];
+  const refs=new Set();
+  (str.match(/PMID:\s*(\d+)/g)||[]).forEach(x=>refs.add(x.replace(/PMID:\s*/,"PMID:")));
+  (str.match(/NCT\d+/g)||[]).forEach(x=>refs.add(x));
+  (str.match(/US\d+[A-Z]\d*/g)||[]).forEach(x=>refs.add(x));
+  (str.match(/EP\d+[A-Z]\d*/g)||[]).forEach(x=>refs.add(x));
+  (str.match(/https?:\/\/[^\s\]\\)]+/g)||[]).forEach(x=>refs.add(x));
+  return [...refs].slice(0,20);
+}
 async function llmChatWithSearch(user,{system}={}){
   const p=activeProvider(), key=$("apiKey").value.trim();
   if(!key) throw new Error("请先在设置中填写 "+p.name+" 的 API Key");
@@ -1074,14 +1426,17 @@ function countPhase(t){ const m={}; t.forEach(x=>{ const k=x.phase||"未明确";
 function countStatus(t){ const m={}; t.forEach(x=>{ const k=x.status||"未知"; m[k]=(m[k]||0)+1; }); return m; }
 function condsText(t){ const s=new Set(); t.forEach(x=>(x.conditions||[]).forEach(c=>{ if(c) s.add(c); })); return [...s].slice(0,8).join("、")||"—"; }
 function buildReport(o){
-  const r={ targetName:o.name, detail:o.detail, papers:o.papers||[], trials:o.trials||[], drugs:o.drugs||[],
+  const r={ targetName:o.name, gene:o.gene||"", mutation:o.mutation||"", detail:o.detail,
+            papers:o.papers||[], trials:o.trials||[], drugs:o.drugs||[],
             patents:o.patents||[], molecules:o.molecules||[], patentInsight:o.patentInsight||null, patentNote:o.patentNote||"",
             target_overview:"", research_progress:"", clinical_landscape:"",
-            key_findings:"", future_outlook:"", web_summary:"", patent_landscape:"" };
+            key_findings:"", future_outlook:"", web_summary:"", patent_landscape:"",
+            cachedFlags:[], incrementNote:"" };
   const d=r.detail;
   if(d&&d.geneSymbol){
     const parts=["靶点: "+o.name];
     if(d.geneSymbol) parts.push("基因: "+d.geneSymbol);
+    if(o.mutation) parts.push("突变: "+o.mutation);
     if(d.proteinClass) parts.push("蛋白类别: "+d.proteinClass);
     if(d.proteinName) parts.push("蛋白全名: "+d.proteinName);
     if(d.description) parts.push("功能: "+d.description);
@@ -1098,12 +1453,15 @@ function buildReport(o){
     const recent=[now-2,now-1,now].map(String);
     const trend=(yrs.length>=2&&yc[yrs[yrs.length-1]]>yc[yrs[0]])?"上升":"波动";
     const rcnt=recent.reduce((a,y)=>{ a+=yc[y]||0; return a; },0);
-    r.research_progress=`共检索到 ${r.papers.length} 篇文献，覆盖 ${yrs.length} 个年份（${yrs[0]}–${yrs[yrs.length-1]}），整体呈 ${trend} 趋势。近三年（${recent[0]}–${recent[2]}）共发表 ${rcnt} 篇。`;
+    const ptc={}; r.papers.forEach(p=>(p.pubType||[]).forEach(t=>ptc[t]=(ptc[t]||0)+1));
+    const ptStr=Object.entries(ptc).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`${k} ${v}篇`).join("、");
+    r.research_progress=`共检索到 ${r.papers.length} 篇文献，覆盖 ${yrs.length} 个年份（${yrs[0]}–${yrs[yrs.length-1]}），整体呈 ${trend} 趋势。近三年（${recent[0]}–${recent[2]}）共发表 ${rcnt} 篇。`+(ptStr?`\n文献类型：${ptStr}。`:"");
   } else r.research_progress=`共检索到 ${r.papers.length} 篇文献。`;
   const ph=countPhase(r.trials), pk=Object.keys(ph);
   const st=countStatus(r.trials), sk=Object.keys(st);
   const cls=(pk.length?`共 ${r.trials.length} 项试验，阶段：${pk.map(k=>k+" "+ph[k]+"项").join("、")}。`:(`共 ${r.trials.length} 项试验。`));
-  r.clinical_landscape=cls+(sk.length?`状态：${sk.map(k=>k+" "+st[k]+"项").join("、")}。`:"")+`适应症：${condsText(r.trials)}。`;
+  const intlSources=r.trials.filter(t=>t.source&&t.source!=="ClinicalTrials.gov");
+  r.clinical_landscape=cls+(sk.length?`状态：${sk.map(k=>k+" "+st[k]+"项").join("、")}。`:"")+`适应症：${condsText(r.trials)}。`+(intlSources.length?`\n含 ${intlSources.length} 项来自 ${[...new Set(intlSources.map(t=>t.source))].join("/")} 的试验。`:"");
   const top=[...r.papers].sort((a,b)=>(b.year||"0").localeCompare(a.year||"0")).slice(0,5);
   r.key_findings= top.length?top.map((p,i)=>(i+1)+". "+p.title+" — "+p.journal+" ("+p.year+")").join("\n"):"暂无文献数据。";
   if(r.drugs.length){ const ap=r.drugs.filter(x=>/appr/i.test(x.phase)||/上市/.test(x.phase));
@@ -1129,6 +1487,8 @@ function contextFor(field,r){
   if(field==="research_progress"||field==="key_findings"){
     parts.push("\n文献总数: "+r.papers.length);
     const yc=countYear(r.papers); if(Object.keys(yc).length) parts.push("年份分布: "+Object.entries(yc).map(([y,c])=>y+"("+c+"篇)").join(", "));
+    const ptc={}; r.papers.forEach(p=>(p.pubType||[]).forEach(t=>ptc[t]=(ptc[t]||0)+1));
+    if(Object.keys(ptc).length) parts.push("文献类型: "+JSON.stringify(ptc));
     parts.push(clipText(r.papers.slice(0,10).map((p,i)=>(i+1)+". "+p.title+" ("+p.journal+", "+p.year+")").join("\n"),2200));
   }
   if(field==="clinical_landscape"||field==="future_outlook"){
@@ -1136,6 +1496,8 @@ function contextFor(field,r){
     const ph=countPhase(r.trials); if(Object.keys(ph).length) parts.push("阶段: "+JSON.stringify(ph));
     const st=countStatus(r.trials); if(Object.keys(st).length) parts.push("状态: "+JSON.stringify(st));
     const c=condsText(r.trials); if(c!=="—") parts.push("适应症: "+c);
+    const srcs=[...new Set(r.trials.map(t=>t.source||"ClinicalTrials.gov"))];
+    parts.push("来源: "+srcs.join("/"));
   }
   if(field==="future_outlook"){
     parts.push("\n药物: "+r.drugs.length); r.drugs.forEach(d=>parts.push(" - "+d.name+" ["+d.phase+"] "+d.company+" — "+d.mechanism));
@@ -1165,13 +1527,36 @@ function sysCtx(r){
 }
 
 async function enhance(report,cb){
+  const useCites=!($("aiCites")&&!$("aiCites").checked);
+  report.citations={};
   const fields=[["target_overview","target_overview"],["research_progress","research_progress"],
     ["clinical_landscape","clinical_landscape"],["key_findings","key_findings"],["future_outlook","future_outlook"]];
   for(let i=0;i<fields.length;i++){
     if(STOP) return;
     const f=fields[i][0];
     if(cb) cb(72+i*5,"🧠 AI 分析 "+f+" ...");
-    try{ const t=await llmChat(PROMPTS[f](contextFor(f,report))); if(t) report[f]=t; }catch(e){ if(cb) cb(-1,"AI 分析 "+f+" 失败"); }
+    try{
+      if(useCites){
+        const sys=`你是一名生物医药专家。基于给定数据生成专业分析。请严格返回 JSON：{"text":"分析正文（与原来同风格）","claims":[{"text":"论断","refs":["PMID:123","NCT04567890","US11844110B2"]}]}。refs 只能引用数据中真实出现的编号（PMID/NCT/专利号），没有就留空数组。不要编造。`;
+        try{
+          const o=await llmJson(PROMPTS[f](contextFor(f,report)),{system:sys});
+          if(o&&o.text){ report[f]=o.text;
+            const claims=(Array.isArray(o.claims)?o.claims:[]).filter(c=>c&&c.text);
+            const refs=new Set(); claims.forEach(c=>(c.refs||[]).forEach(r=>refs.add(r)));
+            const combined=(o.text+" "+(claims.map(c=>c.text).join(" ")));
+            extractRefs(combined).forEach(r=>refs.add(r));
+            if(refs.size) report.citations[f]=[...refs];
+          }
+        }catch(e2){
+          // 结构化失败 → 回退纯文本，保证内容不丢
+          const t=await llmChat(PROMPTS[f](contextFor(f,report)));
+          if(t){ report[f]=t; const refs=extractRefs(t); if(refs.length) report.citations[f]=refs; }
+        }
+      } else {
+        const t=await llmChat(PROMPTS[f](contextFor(f,report)));
+        if(t){ report[f]=t; const refs=extractRefs(t); if(refs.length) report.citations[f]=refs; }
+      }
+    }catch(e){ if(cb) cb(-1,"AI 分析 "+f+" 失败"); }
   }
   if(STOP) return;
   // AI 联网情报分析（仅智谱支持联网搜索）
@@ -1185,12 +1570,12 @@ async function enhance(report,cb){
         d&&d.geneSymbol,
         d&&d.proteinClass
       ));
-      if(t) report.web_summary=t;
+      if(t){ report.web_summary=t; const refs=extractRefs(t); if(refs.length) report.citations.web_summary=refs; }
     }catch(e){ if(cb) cb(-1,"AI 联网情报分析失败"); }
   } else {
     // 非联网模式：基于已有数据生成综合研判
     if(cb) cb(96,"🧠 AI 综合研判 ...");
-    try{ const t=await llmChat(PROMPTS.web_summary_legacy(sysCtx(report))); if(t) report.web_summary=t; }catch(e){ if(cb) cb(-1,"AI 综合研判失败"); }
+    try{ const t=await llmChat(PROMPTS.web_summary_legacy(sysCtx(report))); if(t){ report.web_summary=t; const refs=extractRefs(t); if(refs.length) report.citations.web_summary=refs; } }catch(e){ if(cb) cb(-1,"AI 综合研判失败"); }
   }
   if(report.patents&&report.patents.length){
     if(STOP) return;
@@ -1206,7 +1591,7 @@ async function enhance(report,cb){
       return s;
     }).join("\n")+(report.patentInsight&&report.patentInsight.assignees?
       "\n\n主要申请人布局:\n"+Object.entries(report.patentInsight.assignees).filter(([,v])=>v&&v.length).map(([a,ps])=>` ${a}: ${ps.length}件`).join("\n"):""),4000);
-    try{ const t=await llmChat(PROMPTS.patent_landscape(report.targetName,sum)); if(t) report.patent_landscape=t; }catch(e){}
+    try{ const t=await llmChat(PROMPTS.patent_landscape(report.targetName,sum)); if(t){ report.patent_landscape=t; const refs=extractRefs(t); if(refs.length) report.citations.patent_landscape=refs; } }catch(e){}
   }
 }
 
@@ -1231,54 +1616,95 @@ async function run(){
   const useLLM=$("useLLM").checked;
   const on=src=>$("src"+src).checked;
   const errs=[];
+  const pt=parseTarget(name);
+  const gene=pt.gene, mutation=pt.mutation;
   let detail=null, papers=[], trials=[], drugs=[], patents=[], molecules=[], patentInsight=null, patentNote="";
+  let cachedFlags=[];
   try{
-    if(on("Papers")){ setProg(8,"搜索文献 (PubMed)...");
-      try{ papers=await Promise.race([searchPapers(name,40),withTimeout(50000)]); setProg(18,""); }
-      catch(e){ if(!STOP) errs.push("PubMed: "+e.message); } }
+    if(on("Papers")){ setProg(8,"搜索文献 (PubMed)…");
+      try{
+        const res=await Promise.race([cachedSearch("papers:"+pt.raw,()=>searchPapers(gene,40)),withTimeout(50000)]);
+        papers=res.data; if(res.cached) cachedFlags.push("文献(缓存)");
+        if(mutation){
+          const res2=await Promise.race([cachedSearch("papers:"+pt.raw+":mut",()=>searchPapers(pt.raw,20)).catch(()=>({data:[],cached:false})),withTimeout(40000)]);
+          const mut=(res2.data||[]).filter(p=>!papers.some(x=>x.pmid&&x.pmid===p.pmid));
+          papers=papers.concat(mut);
+        }
+        setProg(18,"");
+      }catch(e){ if(!STOP) errs.push("PubMed: "+e.message); } }
     if(STOP) return;
     if(on("Trials")){ setProg(26,"查询临床试验…");
-      try{ trials=await Promise.race([searchTrials(name,20),withTimeout(50000)]); setProg(34,""); }
-      catch(e){ if(!STOP) errs.push("ClinicalTrials: "+e.message); } }
+      try{
+        const res=await Promise.race([cachedSearch("trials:"+gene,()=>searchTrialsIntl(gene,20)),withTimeout(60000)]);
+        trials=res.data; if(res.cached) cachedFlags.push("临床(缓存)");
+        if(mutation){
+          const res2=await Promise.race([cachedSearch("trials:"+pt.raw+":mut",()=>searchTrialsIntl(pt.raw,10)).catch(()=>({data:[],cached:false})),withTimeout(45000)]);
+          const extra=(res2.data||[]).filter(t=>!trials.some(x=>x.id&&x.id===t.id));
+          trials=trials.concat(extra);
+        }
+        setProg(34,"");
+      }catch(e){ if(!STOP) errs.push("ClinicalTrials: "+e.message); } }
     if(STOP) return;
     if(on("Target")){ setProg(38,"获取靶点/表达谱信息 (Open Targets + UniProt + HPA)…");
       try{
-        detail=await Promise.race([getTargetDetail(name),withTimeout(50000)]).catch(()=>null);
-        const uni=await Promise.race([getUniProt(detail&&detail.geneSymbol||name),withTimeout(40000)]).catch(()=>null);
-        const hpa=await Promise.race([getHPA(detail&&detail.geneSymbol||name),withTimeout(40000)]).catch(()=>null);
-        const pdb=await Promise.race([getPDB(detail&&detail.geneSymbol||name,uni&&uni.accession),withTimeout(40000)]).catch(()=>null);
+        detail=await Promise.race([getTargetDetail(gene),withTimeout(50000)]).catch(()=>null);
+        const aliases=detail&&Array.isArray(detail.synonyms)?detail.synonyms:[];
+        const uni=await Promise.race([getUniProt(detail&&detail.geneSymbol||gene,aliases),withTimeout(40000)]).catch(()=>null);
+        const hpa=await Promise.race([getHPA(detail&&detail.geneSymbol||gene),withTimeout(40000)]).catch(()=>null);
+        const pdb=await Promise.race([getPDB(detail&&detail.geneSymbol||gene,uni&&uni.accession),withTimeout(40000)]).catch(()=>null);
         if(!detail&&(uni||hpa||(pdb&&pdb.length))) detail={};
         if(uni&&detail) Object.assign(detail,uni);
         if(hpa&&detail) detail.hpa=hpa;
         if(pdb&&pdb.length&&detail) detail.pdb=pdb;
+        if(detail&&mutation) detail.mutation=mutation;
         setProg(50,"");
       }catch(e){ if(!STOP) errs.push("靶点信息: "+e.message); } }
     if(STOP) return;
     if(on("Drugs")){ setProg(50,"获取药物/活性分子…");
       try{
-        drugs=await Promise.race([getDrugs(name),withTimeout(50000)]).catch(()=>[]);
-        molecules=await Promise.race([getChEMBL(name),withTimeout(50000)]).catch(()=>[]);
+        const resD=await Promise.race([cachedSearch("drugs:"+gene,()=>getDrugs(gene)),withTimeout(50000)]).catch(()=>({data:[],cached:false}));
+        drugs=resD.data; if(resD.cached) cachedFlags.push("药物(缓存)");
+        const resM=await Promise.race([cachedSearch("chembl:"+gene,()=>getChEMBL(gene)),withTimeout(50000)]).catch(()=>({data:[],cached:false}));
+        molecules=resM.data; if(resM.cached) cachedFlags.push("分子(缓存)");
         if(drugs.length){ setProg(58,"匹配药物公司…"); await Promise.race([enrichCompany(drugs),withTimeout(30000)]).catch(()=>{}); }
         setProg(64,"");
       }catch(e){ if(!STOP) errs.push("药物: "+e.message); } }
     if(STOP) return;
     if(on("Patents")){ setProg(66,"检索专利…");
       try{
-        const res=await Promise.race([searchPatents(name,(t)=>{ if(t) setProg(70,t); }),withTimeout(120000)]);
+        const res=await Promise.race([searchPatents(gene,(t)=>{ if(t) setProg(70,t); }),withTimeout(120000)]);
         patents=res.patents||[]; patentInsight=res.insight||null; patentNote=res.note||"";
       }
       catch(e){ if(!STOP) errs.push("专利: "+e.message); }
       setProg(70,""); }
     if(STOP) return;
-    const report=buildReport({name:name,detail,papers,trials,drugs,patents,molecules,patentInsight,patentNote});
+    const report=buildReport({name:name,gene,mutation,detail,papers,trials,drugs,patents,molecules,patentInsight,patentNote});
+    report.cachedFlags=cachedFlags;
     if(useLLM){ setProg(72,"AI 增强…"); await enhance(report,setProg); }
     if(STOP) return;
+    // 增量提示：与历史对比
+    try{
+      const prev=await findPreviousReport(gene||name);
+      if(prev){
+        const dP=report.papers.length-prev.papers.length, dT=report.trials.length-prev.trials.length;
+        report.incrementNote=`与上次生成（${new Date(prev.createdAt).toLocaleString()}）相比：文献 ${dP>=0?"+":"-"}${Math.abs(dP)}、临床 ${dT>=0?"+":"-"}${Math.abs(dT)}、专利 ${report.patents.length-prev.patents.length>=0?"+":"-"}${Math.abs(report.patents.length-prev.patents.length)}。`;
+      }
+    }catch(e){}
     REPORT=report;
     $("progressWrap").classList.add("hidden");
     render(report,errs);
     $("resultArea").classList.remove("hidden");
+    if($("saveHist")&&$("saveHist").checked){ saveReport(report,errs).then(()=>renderHistory()); }
   }catch(e){ if(!STOP) showErr(e); }
   finally{ STOP=false; $("startBtn").disabled=false; }
+}
+async function findPreviousReport(gene){
+  try{
+    const list=await listReports();
+    const match=list.find(r=>(r.target||"").toLowerCase()===(gene||"").toLowerCase());
+    if(!match) return null;
+    return loadReport(match.id);
+  }catch(e){ return null; }
 }
 
 /* ── 渲染 ───────────────────────────────────────────────────────── */
@@ -1297,6 +1723,10 @@ function render(r,errs){
   const mi=$("metrics"); mi.innerHTML="";
   [["📄 文献",r.papers.length],["🧪 临床",r.trials.length],["💊 药物",r.drugs.length],["🧬 分子",r.molecules?r.molecules.length:0],["📜 专利",r.patents.length]].
     forEach(([l,n])=>{ const c=document.createElement("div"); c.className="mcard"; c.innerHTML=`<b>${n}</b><span>${l}</span>`; mi.appendChild(c); });
+  const notices=[];
+  if(r.cachedFlags&&r.cachedFlags.length) notices.push("部分数据来自本地缓存："+r.cachedFlags.join("、"));
+  if(r.incrementNote) notices.push(r.incrementNote);
+  if(notices.length){ const nb=document.createElement("div"); nb.className="note"; nb.textContent=notices.join("\n"); if(mi.parentElement) mi.parentElement.insertBefore(nb,mi); }
   if(errs&&errs.length){ const b=document.createElement("div"); b.className="errbox"; b.textContent="部分数据源失败：\n"+errs.join("\n"); if(mi.parentElement) mi.parentElement.insertBefore(b,mi); }
 
   const d=r.detail;
@@ -1363,6 +1793,8 @@ function render(r,errs){
       `<div class="paper"><div class="t">${esc(p.title)}</div><div class="m">${esc(p.journal)} (${esc(p.year)})`+
       (p.doi?` · DOI <a href="https://doi.org/${esc(p.doi)}" target="_blank" style="color:var(--mid)">${esc(p.doi)}</a>`:"")+
       (p.pmid?` · PMID <a href="https://pubmed.ncbi.nlm.nih.gov/${esc(p.pmid)}" target="_blank" style="color:var(--mid)">${esc(p.pmid)}</a>`:"")+
+      (p.pubType&&p.pubType.length?` · ${p.pubType.slice(0,2).map(esc).join("、")}`:"")+
+      (p.mesh&&p.mesh.length?`<div class="a" style="color:var(--mid)">MeSH: ${p.mesh.slice(0,5).map(esc).join(" · ")}</div>`:"")+
       "</div>"+
       (p.abstract?`<div class="a">${esc(p.abstract.slice(0,240))}…</div>`:"")+"</div>"));
     pn.open();
@@ -1373,8 +1805,12 @@ function render(r,errs){
   const ph=countPhase(r.trials);
   if(Object.keys(ph).length)c.body.insertAdjacentHTML("beforeend",`<p style="margin-top:.4rem">${Object.entries(ph).map(([k,v])=>`<span class="empty" style="margin-right:6px">${esc(k)}：${v}</span>`).join("")}</p>`);
   if(r.trials.length){
-    const rows=r.trials.map(t=>`<tr><td><a href="https://clinicaltrials.gov/study/${esc(t.id)}" target="_blank" style="color:var(--mid)">${esc(t.id)}</a></td><td>${esc(t.title).slice(0,70)}</td><td>${esc(t.phase)}</td><td>${esc(t.status)}</td><td>${esc((t.conditions||[]).join(", ")).slice(0,50)}</td></tr>`).join("");
-    c.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>NCT</th><th>标题</th><th>阶段</th><th>状态</th><th>适应症</th></tr></thead><tbody>${rows}</tbody></table>`);
+    const rows=r.trials.map(t=>{
+      const src=t.source&&t.source!=="ClinicalTrials.gov"?esc(t.source):"";
+      const cc=(t.countries&&t.countries.length)?esc(t.countries.slice(0,3).join(", ")):"";
+      return `<tr><td><a href="${t.source==="ClinicalTrials.gov"?("https://clinicaltrials.gov/study/"+esc(t.id)):"#"}">${esc(t.id)}</a></td><td>${esc(t.title).slice(0,70)}</td><td>${esc(t.phase)}</td><td>${esc(t.status)}</td><td>${esc((t.conditions||[]).join(", ")).slice(0,50)}</td><td>${src||cc||"—"}</td></tr>`;
+    }).join("");
+    c.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>NCT</th><th>标题</th><th>阶段</th><th>状态</th><th>适应症</th><th>来源/国家</th></tr></thead><tbody>${rows}</tbody></table>`);
     c.open();
   }
 
@@ -1439,9 +1875,29 @@ function render(r,errs){
   if(r.web_summary){ const w=addPanel("🧠 AI 综合情报研判"); w.body.insertAdjacentHTML("beforeend",`<div class="AI">${esc(r.web_summary).replace(/\n/g,"<br>")}</div>`); w.open(); }
   if(r.molecules&&r.molecules.length){
     const mo=addPanel("🔬 靶向活性分子（ChEMBL）",r.molecules.length+"个");
-    const rows=r.molecules.slice(0,12).map(m=>`<tr><td>${esc(m.name)}</td><td>${m.chembl?`<a href="https://www.ebi.ac.uk/chembl/compound_report_card/${esc(m.chembl)}/" target="_blank" style="color:var(--mid)">${esc(m.chembl)}</a>`:"—"}</td><td>${esc(m.pchembl||"—")}</td></tr>`).join("");
-    mo.body.insertAdjacentHTML("beforeend",`<p style="font-size:.82rem;color:#888">来自 ChEMBL 的高活性化合物线索（pChEMBL 为活性指数，越大活性越强；供研发参考，非批准药物）。</p><table><thead><tr><th>分子/化合物</th><th>ChEMBL ID</th><th>pChEMBL</th></tr></thead><tbody>${rows||""}</tbody></table>`);
+    const rows=r.molecules.slice(0,12).map(m=>{
+      const det=(m.details&&m.details.length)?`<div class="hint">${m.details.slice(0,4).map(d=>`${esc(d.type)} ${esc(d.val)}${d.pchembl?" (pChEMBL "+esc(d.pchembl)+")":""}`).join(" · ")}</div>`:"";
+      return `<tr><td>${esc(m.name)}</td><td>${m.chembl?`<a href="https://www.ebi.ac.uk/chembl/compound_report_card/${esc(m.chembl)}/" target="_blank" style="color:var(--mid)">${esc(m.chembl)}</a>`:"—"}</td><td>${esc(m.pchembl||"—")}</td><td>${esc(m.bestType?m.bestType+(m.bestVal?" "+m.bestVal:""):"—")}${det}</td></tr>`;
+    }).join("");
+    mo.body.insertAdjacentHTML("beforeend",`<p style="font-size:.82rem;color:#888">来自 ChEMBL 的高活性化合物线索（pChEMBL 为活性指数，越大活性越强；含 IC50/EC50/Ki/Kd 测定类型；供研发参考，非批准药物）。</p><table><thead><tr><th>分子/化合物</th><th>ChEMBL ID</th><th>pChEMBL</th><th>测定活性</th></tr></thead><tbody>${rows||""}</tbody></table>`);
     mo.open();
+  }
+  const cits=r.citations;
+  if(cits&&Object.keys(cits).length){
+    const cp=addPanel("📚 引用来源");
+    const secName={target_overview:"靶点概述",research_progress:"研究进展",clinical_landscape:"临床概况",key_findings:"核心文献",future_outlook:"药物展望",web_summary:"AI 综合研判",patent_landscape:"专利调研"};
+    const linkRef=ref=>{
+      const m=ref.match(/PMID:\s*(\d+)/); if(m) return `<a href="https://pubmed.ncbi.nlm.nih.gov/${m[1]}/" target="_blank" style="color:var(--mid)">${esc(ref)}</a>`;
+      const n=ref.match(/NCT(\d+)/); if(n) return `<a href="https://clinicaltrials.gov/study/${n[0]}/" target="_blank" style="color:var(--mid)">${esc(ref)}</a>`;
+      const u=ref.match(/(US|EP)\d+[A-Z]?\d*/); if(u) return `<a href="https://patents.google.com/patent/${u[0]}/en" target="_blank" style="color:var(--mid)">${esc(ref)}</a>`;
+      if(/^https?:/.test(ref)) return `<a href="${esc(ref)}" target="_blank" style="color:var(--mid)">${esc(ref)}</a>`;
+      return esc(ref);
+    };
+    const blk=Object.entries(cits).map(([sec,refs])=>{
+      if(!refs||!refs.length) return "";
+      return `<div class="paper"><div class="t">${secName[sec]||sec}</div><div class="m">${refs.map(linkRef).join(" · ")}</div></div>`;
+    }).filter(Boolean).join("");
+    if(blk){ cp.body.insertAdjacentHTML("beforeend",blk); cp.open(); }
   }
 }
 
@@ -1489,6 +1945,16 @@ function markdown(r){
   if(h&&hpaLines(h).length){ m+=`## 表达谱与抗体可及性（HPA）\n${hpaLines(h).map(x=>"- "+x).join("\n")}\n\n`; }
   const pdb=r.detail&&r.detail.pdb;
   if(pdb&&pdb.length){ m+=`## 蛋白质3D结构（PDB）\n`; pdb.forEach(p=>m+=`- ${p.pdbId} | ${p.title} | ${p.method} | ${p.resolution?p.resolution+"Å":"—"} | [查看](${p.link})\n`); m+="\n"; }
+  if(r.mutation) m+=`## 突变特异检索\n${r.mutation} 相关数据已并入各模块；如需按突变细分请结合文献与专利详情。\n\n`;
+  if(r.citations&&Object.keys(r.citations).length){
+    const secName={target_overview:"靶点概述",research_progress:"研究进展",clinical_landscape:"临床概况",key_findings:"核心文献",future_outlook:"药物展望",web_summary:"AI 综合研判",patent_landscape:"专利调研"};
+    m+=`## 引用来源\n`;
+    Object.entries(r.citations).forEach(([sec,refs])=>{
+      if(!refs||!refs.length) return;
+      m+=`**${secName[sec]||sec}**：${refs.join("；")}\n`;
+    });
+    m+="\n";
+  }
   return m;
 }
 function download(name,content,type){
@@ -1497,6 +1963,73 @@ function download(name,content,type){
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
 function fname(n){ return String(n||"target").replace(/[\\/:*?"<>|]/g,"_"); }
+
+/* ── HTML 导出 / 打印 ───────────────────────────────────────── */
+function reportHTML(r){
+  const md=markdown(r);
+  const escHtml=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const body=md.split("\n").map(l=>{
+    if(/^# /.test(l)) return `<h1>${escHtml(l.replace(/^# /,""))}</h1>`;
+    if(/^## /.test(l)) return `<h2>${escHtml(l.replace(/^## /,""))}</h2>`;
+    if(/^### /.test(l)) return `<h3>${escHtml(l.replace(/^### /,""))}</h3>`;
+    if(/^> /.test(l)) return `<blockquote>${escHtml(l.replace(/^> /,""))}</blockquote>`;
+    if(/^- /.test(l)) return `<li>${escHtml(l.replace(/^- /,""))}</li>`;
+    if(/^\d+\. /.test(l)) return `<li>${escHtml(l)}</li>`;
+    if(l.trim()==="") return "";
+    return `<p>${escHtml(l)}</p>`;
+  }).join("\n");
+  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+  <title>${escHtml(r.targetName)} 靶点调研报告</title>
+  <style>body{font-family:-apple-system,"Microsoft YaHei",sans-serif;max-width:900px;margin:24px auto;padding:0 20px;color:#2C3E50;line-height:1.6}
+  h1{color:#1B4F72;border-bottom:3px solid #2E86C1;padding-bottom:8px}h2{color:#2E86C1;border-left:4px solid #2E86C1;padding-left:10px;margin-top:24px}
+  h3{color:#34495E}blockquote{background:#fffbe6;border-left:3px solid #f1c40f;padding:8px 12px;margin:10px 0}li{margin:3px 0}
+  pre{background:#f8f9fa;border:1px solid #e2e8f0;padding:10px;border-radius:6px;overflow:auto}code{font-family:monospace}
+  a{color:#2E86C1}@media print{.no-print{display:none}}</style></head>
+  <body><button class="no-print" onclick="window.print()" style="margin:8px 0;padding:6px 14px;border:none;border-radius:6px;background:#2E86C1;color:#fff;cursor:pointer">🖨 打印/保存为PDF</button>
+  ${body}</body></html>`;
+}
+function downloadHTML(r){
+  download(fname(r.targetName)+"_报告.html",reportHTML(r),"text/html;charset=utf-8");
+}
+function printReport(r){
+  const w=window.open("","_blank");
+  if(!w){ alert("浏览器阻止了弹窗，请允许后重试"); return; }
+  w.document.write(reportHTML(r)); w.document.close();
+  setTimeout(()=>{ w.focus(); w.print(); },300);
+}
+/* ── 历史报告 UI ─────────────────────────────────────────── */
+async function renderHistory(){
+  const wrap=$("histWrap"), empty=$("histEmpty"), tbody=$("histTable").querySelector("tbody");
+  let list=[];
+  try{ list=await listReports(); }catch(e){}
+  if(!list.length){ wrap.classList.add("hidden"); empty.classList.remove("hidden"); return; }
+  wrap.classList.remove("hidden"); empty.classList.add("hidden");
+  tbody.innerHTML="";
+  list.forEach(m=>{
+    const tr=document.createElement("tr");
+    const c=(m.counts||{});
+    tr.innerHTML=`<td><input type="checkbox" class="histChk" value="${esc(m.id)}"></td>
+      <td>${esc(m.target||"—")}</td><td>${new Date(m.createdAt).toLocaleString()}</td>
+      <td>${c.papers||0}</td><td>${c.trials||0}</td><td>${c.drugs||0}</td><td>${c.patents||0}</td>
+      <td>${m.aiEnhanced?"✅":"—"}</td>
+      <td class="row" style="gap:.3rem;flex-wrap:nowrap">
+        <button class="btn btn-ghost" data-act="view" data-id="${esc(m.id)}" style="padding:.2rem .6rem;font-size:.75rem">查看</button>
+        <button class="btn btn-ghost" data-act="md" data-id="${esc(m.id)}" style="padding:.2rem .6rem;font-size:.75rem">MD</button>
+        <button class="btn btn-ghost" data-act="json" data-id="${esc(m.id)}" style="padding:.2rem .6rem;font-size:.75rem">JSON</button>
+        <button class="btn btn-ghost" data-act="del" data-id="${esc(m.id)}" style="padding:.2rem .6rem;font-size:.75rem;color:#c0392b">删除</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+async function viewHistory(id){
+  const r=await loadReport(id);
+  if(!r){ alert("无法加载该记录"); return; }
+  if(r._histMD){ const box=$("errbox"); box.classList.remove("hidden"); box.textContent="该记录为降级存储（仅 Markdown）：\n\n"+r._histMD.slice(0,2000); return; }
+  REPORT=r;
+  render(r,[]);
+  $("resultArea").classList.remove("hidden");
+  $("resultArea").scrollIntoView({behavior:"smooth"});
+}
 
 /* ── PPT 导出 ──────────────────────────────────────────────────────── */
 function generatePPT(r){
@@ -1685,6 +2218,20 @@ function generatePPT(r){
   ],{x:0.5,y:1.3,w:9,h:4.5,fontSize:12,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.5, valign:"top"});
   addFooter(s11);
 
+  // ===== Slide 11b: 引用来源（如有）=====
+  if(r.citations&&Object.keys(r.citations).length){
+    const s11b=pptx.addSlide();
+    addHeader(s11b,"引用来源","📚");
+    const secName={target_overview:"靶点概述",research_progress:"研究进展",clinical_landscape:"临床概况",key_findings:"核心文献",future_outlook:"药物展望",web_summary:"AI 综合研判",patent_landscape:"专利调研"};
+    const lines=[];
+    Object.entries(r.citations).forEach(([sec,refs])=>{
+      if(!refs||!refs.length) return;
+      lines.push({text:(secName[sec]||sec)+"：",options:{bold:true}},{text:refs.slice(0,12).join("；")+"\n",options:{fontSize:9}});
+    });
+    if(lines.length) s11b.addText(lines,{x:0.5,y:1.2,w:9,h:5.2,fontSize:11,color:COL.txt,fontFace:FONT,valign:"top",lineSpacingMultiple:1.3});
+    addFooter(s11b);
+  }
+
   return pptx.writeFile({fileName:fname(r.targetName)+"_靶点调研报告.pptx"});
 }
 
@@ -1780,9 +2327,10 @@ function generateWord(r){
 
   if(r.molecules&&r.molecules.length){
     html+=`<h3>靶向活性分子（ChEMBL）</h3>
-    <table><tr><th>分子</th><th>ChEMBL ID</th><th>pChEMBL</th><th>来源</th></tr>`;
+    <table><tr><th>分子</th><th>ChEMBL ID</th><th>pChEMBL</th><th>测定活性</th><th>来源</th></tr>`;
     r.molecules.slice(0,15).forEach(m=>{
-      html+=`<tr><td>${esc(m.name)}</td><td><a href="https://www.ebi.ac.uk/chembl/compound_report_card/${esc(m.chembl)}/">${esc(m.chembl)}</a></td><td>${esc(m.pchembl||"—")}</td><td><a href="https://www.ebi.ac.uk/chembl/">ChEMBL</a></td></tr>`;
+      const det=(m.details&&m.details.length)?m.details.slice(0,4).map(d=>`${esc(d.type)} ${esc(d.val)}${d.pchembl?" (pChEMBL "+esc(d.pchembl)+")":""}`).join("<br>"):esc(m.bestType?(m.bestType+(m.bestVal?" "+m.bestVal:"")):"");
+      html+=`<tr><td>${esc(m.name)}</td><td><a href="https://www.ebi.ac.uk/chembl/compound_report_card/${esc(m.chembl)}/">${esc(m.chembl)}</a></td><td>${esc(m.pchembl||"—")}</td><td>${det||"—"}</td><td><a href="https://www.ebi.ac.uk/chembl/">ChEMBL</a></td></tr>`;
     });
     html+=`</table>`;
   }
@@ -1817,6 +2365,22 @@ function generateWord(r){
 
   if(r.web_summary) html+=`<h2>七、AI 综合情报研判</h2><div class="ai-box">${esc(r.web_summary).replace(/\n/g,"<br>")}</div>`;
 
+  if(r.citations&&Object.keys(r.citations).length){
+    const secName={target_overview:"靶点概述",research_progress:"研究进展",clinical_landscape:"临床概况",key_findings:"核心文献",future_outlook:"药物展望",web_summary:"AI 综合研判",patent_landscape:"专利调研"};
+    html+=`<h2>八、引用来源</h2>`;
+    Object.entries(r.citations).forEach(([sec,refs])=>{
+      if(!refs||!refs.length) return;
+      const links=refs.map(ref=>{
+        const m=ref.match(/PMID:\s*(\d+)/); if(m) return `<a href="https://pubmed.ncbi.nlm.nih.gov/${m[1]}/">${esc(ref)}</a>`;
+        const n=ref.match(/NCT(\d+)/); if(n) return `<a href="https://clinicaltrials.gov/study/${n[0]}/">${esc(ref)}</a>`;
+        const u=ref.match(/(US|EP)\d+[A-Z]?\d*/); if(u) return `<a href="https://patents.google.com/patent/${u[0]}/en">${esc(ref)}</a>`;
+        if(/^https?:/.test(ref)) return `<a href="${esc(ref)}">${esc(ref)}</a>`;
+        return esc(ref);
+      });
+      html+=`<p><b>${secName[sec]||sec}</b>：${links.join("；")}</p>`;
+    });
+  }
+
   html+=`<h2>数据来源</h2><ul>
     <li>文献检索：<a href="https://pubmed.ncbi.nlm.nih.gov/">PubMed (NCBI)</a></li>
     <li>临床试验：<a href="https://clinicaltrials.gov/">ClinicalTrials.gov (v2 API)</a></li>
@@ -1835,6 +2399,79 @@ function generateWord(r){
   a.download=fname(r.targetName)+"_靶点调研报告.docx";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ── BM25 本地检索 + 追问 ───────────────────────────────── */
+function tokenize(s){
+  return String(s||"").toLowerCase().split(/[^a-z0-9\u4e00-\u9fa5]+/).filter(t=>t.length>1);
+}
+function buildDocIndex(report){
+  const docs=[];
+  (report.papers||[]).forEach((p,i)=>docs.push({id:"PMID:"+(p.pmid||i), text:(p.title||"")+" "+(p.abstract||""), kind:"文献"}));
+  (report.patents||[]).forEach((p,i)=>docs.push({id:p.number||("P"+i), text:(p.title||"")+" "+(p.abstract||p.snippet||""), kind:"专利"}));
+  (report.trials||[]).forEach((p,i)=>docs.push({id:p.id||("T"+i), text:(p.title||"")+" "+(p.briefSummary||""), kind:"临床"}));
+  return docs.filter(d=>d.text);
+}
+function bm25Score(query,doc,k=1.5,b=0.75){
+  const q=tokenize(query), dt=tokenize(doc.text);
+  if(!dt.length) return 0;
+  const tf={}; dt.forEach(w=>tf[w]=(tf[w]||0)+1);
+  const dl=dt.length, avgdl=1;
+  let score=0;
+  q.forEach(w=>{
+    if(!tf[w]) return;
+    const f=tf[w];
+    score+=((f*(k+1))/(f+k*(1-b+b*dl/avgdl)));
+  });
+  return score;
+}
+function retrieveTopK(query,docs,k=8){
+  return docs.map(d=>({d,score:bm25Score(query,d)})).filter(x=>x.score>0)
+    .sort((a,b)=>b.score-a.score).slice(0,k).map(x=>x.d);
+}
+async function askFollowUp(){
+  const box=$("askResult"); if(!REPORT) return;
+  const q=($("askInput").value||"").trim(); if(!q) return;
+  box.style.display="block"; box.textContent="🔍 检索并生成中…";
+  try{
+    const docs=buildDocIndex(REPORT);
+    const top=retrieveTopK(q,docs,8);
+    if(!top.length){ box.textContent="未从当前报告检索到相关内容，请换种问法。"; return; }
+    const ctx=top.map((d,i)=>`[${i+1}] (${d.kind} ${d.id}) ${d.text.slice(0,400)}`).join("\n\n");
+    const prompt=`基于以下检索片段回答用户问题。请只用片段中的信息，并标注引用编号 [1][2]…。\n\n${ctx}\n\n问题：${q}`;
+    const t=await llmChat(prompt);
+    const html=esc(t).replace(/\n/g,"<br>");
+    const refsLine=top.map((d,i)=>`<a href="${linkForRef(d.id)}" target="_blank" style="color:var(--mid)">[${i+1}] ${esc(d.kind)} ${esc(d.id)}</a>`).join(" · ");
+    box.innerHTML=`<div>${html}</div><div class="hint" style="margin-top:.4rem">${refsLine}</div>`;
+  }catch(e){ box.textContent="追问失败："+(e&&e.message||e); }
+}
+function linkForRef(ref){
+  const m=ref.match(/PMID:\s*(\d+)/); if(m) return "https://pubmed.ncbi.nlm.nih.gov/"+m[1]+"/";
+  const n=ref.match(/NCT(\d+)/); if(n) return "https://clinicaltrials.gov/study/"+n[0]+"/";
+  const u=ref.match(/(US|EP)\d+[A-Z]?\d*/); if(u) return "https://patents.google.com/patent/"+u[0]+"/en";
+  return "#";
+}
+
+/* ── 历史对比 ───────────────────────────────────────────── */
+async function compareReports(){
+  const boxes=[...document.querySelectorAll(".histChk:checked")];
+  if(boxes.length<2){ alert("请勾选 2 项历史记录进行对比"); return; }
+  const rs=[];
+  for(const b of boxes){ const r=await loadReport(b.value); if(r) rs.push(r); }
+  if(rs.length<2){ alert("对比数据不足"); return; }
+  const sec=$("sections"); sec.innerHTML="";
+  const rows=[["指标"].concat(rs.map((r,i)=>"#"+(i+1)+" "+r.targetName))];
+  const cols=["文献","临床","药物","专利","分子"];
+  cols.forEach(c=>{
+    const key={文献:"papers",临床:"trials",药物:"drugs",专利:"patents",分子:"molecules"}[c];
+    rows.push([c].concat(rs.map(r=>((r[key]||[]).length))));
+  });
+  const tbl=`<table><thead><tr>${rows[0].map((h,i)=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${
+    rows.slice(1).map(row=>`<tr>${row.map((c,i)=>`<td>${i===0?esc(c):esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const a=addPanel("📊 历史对比",rs.length+" 项");
+  a.body.insertAdjacentHTML("beforeend",tbl);
+  a.open();
+  $("resultArea").classList.remove("hidden");
 }
 
 /* ── 初始化 ─────────────────────────────────────────────────────────── */
@@ -1874,6 +2511,11 @@ function init(){
   $("patMcpTool").addEventListener("input",()=>ls.set("patMcpTool",$("patMcpTool").value));
   $("patDeep").addEventListener("change",()=>ls.set("patDeep",$("patDeep").checked));
   $("useLLM").addEventListener("change",()=>ls.set("useLLM",$("useLLM").checked));
+  $("yearRange").addEventListener("change",()=>ls.set("yearRange",$("yearRange").value));
+  $("ncbiKey").addEventListener("input",()=>ls.set("ncbiKey",$("ncbiKey").value));
+  $("intlTrials").addEventListener("change",()=>ls.set("intlTrials",$("intlTrials").checked));
+  $("aiCites").addEventListener("change",()=>ls.set("aiCites",$("aiCites").checked));
+  $("saveHist").addEventListener("change",()=>ls.set("saveHist",$("saveHist").checked));
   ["Papers","Trials","Target","Drugs","Patents"].forEach(k=>{
     const el=$("src"+k); const startVal=localStorage.getItem("src"+k);
     el.checked = startVal===null? true : startVal==="true";
@@ -1890,6 +2532,11 @@ function init(){
   $("patMcpUrl").value=ls.get("patMcpUrl","");
   $("patMcpTool").value=ls.get("patMcpTool","");
   $("patDeep").checked = ls.get("patDeep",true);
+  $("yearRange").value=ls.get("yearRange","20");
+  $("ncbiKey").value=ls.get("ncbiKey","");
+  $("intlTrials").checked = ls.get("intlTrials",false);
+  $("aiCites").checked = ls.get("aiCites",true);
+  $("saveHist").checked = ls.get("saveHist",true);
   syncPatUI();
   $("useLLM").checked = ls.get("useLLM",true);
   fillModels();
@@ -1898,9 +2545,26 @@ function init(){
   $("targetInput").addEventListener("keydown",e=>{ if(e.key==="Enter")run(); });
   $("dlMarkdown").addEventListener("click",()=>REPORT&&download(fname(REPORT.targetName)+"_报告.md",markdown(REPORT)));
   $("dlJson").addEventListener("click",()=>REPORT&&download(fname(REPORT.targetName)+"_数据.json",JSON.stringify(REPORT,null,2),"application/json"));
+  $("dlHtml").addEventListener("click",()=>REPORT&&downloadHTML(REPORT));
+  $("printBtn").addEventListener("click",()=>REPORT&&printReport(REPORT));
+  $("saveBtn").addEventListener("click",async()=>{ if(!REPORT) return; const rec=await saveReport(REPORT,[]); renderHistory(); alert(rec?"已保存到历史":"保存失败"); });
   $("dlPPT").addEventListener("click",async()=>{ if(!REPORT) return; try{ $("dlPPT").disabled=true; $("dlPPT").textContent="⏳ 生成中…"; await generatePPT(REPORT); }catch(e){ alert("PPT 生成失败: "+e.message); } finally{ $("dlPPT").disabled=false; $("dlPPT").textContent="📑 下载 PPT"; } });
   $("dlWord").addEventListener("click",()=>{ if(!REPORT) return; try{ $("dlWord").disabled=true; $("dlWord").textContent="⏳ 生成中…"; generateWord(REPORT); }catch(e){ alert("Word 生成失败: "+e.message); } finally{ $("dlWord").disabled=false; $("dlWord").textContent="📝 下载 Word"; } });
   $("copyText").addEventListener("click",()=>REPORT&&navigator.clipboard.writeText(markdown(REPORT)).then(()=>alert("已复制 Markdown 到剪贴板")).catch(()=>{}));
+  $("askBtn").addEventListener("click",askFollowUp);
+  $("askInput").addEventListener("keydown",e=>{ if(e.key==="Enter")askFollowUp(); });
+  $("histRefresh").addEventListener("click",renderHistory);
+  $("histClear").addEventListener("click",async()=>{ if(!confirm("确认清空全部历史？")) return; await clearAllReports(); renderHistory(); });
+  $("histCompare").addEventListener("click",compareReports);
+  $("histTable").addEventListener("click",async e=>{
+    const btn=e.target.closest("button[data-act]"); if(!btn) return;
+    const id=btn.getAttribute("data-id"), act=btn.getAttribute("data-act");
+    if(act==="view") viewHistory(id);
+    else if(act==="md"){ const r=await loadReport(id); if(r) download(fname(r.targetName)+"_历史.md",markdown(r)); }
+    else if(act==="json"){ const r=await loadReport(id); if(r) download(fname(r.targetName)+"_历史.json",JSON.stringify(r,null,2),"application/json"); }
+    else if(act==="del"){ await deleteReport(id); renderHistory(); }
+  });
+  renderHistory();
 }
 document.addEventListener("DOMContentLoaded",init);
 </script>

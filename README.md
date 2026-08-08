@@ -30,10 +30,17 @@
 ### ✨ 功能特性
 
 - **多数据源整合**：PubMed、ClinicalTrials.gov、Open Targets、UniProt、ChEMBL、Human Protein Atlas、Google Patents/USPTO/Lens.org/Espacenet/MCP 专利
-- **AI 智能分析**：支持 DeepSeek、小米 MiMo、智谱 GLM、自定义 OpenAI 兼容接口
+- **AI 智能分析**：支持 DeepSeek、小米 MiMo、智谱 GLM、自定义 OpenAI 兼容接口；可输出结构化 JSON 论断并附引用（PMID/NCT/专利号）
 - **联网情报分析**：智谱 GLM 支持实时联网搜索获取最新行业情报
-- **一键生成报告**：Markdown、JSON、PPT 多格式导出
+- **一键生成报告**：Markdown、JSON、PPT、Word、HTML、打印/PDF 多格式导出
 - **PWA 支持**：可安装到手机/桌面，支持离线使用
+- **历史报告库（IndexedDB 本地）**：自动保存每次分析，支持查看/下载/删除/多记录对比与增量变化提示
+- **突变特异检索**：支持「EGFR T790M / KRAS G12C」等基因+突变输入，按基因与突变分层检索
+- **文献深度**：MeSH 主题词、文献类型（综述/临床试验/原始研究）、期刊国家标注；可调年份范围（近5/10/20年/全部）
+- **临床国际覆盖**：主检索含试验国家字段，可开启实验性 EU CTIS / WHO ICTRP 源
+- **活性分子明细**：ChEMBL 保留 IC50/EC50/Ki/Kd 等测定类型
+- **稳定性**：指数退避重试、并发限制、可选 NCBI API Key、本地缓存（24h）
+- **追问问答**：基于当前报告的本地语义检索（BM25）+ AI 作答并标注来源
 
 ### 🚀 快速开始
 
