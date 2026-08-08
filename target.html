@@ -444,7 +444,7 @@ async function getPDB(gene,uniprotAcc){
     const pdbIds=(searchData.result_set||[]).map(r=>r.identifier).filter(Boolean);
     if(!pdbIds.length) return [];
     // Step 2: 使用 GraphQL 获取详细信息
-    const gql=`query($ids:[String!]!]{
+    const gql=`query($ids:[String!]!){
       entries(entry_ids:$ids){
         rcsb_id struct{title} exptl{method} refine{ls_d_res_high}
         rcsb_primary_citation{year pdbx_database_id_PubMed pdbx_database_id_DOI}
