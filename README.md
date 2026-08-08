@@ -13,6 +13,7 @@
 | 🧹 精准数据清理工具 | `clear.html` | Web 应用，用于清理和标准化数据 |
 | 🧬 BsaI 酶切位点重复分析 | `bsaitest.html` | 分析4-mer在 BsaI 位点数据库中的出现频率 |
 | 🧪 NNK 引物生成器 | `NNKprimer.html` | 输入编码区序列，生成 NNK 突变引物组合 |
+| 🧬 His-mut 多点组氨酸突变引物 | `Hismut.html` | 按标记序列定位多个突变点，生成组氨酸（CAC）突变引物并去重计数 |
 | 🔬 2ED Maturation 反向引物 | `2edmaturation.html` | 截取 NNK 前24bp 计算 Tm，生成反向互补引物 |
 | 📊 CDR 序列提取工具 | `CDR-extract-V1.2.1-260618.py` | 从 Excel/CSV 提取 CDR 序列 |
 | 🔍 CDR3/CDR2/CDR1 搜索工具 | `igblast-solo-SQLite260618-V1.3.2.py` | SQLite 数据库搜索 CDR 区域 |
@@ -190,6 +191,25 @@ start target.html
 
 ---
 
+## 🧬 His-mut 多点组氨酸突变引物生成器
+
+`Hismut.html` 是 `His-mut.py` 的纯前端 Web 版，从测序 FASTA 序列中按标记序列定位突变点，生成组氨酸（His/CAC）突变引物并去重计数。
+
+### 功能
+
+- 粘贴多序列 FASTA 或选择多个 `.seq` 文件读取
+- 支持配置多个突变点，每个点在完整序列中独立定位标记序列
+- 每个突变点可设置：标签、标记序列 motif、替换起始位、替换长度、突变碱基、上下游臂长
+- 默认预填 L13 突变点（`AGCCCCTAAGCTCCTGATCTAT`，偏移 15→CAC，臂长 15/15），与原程序一致
+- 生成正向引物及反向互补引物，按原程序逻辑子串去重并计数（COUNT / INCLUDE）
+- 输出 `primer_unique.txt`、`realign_primer_aa.txt`、`primer_unique.csv`、`de-primer_seq.txt`、`de-error.txt`
+
+### 使用
+
+直接用浏览器打开 `Hismut.html`，粘贴 FASTA 或选择文件，配置突变点后点击「生成引物」即可。
+
+---
+
 ## 🔬 2ED Maturation 反向引物生成器
 
 `2edmaturation.html` 处理含 NNK 的序列，自动生成反向引物并计算 Tm 值。
@@ -280,6 +300,7 @@ python primer_Tm-calculator.py
 
 - ✨ 新增 `bsaitest.html` - BsaI 酶切位点重复分析
 - ✨ 新增 `NNKprimer.html` - NNK 引物生成器
+- ✨ 新增 `Hismut.html` - His-mut 多点组氨酸突变引物生成器
 - ✨ 新增 `2edmaturation.html` - 2ED Maturation 反向引物生成器
 - 🐛 修复 `target.html` PDB 搜索查询逻辑
 

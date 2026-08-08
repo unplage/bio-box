@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>His-mut 多点组氨酸突变引物生成器</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        background: #f0f2f5;
+        display: flex; justify-content: center;
+        padding: 1.5rem 1rem; min-height: 100vh;
+    }
+    .container {
+        background: #fff; max-width: 1100px; width: 100%;
+        border-radius: 12px; padding: 1.8rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    h1 { color: #2c3e50; margin-bottom: .3rem; font-size: 1.5rem; }
+    .sub { color: #7f8c8d; font-size: .88rem; margin-bottom: 1.2rem; }
+    .block { margin-bottom: 1.2rem; }
+    .block-title {
+        font-weight: 600; font-size: .95rem; color: #2c3e50;
+        margin-bottom: .5rem; display: flex; align-items: center; gap: .5rem;
+    }
+    .block-title .tip { font-weight: 400; font-size: .75rem; color: #999; }
+    textarea {
+        width: 100%; min-height: 200px; padding: .6rem; font-family: monospace;
+        font-size: .85rem; border: 1px solid #ccd4dd; border-radius: 6px;
+        resize: vertical; background: #f8f9fa;
+    }
+    .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+    .btn {
+        padding: .55rem 1.5rem; border: none; border-radius: 6px;
+        font-size: .95rem; font-weight: 600; cursor: pointer; color: #fff;
+        background: #2e86c1; transition: .15s;
+    }
+    .btn:hover { background: #2874a6; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-green { background: #27ae60; }
+    .btn-green:hover { background: #229954; }
+    .btn-ghost { background: #ecf0f1; color: #2c3e50; }
+    .btn-ghost:hover { background: #dfe6ea; }
+    .btn-sm { padding: .35rem .8rem; font-size: .82rem; }
+    .btn-red { background: #e74c3c; }
+    .btn-red:hover { background: #c0392b; }
+    .mut-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .mut-table th, .mut-table td { border: 1px solid #e2e8f0; padding: .4rem .5rem; text-align: left; }
+    .mut-table th { background: #2e86c1; color: #fff; font-weight: 600; white-space: nowrap; }
+    .mut-table input {
+        width: 100%; padding: .3rem .45rem; border: 1px solid #ccd4dd;
+        border-radius: 4px; font-size: .82rem; font-family: monospace;
+    }
+    .stats { display: flex; gap: .8rem; margin: 1rem 0; flex-wrap: wrap; }
+    .stat {
+        background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 8px;
+        padding: .6rem 1rem; text-align: center; min-width: 110px;
+    }
+    .stat b { display: block; font-size: 1.4rem; color: #2e86c1; }
+    .stat span { font-size: .8rem; color: #7f8c8d; }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: .6rem; }
+    th, td { border: 1px solid #e2e8f0; padding: .45rem .6rem; text-align: left; }
+    th { background: #2e86c1; color: #fff; font-weight: 600; white-space: nowrap; }
+    tr:nth-child(even) td { background: #f8f9fa; }
+    .error { background: #fdecea; border: 1px solid #f5c6cb; color: #721c24;
+             padding: .6rem 1rem; border-radius: 6px; margin-top: .8rem; font-size: .9rem; }
+    .empty { color: #999; font-style: italic; margin-top: .8rem; }
+    .section-title {
+        font-weight: 600; color: #2c3e50; margin: 1.2rem 0 .4rem;
+        font-size: 1rem; border-left: 4px solid #2e86c1; padding-left: .5rem;
+    }
+    .hint { font-size: .75rem; color: #999; margin-top: .2rem; }
+    .file-wrap { display: inline-flex; align-items: center; gap: .4rem; }
+    .file-btn { position: relative; overflow: hidden; }
+    .file-btn input[type=file] { position: absolute; left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+    code { background: #f1f2f6; padding: .05rem .3rem; border-radius: 3px; font-size: .8em; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>🧬 His-mut 多点组氨酸突变引物生成器</h1>
+    <p class="sub">从测序 FASTA 序列中按标记序列定位突变点，生成组氨酸（His/CAC）突变引物并去重计数</p>
+
+    <div class="block">
+        <div class="block-title">1. 输入 FASTA 序列 <span class="tip">支持粘贴或多选 .seq 文件</span></div>
+        <textarea id="seqInput" spellcheck="false" placeholder="&gt;seq001&#10;ATGGCCGCCGCG...&#10;&gt;seq002&#10;ATGGCCGCCGCG..."></textarea>
+        <div class="row" style="margin-top:.5rem">
+            <button class="btn btn-ghost btn-sm" id="loadBtn" onclick="loadExample()">加载示例数据</button>
+            <span class="file-wrap">
+                <button class="btn btn-ghost btn-sm file-btn">选择 .seq 文件<input type="file" id="fileInput" multiple accept=".seq,.fasta,.fa,.txt,.fna"></button>
+            </span>
+        </div>
+    </div>
+
+    <div class="block">
+        <div class="block-title">2. 突变点配置 <span class="tip">每个点在完整序列中独立定位标记序列；替换起始位 = 标记序列后片段的 0-based 偏移</span></div>
+        <div id="mutConfig"></div>
+        <div class="row" style="margin-top:.5rem">
+            <button class="btn btn-ghost btn-sm" onclick="addMutRow()">＋ 添加突变点</button>
+            <button class="btn btn-ghost btn-sm" onclick="resetMuts()">重置为默认</button>
+        </div>
+    </div>
+
+    <div class="row" style="margin-top:.8rem">
+        <button class="btn btn-green" id="runBtn" onclick="doRun()">⚡ 生成引物</button>
+        <button class="btn" id="downloadBtn" onclick="doDownload()" style="display:none">📥 下载结果文件</button>
+    </div>
+
+    <div id="errorArea"></div>
+    <div class="stats" id="statsArea" style="display:none"></div>
+
+    <div id="resultArea"></div>
+</div>
+
+<script>
+"use strict";
+
+const DEFAULT_MUTS = [
+    {
+        label: "L13",
+        motif: "AGCCCCTAAGCTCCTGATCTAT",
+        replaceStart: 15,
+        replaceLen: 3,
+        replaceSeq: "CAC",
+        flankBefore: 15,
+        flankAfter: 15
+    }
+];
+
+const COMP = { "A": "T", "T": "A", "G": "C", "C": "G", "N": "N", "U": "A", "R": "Y", "Y": "R", "S": "S", "W": "W", "K": "M", "M": "K", "B": "V", "V": "B", "D": "H", "H": "D" };
+
+let mutRows = [];
+let lastFiles = { uniqueFasta: "", realign: "", csv: "", error: "" };
+let lastResults = null;
+
+function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function reverseComplement(seq) {
+    let out = "";
+    for (let i = seq.length - 1; i >= 0; i--) {
+        const b = seq[i].toUpperCase();
+        out += COMP[b] || b;
+    }
+    return out;
+}
+
+/* ── FASTA 解析 ─────────────────────────────────────────────── */
+function parseFasta(text) {
+    const records = [];
+    let id = "", seqLines = [];
+    const lines = String(text).split(/\r?\n/);
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (!line || line.startsWith(";") || line.startsWith("#")) continue;
+        if (line.startsWith(">")) {
+            if (id) records.push({ id, seq: seqLines.join("").toUpperCase() });
+            id = line.slice(1).trim().split(/\s+/)[0];
+            seqLines = [];
+        } else {
+            seqLines.push(line.replace(/\s+/g, ""));
+        }
+    }
+    if (id) records.push({ id, seq: seqLines.join("").toUpperCase() });
+    return records;
+}
+
+/* ── 突变点配置行 ───────────────────────────────────────────── */
+function addMutRow(cfg) {
+    const c = cfg || { label: "", motif: "", replaceStart: 15, replaceLen: 3, replaceSeq: "CAC", flankBefore: 15, flankAfter: 15 };
+    const wrap = document.createElement("div");
+    wrap.className = "mut-row";
+    wrap.style.cssText = "display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem;";
+    wrap.innerHTML =
+        '<input class="m-label" placeholder="标签" value="' + esc(c.label) + '" style="width:70px">' +
+        '<input class="m-motif" placeholder="标记序列 motif" value="' + esc(c.motif) + '" style="width:280px;font-family:monospace">' +
+        '<input class="m-start" type="number" min="0" placeholder="起始位" value="' + esc(c.replaceStart) + '" style="width:70px" title="替换起始位（0-based，相对标记序列后片段）">' +
+        '<input class="m-len" type="number" min="1" placeholder="长度" value="' + esc(c.replaceLen) + '" style="width:60px" title="替换长度">' +
+        '<input class="m-replace" placeholder="突变碱基" value="' + esc(c.replaceSeq) + '" style="width:70px;font-family:monospace" title="替换为的碱基，如 CAC">' +
+        '<input class="m-before" type="number" min="0" placeholder="上游臂" value="' + esc(c.flankBefore) + '" style="width:70px" title="上游（5\'端）保留臂长">' +
+        '<input class="m-after" type="number" min="0" placeholder="下游臂" value="' + esc(c.flankAfter) + '" style="width:70px" title="下游（3\'端）保留臂长">' +
+        '<button class="btn btn-red btn-sm" onclick="this.parentNode.remove()">✕</button>';
+    document.getElementById("mutConfig").appendChild(wrap);
+    mutRows.push(wrap);
+}
+
+function readMutRows() {
+    const out = [];
+    document.querySelectorAll("#mutConfig .mut-row").forEach(w => {
+        const label = w.querySelector(".m-label").value.trim();
+        const motif = w.querySelector(".m-motif").value.trim();
+        const replaceStart = parseInt(w.querySelector(".m-start").value, 10);
+        const replaceLen = parseInt(w.querySelector(".m-len").value, 10);
+        const replaceSeq = w.querySelector(".m-replace").value.trim().toUpperCase();
+        const flankBefore = parseInt(w.querySelector(".m-before").value, 10);
+        const flankAfter = parseInt(w.querySelector(".m-after").value, 10);
+        out.push({ label, motif, replaceStart, replaceLen, replaceSeq, flankBefore, flankAfter });
+    });
+    return out;
+}
+
+function resetMuts() {
+    document.getElementById("mutConfig").innerHTML = "";
+    mutRows = [];
+    DEFAULT_MUTS.forEach(addMutRow);
+}
+
+/* ── 核心逻辑（忠实移植 His-mut.py）─────────────────────────── */
+function generatePrimers(records, muts) {
+    const primers = [];   // {name, seq, recId, mutLabel}
+    const errors = [];
+
+    for (const rec of records) {
+        const seq = rec.seq;
+        for (const m of muts) {
+            if (!m.motif) { errors.push("please check" + rec.id + " (突变点「" + m.label + "」标记序列为空)"); continue; }
+            const idx = seq.indexOf(m.motif);
+            if (idx === -1) { errors.push("please check" + rec.id + " (突变点「" + m.label + "」标记序列未找到)"); continue; }
+            // 原程序用 re.split 切在第一次出现的 motif 后
+            const region = seq.slice(idx + m.motif.length);
+            if (region.length < m.replaceStart + m.replaceLen) {
+                errors.push("please check" + rec.id + " (突变点「" + m.label + "」替换窗口越界: 片段长度 " + region.length + ")");
+                continue;
+            }
+            const winStart = Math.max(0, m.replaceStart - m.flankBefore);
+            const winEnd = Math.min(region.length, m.replaceStart + m.replaceLen + m.flankAfter);
+            const f = region.slice(winStart, m.replaceStart) + m.replaceSeq + region.slice(m.replaceStart + m.replaceLen, winEnd);
+            const r = reverseComplement(f);
+            const tag = m.label ? "(" + m.label + ")" : "";
+            primers.push({ name: tag + "F-" + rec.id, seq: f, recId: rec.id, mutLabel: m.label, fwd: true });
+            primers.push({ name: tag + "R-" + rec.id, seq: r, recId: rec.id, mutLabel: m.label, fwd: false });
+        }
+    }
+    return { primers, errors };
+}
+
+function dedupePrimers(primers) {
+    // 复刻 His-mut.py 44-64 行：按子串包含分组去重计数
+    const uniq = [];
+    let seen = [];
+    let count = 0;
+    const nameOf = i => primers[i].name;
+    for (let i = 0; i < primers.length; i++) {
+        const seq1 = primers[i].seq;
+        const k1 = [];
+        for (let j = 0; j < primers.length; j++) {
+            if (seq1 && primers[j].seq.indexOf(seq1) !== -1) k1.push(nameOf(j));
+        }
+        if (k1.length === 1) {
+            count++;
+            seen.push(k1[0]);
+            uniq.push({ name: k1[0], seq: seq1, count: 1, include: [] });
+        } else if (k1[0] && seen.indexOf(k1[0]) !== -1) {
+            continue;
+        } else {
+            count++;
+            seen = seen.concat(k1);
+            uniq.push({ name: k1[0], seq: seq1, count: k1.length, include: k1.slice(1) });
+        }
+    }
+    return { uniq, count };
+}
+
+function pyList(arr) {
+    // 复刻 Python str(list) 格式：['name1', 'name2']
+    return "['" + arr.join("', '") + "']";
+}
+
+function buildFiles(records, muts, errors) {
+    const { primers, errors: genErrors } = generatePrimers(records, muts);
+    const allErrors = errors.concat(genErrors);
+    const { uniq, count } = dedupePrimers(primers);
+
+    // primer_unique.txt / csv / realign_primer_aa.txt（复刻原输出格式）
+    let uniqueFasta = "", csv = "", realign = "";
+    for (const u of uniq) {
+        uniqueFasta += ">" + u.name + "\n" + u.seq + "\n";
+        csv += u.name + "," + u.seq + "\n";
+        if (u.count === 1) {
+            realign += ">" + u.name + "\tCOUNT:" + "1" + "\n" + u.seq + "\n";
+        } else {
+            realign += ">" + u.name + "\t\tCOUNT:" + u.count + "\tINCLUDE:" + pyList([u.name].concat(u.include)) + "\n" + u.seq + "\n";
+        }
+    }
+    realign += "\n!!!there be " + count + " unique aa sequences!!!";
+
+    const errorTxt = allErrors.join("\n") + (allErrors.length ? "\n" : "");
+    // 原始 F/R 引物（去重前），对应原程序的 de-primer_seq.txt
+    let dePrimer = "";
+    for (const p of primers) dePrimer += ">" + p.name + "\n" + p.seq + "\n";
+    return { uniqueFasta, csv, realign, dePrimer, error: errorTxt, uniq, primers, errors: allErrors };
+}
+
+/* ── UI ─────────────────────────────────────────────────────── */
+function doRun() {
+    const errArea = document.getElementById("errorArea");
+    const statsArea = document.getElementById("statsArea");
+    const resultArea = document.getElementById("resultArea");
+    const downloadBtn = document.getElementById("downloadBtn");
+    errArea.innerHTML = "";
+    statsArea.style.display = "none";
+    resultArea.innerHTML = "";
+    downloadBtn.style.display = "none";
+
+    const text = document.getElementById("seqInput").value;
+    const records = parseFasta(text);
+    if (!records.length) { errArea.innerHTML = '<div class="error">请输入至少一条 FASTA 序列。</div>'; return; }
+
+    const muts = readMutRows();
+    if (!muts.length) { errArea.innerHTML = '<div class="error">请至少配置一个突变点。</div>'; return; }
+    for (const m of muts) {
+        if (!m.motif) { errArea.innerHTML = '<div class="error">存在标记序列（motif）为空的突变点「' + esc(m.label) + '」，请补全。</div>'; return; }
+        if (!/^[ACGTNURYSWKMBDHV]+$/i.test(m.replaceSeq)) { errArea.innerHTML = '<div class="error">突变碱基「' + esc(m.replaceSeq) + '」包含非法字符（仅允许 A/T/G/C/N 等 IUPAC 碱基）。</div>'; return; }
+    }
+
+    const res = buildFiles(records, muts, []);
+    lastFiles = { uniqueFasta: res.uniqueFasta, realign: res.realign, csv: res.csv, dePrimer: res.dePrimer, error: res.error };
+    lastResults = res;
+
+    const uniqCount = res.uniq.length;
+    const totalCount = res.primers.length;
+    statsArea.style.display = "flex";
+    statsArea.innerHTML =
+        '<div class="stat"><b>' + records.length + '</b><span>序列数</span></div>' +
+        '<div class="stat"><b>' + muts.length + '</b><span>突变点</span></div>' +
+        '<div class="stat"><b>' + totalCount + '</b><span>引物总数</span></div>' +
+        '<div class="stat"><b>' + uniqCount + '</b><span>唯一引物组</span></div>' +
+        '<div class="stat"><b>' + res.errors.length + '</b><span>错误数</span></div>';
+
+    if (res.errors.length) {
+        const eb = document.createElement("div");
+        eb.className = "error";
+        eb.textContent = "部分序列未生成引物：\n" + res.errors.join("\n");
+        errArea.appendChild(eb);
+    }
+
+    let html = '<div class="section-title">🔑 去重引物列表</div>';
+    if (!uniqCount) {
+        html += '<p class="empty">未生成任何引物。</p>';
+    } else {
+        html += '<table><thead><tr><th>#</th><th>名称</th><th>引物序列</th><th>来源记录</th><th>突变点</th><th>方向</th><th>计数</th></tr></thead><tbody>';
+        res.uniq.forEach((u, i) => {
+            const src = primersToRec(u.name, res);
+            html += '<tr><td>' + (i + 1) + '</td><td style="white-space:nowrap">' + esc(u.name) + '</td>' +
+                '<td style="font-family:monospace;word-break:break-all">' + esc(u.seq) + '</td>' +
+                '<td>' + esc(src.recId) + '</td><td>' + esc(src.mutLabel) + '</td><td>' + (src.fwd ? "F" : "R") + '</td><td>' + u.count + '</td></tr>';
+        });
+        html += '</tbody></table>';
+    }
+
+    if (res.errors.length) {
+        html += '<div class="section-title">⚠️ 错误 / 未匹配记录</div><table><thead><tr><th>记录</th><th>原因</th></tr></thead><tbody>';
+        res.errors.forEach(e => html += '<tr><td>' + esc(e.split(" ")[0]) + '</td><td>' + esc(e) + '</td></tr>');
+        html += '</tbody></table>';
+    }
+
+    resultArea.innerHTML = html;
+    downloadBtn.style.display = "inline-block";
+}
+
+function primersToRec(name, res) {
+    const p = res.primers.find(x => x.name === name);
+    if (!p) return { recId: "—", mutLabel: "—", fwd: true };
+    return { recId: p.recId, mutLabel: p.mutLabel, fwd: p.fwd };
+}
+
+function doDownload() {
+    const files = lastFiles;
+    if (!files.uniqueFasta && !files.error) return;
+    // 打包 zip 不可用（无外部库），改为逐个下载 5 个文件
+    downloadOne("primer_unique.txt", files.uniqueFasta);
+    downloadOne("realign_primer_aa.txt", files.realign);
+    downloadOne("primer_unique.csv", files.csv);
+    downloadOne("de-primer_seq.txt", files.dePrimer);
+    downloadOne("de-error.txt", files.error);
+}
+
+function downloadOne(name, content) {
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function loadExample() {
+    const seqs = [
+        "GACATCCAGATGACCCAGTCTCCATCCTCCCTGTCTGCATCTGTAGGAGACAAAGTCACCATCACTTGCCGAGCCAGTCAGGGTATTAGCAGCTGGTTAGCCTGGTATCAGCAGAAACCAGGGAAAGCCCCTAAGCTCCTGATCTATGCTGCATCCAGTTTGCAAAGTGGGGTCCCATCAAGGTTCAGCGGCAGTGGATCTGGGACGGATTACACTCTCACCATCAGCAGCCTGCAGCCTGAAGATTTTGCAACTTATTATTGTCAACAGGGTTACAATACCCCTCC",
+        "GACATCCAGATGACCCAGTCTCCATCCTCCCTGTCTGCATCTGTAGGAGACAGAGTCACCATCACTTGCCGAGCCAGTCAGGGTATTAGCAGCTGGTTAGCCTGGTATCAGCAGAAACCAGGGAAAGCCCCTAAGCTCCTGATCTATAAGGCGTCCAGTTTGCAAAGTGGGGTCCCCTCAAGGTTCAGCGGCAGTGGATCTGGGACAGATTTCACTCTCACCATCAGCAGCCTGCAGCCTGAAGATTTTGCAACTTATTACTGTCAACAGTATAACAGTGCGCCTCC"
+    ];
+    document.getElementById("seqInput").value = seqs.map((s, i) => ">seq0" + (i + 1) + "\n" + s).join("\n");
+}
+
+/* 文件上传 */
+document.getElementById("fileInput").addEventListener("change", function (ev) {
+    const files = Array.from(ev.target.files || []);
+    if (!files.length) return;
+    Promise.all(files.map(f => f.text())).then(texts => {
+        const cur = document.getElementById("seqInput").value.trim();
+        const append = texts.join("\n");
+        document.getElementById("seqInput").value = cur ? cur + "\n" + append : append;
+        ev.target.value = "";
+    }).catch(e => alert("读取文件失败: " + e.message));
+});
+
+/* 初始化 */
+resetMuts();
+document.getElementById("seqInput").addEventListener("paste", () => {});
+</script>
+</body>
+</html>
