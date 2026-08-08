@@ -205,7 +205,7 @@ let STOP=false;
 async function withFetch(url, opts){
   const pr = ($("corsProxy")?$("corsProxy").value:"").trim();
   const attempts = [];
-  if(pr && /^https?:/.test(url)) attempts.push(pr + url.replace(/^https?:\/\//,""));
+  if(pr && /^https?:/.test(url)) attempts.push(pr + url);
   attempts.push(url);
   let last;
   for(const u of attempts){ try{ return await fetch(u,opts); }catch(e){ last=e; } }
