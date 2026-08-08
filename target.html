@@ -1339,7 +1339,7 @@ function render(r,errs){
   const pdb=d&&d.pdb;
   if(pdb&&pdb.length){
     const pdbP=addPanel("🔬 蛋白质3D结构（PDB）",pdb.length+"个");
-    const pdbRows=pdb.slice(0,5).map(p=>`<tr><td><a href="${p.link}" target="_blank">${esc(p.pdbId)}</a></td><td>${esc(p.title).slice(0,60)}</td><td>${esc(p.method)}</td><td>${esc(p.resolution||"—")}Å</td><td>${esc(p.year||"—")}</td></tr>`).join("");
+    const pdbRows=pdb.map(p=>`<tr><td><a href="${p.link}" target="_blank">${esc(p.pdbId)}</a></td><td>${esc(p.title).slice(0,60)}</td><td>${esc(p.method)}</td><td>${esc(p.resolution||"—")}Å</td><td>${esc(p.year||"—")}</td></tr>`).join("");
     pdbP.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>PDB ID</th><th>标题</th><th>方法</th><th>分辨率</th><th>年份</th></tr></thead><tbody>${pdbRows}</tbody></table>`);
     pdbP.open();
   }
@@ -1359,13 +1359,12 @@ function render(r,errs){
 
   if(r.papers.length){
     const pn=addPanel("📚 文献列表",r.papers.length+"篇");
-    r.papers.slice(0,30).forEach(p=>pn.body.insertAdjacentHTML("beforeend",
+    r.papers.forEach(p=>pn.body.insertAdjacentHTML("beforeend",
       `<div class="paper"><div class="t">${esc(p.title)}</div><div class="m">${esc(p.journal)} (${esc(p.year)})`+
       (p.doi?` · DOI <a href="https://doi.org/${esc(p.doi)}" target="_blank" style="color:var(--mid)">${esc(p.doi)}</a>`:"")+
       (p.pmid?` · PMID <a href="https://pubmed.ncbi.nlm.nih.gov/${esc(p.pmid)}" target="_blank" style="color:var(--mid)">${esc(p.pmid)}</a>`:"")+
       "</div>"+
       (p.abstract?`<div class="a">${esc(p.abstract.slice(0,240))}…</div>`:"")+"</div>"));
-    if(r.papers.length>30)pn.body.insertAdjacentHTML("beforeend",`<p class="empty">… 共 ${r.papers.length} 篇</p>`);
     pn.open();
   }
 
@@ -1374,7 +1373,7 @@ function render(r,errs){
   const ph=countPhase(r.trials);
   if(Object.keys(ph).length)c.body.insertAdjacentHTML("beforeend",`<p style="margin-top:.4rem">${Object.entries(ph).map(([k,v])=>`<span class="empty" style="margin-right:6px">${esc(k)}：${v}</span>`).join("")}</p>`);
   if(r.trials.length){
-    const rows=r.trials.slice(0,15).map(t=>`<tr><td><a href="https://clinicaltrials.gov/study/${esc(t.id)}" target="_blank" style="color:var(--mid)">${esc(t.id)}</a></td><td>${esc(t.title).slice(0,70)}</td><td>${esc(t.phase)}</td><td>${esc(t.status)}</td><td>${esc((t.conditions||[]).join(", ")).slice(0,50)}</td></tr>`).join("");
+    const rows=r.trials.map(t=>`<tr><td><a href="https://clinicaltrials.gov/study/${esc(t.id)}" target="_blank" style="color:var(--mid)">${esc(t.id)}</a></td><td>${esc(t.title).slice(0,70)}</td><td>${esc(t.phase)}</td><td>${esc(t.status)}</td><td>${esc((t.conditions||[]).join(", ")).slice(0,50)}</td></tr>`).join("");
     c.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>NCT</th><th>标题</th><th>阶段</th><th>状态</th><th>适应症</th></tr></thead><tbody>${rows}</tbody></table>`);
     c.open();
   }
@@ -1391,7 +1390,7 @@ function render(r,errs){
   if(r.patentNote)pt.body.insertAdjacentHTML("beforeend",`<div class="note" style="border-left:3px solid #f39c12">${esc(r.patentNote)}</div>`);
   if(r.patent_landscape)pt.body.insertAdjacentHTML("beforeend",`<div class="AI">${esc(r.patent_landscape).replace(/\n/g,"<br>")}</div>`);
   if(r.patents.length){
-    const rows=r.patents.slice(0,30).map(p=>{
+    const rows=r.patents.map(p=>{
       const badges=[];
       if(p.year) badges.push(p.year);
       if(p.legal||p.detailLegal) badges.push(p.detailLegal||p.legal);
@@ -1417,19 +1416,19 @@ function render(r,errs){
   }
   const detailed=r.patents.filter(p=>p.abstract||p.mcpAbstract||p.mcpDetail||(p.citations&&p.citations.length)||p.cpc||p.detailLegal||p.inventors);
   if(detailed.length){
-    const dblk=detailed.slice(0,5).map(p=>{
+    const dblk=detailed.map(p=>{
       let s=`<div class="paper"><div class="t">${esc(p.number)} · ${esc(p.title)}</div>`;
-      if(p.abstract||p.mcpAbstract) s+=`<div class="m">摘要：${esc((p.abstract||p.mcpAbstract).slice(0,400))}${(p.abstract||p.mcpAbstract).length>400?"…":""}</div>`;
+      if(p.abstract||p.mcpAbstract) s+=`<div class="m">摘要：${esc(p.abstract||p.mcpAbstract)}</div>`;
       const bits=[];
       if(p.cpc&&p.cpc.length) bits.push("CPC: "+p.cpc.join("; "));
       if(p.claims) bits.push("权利要求约 "+p.claims+" 项");
       if(p.detailLegal) bits.push("法律状态: "+p.detailLegal);
       if(p.mcpStatus) bits.push("USPTO状态: "+p.mcpStatus);
       if(p.mcpClassification) bits.push("分类: "+p.mcpClassification);
-      if(p.inventors) bits.push("发明人: "+p.inventors.slice(0,80));
+      if(p.inventors) bits.push("发明人: "+p.inventors);
       if(p.countries&&p.countries.length) bits.push("同族国家: "+p.countries.join(", "));
       if(bits.length) s+=`<div class="m">${esc(bits.join("　"))}</div>`;
-      if(p.citations&&p.citations.length) s+=`<div class="m">引用的专利（${p.citations.length}）: ${p.citations.slice(0,6).map(esc).join(", ")}${p.citations.length>6?" …":""}</div>`;
+      if(p.citations&&p.citations.length) s+=`<div class="m">引用的专利（${p.citations.length}）: ${p.citations.map(esc).join(", ")}</div>`;
       s+=`</div>`;
       return s;
     }).join("");
@@ -1469,7 +1468,7 @@ function markdown(r){
       if(p.mcpStatus) bits.push("USPTO:"+String(p.mcpStatus).slice(0,40));
       if(bits.length) line+=`（${bits.join("，")}）`;
       m+=line+"\n";
-      if(p.abstract) m+=`  - 摘要：${p.abstract.slice(0,300)}\n`;
+      if(p.abstract) m+=`  - 摘要：${p.abstract}\n`;
     });
     m+="\n";
   }
@@ -1752,21 +1751,20 @@ function generateWord(r){
   if(r.papers.length){
     html+=`<h3>文献详情（${r.papers.length}篇）</h3>
     <table><tr><th>#</th><th>标题</th><th>期刊</th><th>年份</th><th>来源</th></tr>`;
-    r.papers.slice(0,30).forEach((p,i)=>{
+    r.papers.forEach((p,i)=>{
       let link="";
       if(p.pmid) link=`<a href="https://pubmed.ncbi.nlm.nih.gov/${p.pmid}">PubMed</a>`;
       else if(p.doi) link=`<a href="https://doi.org/${p.doi}">DOI</a>`;
-      html+=`<tr><td>${i+1}</td><td>${esc(p.title).slice(0,70)}</td><td>${esc(p.journal)}</td><td>${esc(p.year)}</td><td>${link}</td></tr>`;
+      html+=`<tr><td>${i+1}</td><td>${esc(p.title)}</td><td>${esc(p.journal)}</td><td>${esc(p.year)}</td><td>${link}</td></tr>`;
     });
     html+=`</table>`;
-    if(r.papers.length>30) html+=`<p class="source">… 共 ${r.papers.length} 篇</p>`;
   }
 
   html+=`<h2>四、临床概况</h2><p>${esc(r.clinical_landscape).replace(/\n/g,"<br>")}</p>`;
   if(r.trials.length){
     html+=`<table><tr><th>NCT</th><th>标题</th><th>阶段</th><th>状态</th><th>适应症</th><th>来源</th></tr>`;
-    r.trials.slice(0,20).forEach(t=>{
-      html+=`<tr><td>${esc(t.id)}</td><td>${esc(t.title).slice(0,50)}</td><td>${esc(t.phase)}</td><td>${esc(t.status)}</td><td>${esc((t.conditions||[]).join(", ")).slice(0,40)}</td><td><a href="https://clinicaltrials.gov/study/${esc(t.id)}">ClinicalTrials.gov</a></td></tr>`;
+    r.trials.forEach(t=>{
+      html+=`<tr><td>${esc(t.id)}</td><td>${esc(t.title)}</td><td>${esc(t.phase)}</td><td>${esc(t.status)}</td><td>${esc((t.conditions||[]).join(", ")).slice(0,40)}</td><td><a href="https://clinicaltrials.gov/study/${esc(t.id)}">ClinicalTrials.gov</a></td></tr>`;
     });
     html+=`</table>`;
   }
@@ -1794,14 +1792,14 @@ function generateWord(r){
     if(r.patent_landscape) html+=`<div class="ai-box">${esc(r.patent_landscape).replace(/\n/g,"<br>")}</div>`;
     if(r.patents.length){
       html+=`<table><tr><th>专利号</th><th>标题</th><th>申请人</th><th>年份</th><th>链接</th></tr>`;
-      r.patents.slice(0,20).forEach(p=>{
-        let t=esc(p.title).slice(0,50);
+      r.patents.forEach(p=>{
+        let t=esc(p.title);
         const bits=[];
         if(p.legal||p.detailLegal) bits.push("状态:"+(p.detailLegal||p.legal));
         if(p.citedBy) bits.push("被引"+p.citedBy);
         if(p.claims) bits.push("约"+p.claims+"项权利要求");
         if(bits.length) t+=`<br><span style="color:#7F8C8D;font-size:8pt">${esc(bits.join("，"))}</span>`;
-        if(p.abstract) t+=`<br><span style="color:#7F8C8D;font-size:8pt">摘要：${esc(p.abstract.slice(0,160))}…</span>`;
+        if(p.abstract) t+=`<br><span style="color:#7F8C8D;font-size:8pt">摘要：${esc(p.abstract)}</span>`;
         html+=`<tr><td>${esc(p.number)}</td><td>${t}</td><td>${esc(p.assignee).slice(0,25)}</td><td>${esc(p.year)}</td><td>${p.link?`<a href="${p.link}">查看</a>`:""}</td></tr>`;
       });
       html+=`</table>`;
