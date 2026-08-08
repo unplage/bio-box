@@ -146,7 +146,7 @@
                     <div style="margin-top:.4rem;">
                         <label class="chk"><input type="checkbox" id="patDeep" checked> 🔍 专利深度增强（摘要/权利要求/被引/申请人布局）</label>
                     </div>
-                    <div class="hint">Google Patents 免 Key（走 CORS 代理）；Espacenet 需在 data.epo.org 免费注册申请，Key 填「client_id client_secret」；USPTO/Lens 需 Key；MCP 为 streamable-HTTP 端点，可选 Bearer Key。</div>
+                    <div class="hint">Google Patents 免 Key 但需跨域代理，内置自动尝试 r.jina.ai 兜底，失败会自动回退免Key MCP；Espacenet 需在 data.epo.org 免费注册申请，Key 填「client_id client_secret」；USPTO/Lens 需 Key；MCP 为 streamable-HTTP 端点，可选 Bearer Key。</div>
                 </div>
             </div>
             <div style="margin-top:.8rem;">
@@ -543,23 +543,46 @@ async function getChEMBL(name){
 }
 
 /* ── 专利调研 ───────────────────────────────────────────────── */
+const PATENT_MCP_FALLBACK="https://gateway.pipeworx.io/patents/mcp";
 async function searchPatents(target,cb){
   const src=$("patSrc").value, key=($("patKey").value||"").trim();
   const deep=$("patDeep").checked;
-  let list, ctx=null;
+  let list, ctx=null, note="", effSrc=src;
   if(src==="lens") list=await lensSearch(target,key);
-  else if(src==="google") list=await googlePatentsSearch(target);
+  else if(src==="google"){
+    try{ list=await googlePatentsSearch(target); }
+    catch(e){
+      // Google 代理链全部失败 → 免Key MCP 自动回退
+      const fb=await keylessMCPFallback(target);
+      if(fb&&fb.patents&&fb.patents.length){ list=fb.patents; ctx=fb.ctx; effSrc="mcp"; note="Google 代理链不可用，已自动回退到 MCP 免Key 来源（pipeworx）。"; }
+      else throw e;
+    }
+    if((!list||!list.length)&&!note){
+      const fb=await keylessMCPFallback(target);
+      if(fb&&fb.patents&&fb.patents.length){ list=fb.patents; ctx=fb.ctx; effSrc="mcp"; note="Google 未检索到结果，已自动回退到 MCP 免Key 来源（pipeworx）。"; }
+    }
+  }
   else if(src==="espacenet") list=await espacenetSearch(target,key);
   else if(src==="mcp"){ ctx=await mcpPatentSearch(target,key); list=ctx.patents; }
   else list=await usptoSearch(target,key);
   list=dedupePatents(list||[]);
   let insight=null;
   if(deep&&list.length){
-    const r=await deepEnrichPatents(list,{src,key,target,maxDetail:5,
+    const r=await deepEnrichPatents(list,{src:effSrc,key,target,maxDetail:5,
       tools:ctx&&ctx.tools, endpoint:ctx&&ctx.endpoint, session:ctx&&ctx.session},cb);
     list=r.patents; insight=r.insight;
   }
-  return {patents:list, insight};
+  return {patents:list, insight, note};
+}
+async function keylessMCPFallback(target){
+  let last;
+  for(let i=0;i<2;i++){
+    try{
+      const ctx=await mcpPatentSearchAt(target,"",PATENT_MCP_FALLBACK,"");
+      return {ctx, patents:ctx.patents, via:"pipeworx"};
+    }catch(e){ last=e; }
+  }
+  return null;
 }
 async function usptoSearch(target,key){
   if(!key) throw new Error("请先在设置中填写 USPTO 开放数据门户的 API Key（data.uspto.gov 免费申请）");
@@ -595,7 +618,7 @@ async function lensSearch(name,key){
     link:x.publication_number?`https://www.lens.org/lens/patent/search/result?patent_id=${x.publication_number}`:""})).filter(p=>p.number||p.title);
 }
 
-/* ── Google Patents（免 Key，走 CORS 代理）────────────────── */
+/* ── Google Patents（免 Key，走 CORS 代理 + 内置代理链）────── */
 function stripTags(s){ return String(s==null?"":s).replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim(); }
 function googleNum(num){ return String(num||"").replace(/^patent\//,"").replace(/\/.*$/,"").replace(/^US0+/,"").trim(); }
 function familyLegal(fm){
@@ -608,11 +631,39 @@ function familyLegal(fm){
     return st?(st+(cc?" · "+cc:"")):"";
   }catch(e){ return ""; }
 }
+/* googleFetch：按序尝试 用户代理 → r.jina.ai（免Key，重试）→ allorigins → 直连。
+ * 返回 {text, via}，全部失败时抛出带尝试明细的错误。 */
+async function googleFetch(url,{retries=2}={}){
+  const pr=($("corsProxy")?$("corsProxy").value:"").trim();
+  const attempts=[];
+  if(pr&&/^https?:/.test(url)) attempts.push({label:"自定义代理",url:pr+url});
+  for(let i=0;i<=retries;i++) attempts.push({label:"r.jina.ai",url:"https://r.jina.ai/"+url});
+  attempts.push({label:"allorigins",url:"https://api.allorigins.win/raw?url="+encodeURIComponent(url)});
+  attempts.push({label:"直连",url});
+  const errors=[];
+  for(const a of attempts){
+    try{
+      const r=await fetch(a.url,{headers:{"Referer":"https://patents.google.com/"}});
+      if(!r.ok){ errors.push(a.label+": HTTP "+r.status); continue; }
+      const text=await r.text().catch(()=>"");
+      if(!text){ errors.push(a.label+": 空响应"); continue; }
+      // r.jina.ai 会把 JSON 包在 "Markdown Content:" 之后，剥离包装
+      const body=(a.label==="r.jina.ai" && text.indexOf("Markdown Content:")>=0)
+        ? text.slice(text.indexOf("Markdown Content:")+ "Markdown Content:".length).trim()
+        : text;
+      // 校验是否为合法 JSON（JSON 模式下）
+      if(url.indexOf("/xhr/query")>=0){
+        try{ JSON.parse(body); }catch(e){ errors.push(a.label+": 非JSON"); continue; }
+      }
+      return {text:body, via:a.label};
+    }catch(e){ errors.push(a.label+": "+(e&&e.message||"网络错误")); }
+  }
+  throw new Error("Google Patents 请求失败（CORS 被拦截）。已尝试: "+errors.join("；")+"。\n提示: 设置中填写可用 CORS 代理，或改用「MCP（免Key）」/「Espacenet」来源。");
+}
 async function googleXhr(q,num){
   const exp=encodeURIComponent("q="+q+"&num="+(num||30));
-  const r=await withFetch("https://patents.google.com/xhr/query?url="+exp+"&exp=",{headers:{"Referer":"https://patents.google.com/"}});
-  if(!r.ok) throw new Error("Google Patents HTTP "+r.status);
-  return r.json().catch(()=>null);
+  const {text}=await googleFetch("https://patents.google.com/xhr/query?url="+exp);
+  return JSON.parse(text);
 }
 function googleParseItems(d){
   const items=[];
@@ -656,10 +707,14 @@ async function googleAssigneePortfolio(assignee){
 async function googlePatentDetail(numRaw){
   const num=googleNum(numRaw);
   if(!num) return null;
-  const r=await withFetch("https://patents.google.com/patent/"+num+"/en",{headers:{"Referer":"https://patents.google.com/"}});
-  if(!r.ok) return null;
-  const html=await r.text().catch(()=>"");
-  if(!html) return null;
+  let html="", via="";
+  try{
+    const res=await googleFetch("https://patents.google.com/patent/"+num+"/en",{retries:1});
+    html=res.text; via=res.via;
+  }catch(e){ return null; }
+  // r.jina.ai 可能返回 markdown 化页面而非原始 HTML：检测到明显包装则放弃详情增强
+  if(via==="r.jina.ai" && (html.indexOf("<html")<0 && html.indexOf("<!DOCTYPE")<0 && html.indexOf("<meta")<0)) return null;
+  if(!html||html.indexOf("<meta")<0) return null;
   const doc=new DOMParser().parseFromString(html,"text/html");
   const meta=n=>{ const el=doc.querySelector('meta[name="'+n+'"]'); return (el&&el.getAttribute("content")||"").trim(); };
   const inventors=[...doc.querySelectorAll('meta[name="DC.contributor"]')].map(e=>(e.getAttribute("content")||"").trim()).filter(Boolean);
@@ -902,10 +957,13 @@ async function mcpPatentSearch(target,key){
   const endpoint=($("patMcpUrl").value||"").trim().replace(/\/+$/,"");
   const toolPref=($("patMcpTool").value||"").trim();
   if(!endpoint) throw new Error("请先在设置中填写 MCP endpoint（streamable-HTTP 地址）");
+  return mcpPatentSearchAt(target,key,endpoint,toolPref);
+}
+async function mcpPatentSearchAt(target,key,endpoint,toolPref){
   const init=await mcpInitialize(endpoint,key);
   const tools=await mcpListTools(endpoint,key,init.session);
   if(!tools.length) throw new Error("MCP 服务器未提供任何工具");
-  const tool=pickPatentTool(tools,toolPref);
+  const tool=pickPatentTool(tools,toolPref||"");
   const terms=expandTerms(target).slice(0,2).join(" OR ");
   const tSchema=(tools.find(t=>t.name===tool)||{});
   let args=buildMcpArgs(tSchema.schema,tSchema.required,terms,target);
@@ -1017,7 +1075,7 @@ function countStatus(t){ const m={}; t.forEach(x=>{ const k=x.status||"未知"; 
 function condsText(t){ const s=new Set(); t.forEach(x=>(x.conditions||[]).forEach(c=>{ if(c) s.add(c); })); return [...s].slice(0,8).join("、")||"—"; }
 function buildReport(o){
   const r={ targetName:o.name, detail:o.detail, papers:o.papers||[], trials:o.trials||[], drugs:o.drugs||[],
-            patents:o.patents||[], molecules:o.molecules||[], patentInsight:o.patentInsight||null,
+            patents:o.patents||[], molecules:o.molecules||[], patentInsight:o.patentInsight||null, patentNote:o.patentNote||"",
             target_overview:"", research_progress:"", clinical_landscape:"",
             key_findings:"", future_outlook:"", web_summary:"", patent_landscape:"" };
   const d=r.detail;
@@ -1159,7 +1217,7 @@ function showErr(e){
   const box=$("errbox"); box.classList.remove("hidden");
   box.textContent="❌ 生成失败："+(e&&e.message?e.message:e);
   if(/(Failed to fetch|NetworkError|CORS|blocked)/.test(e&&e.message||""))
-    box.textContent+="\n\n提示：疑似 CORS 跨域限制。可在设置中填写一个 CORS 代理前缀（如 https://corsproxy.io/?）后重试。";
+    box.textContent+="\n\n提示：疑似 CORS 跨域限制。可①在设置中填写可用 CORS 代理后重试；②或将「专利接口」切换为 MCP（免Key）或 Espacenet。内置已自动尝试 r.jina.ai / allorigins 兜底。";
   box.scrollIntoView({behavior:"smooth"});
 }
 async function run(){
@@ -1173,7 +1231,7 @@ async function run(){
   const useLLM=$("useLLM").checked;
   const on=src=>$("src"+src).checked;
   const errs=[];
-  let detail=null, papers=[], trials=[], drugs=[], patents=[], molecules=[], patentInsight=null;
+  let detail=null, papers=[], trials=[], drugs=[], patents=[], molecules=[], patentInsight=null, patentNote="";
   try{
     if(on("Papers")){ setProg(8,"搜索文献 (PubMed)...");
       try{ papers=await Promise.race([searchPapers(name,40),withTimeout(50000)]); setProg(18,""); }
@@ -1207,12 +1265,12 @@ async function run(){
     if(on("Patents")){ setProg(66,"检索专利…");
       try{
         const res=await Promise.race([searchPatents(name,(t)=>{ if(t) setProg(70,t); }),withTimeout(120000)]);
-        patents=res.patents||[]; patentInsight=res.insight||null;
+        patents=res.patents||[]; patentInsight=res.insight||null; patentNote=res.note||"";
       }
       catch(e){ if(!STOP) errs.push("专利: "+e.message); }
       setProg(70,""); }
     if(STOP) return;
-    const report=buildReport({name:name,detail,papers,trials,drugs,patents,molecules,patentInsight});
+    const report=buildReport({name:name,detail,papers,trials,drugs,patents,molecules,patentInsight,patentNote});
     if(useLLM){ setProg(72,"AI 增强…"); await enhance(report,setProg); }
     if(STOP) return;
     REPORT=report;
@@ -1330,6 +1388,7 @@ function render(r,errs){
   if(r.drugs.length)dg.open();
 
   const pt=addPanel("📜 专利调研",r.patents.length+"项");
+  if(r.patentNote)pt.body.insertAdjacentHTML("beforeend",`<div class="note" style="border-left:3px solid #f39c12">${esc(r.patentNote)}</div>`);
   if(r.patent_landscape)pt.body.insertAdjacentHTML("beforeend",`<div class="AI">${esc(r.patent_landscape).replace(/\n/g,"<br>")}</div>`);
   if(r.patents.length){
     const rows=r.patents.slice(0,30).map(p=>{

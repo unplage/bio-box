@@ -101,15 +101,19 @@ start target.html
 
 #### 2. CORS 代理（可选）
 
-如果遇到跨域请求失败，可配置 CORS 代理：
-- 推荐代理：`https://corsproxy.io/?`
-- 在设置中填入代理前缀即可
+Google Patents 的 XHR 接口不返回 CORS 头，浏览器直连会被拦截。页面已**内置代理链自动兜底**：
+1. 你填写的自定义代理（若有）
+2. `https://r.jina.ai/<url>`（免费、免 Key，自动重试，解析其 Markdown 包装）
+3. `https://api.allorigins.win/raw?url=`（兜底）
+4. 直连（最后）
+
+若全部失败，Google 来源会自动回退到免 Key 的 MCP 来源（pipeworx）并在专利面板顶部提示。可填自定义代理前缀进一步优化。
 
 #### 3. 专利数据源
 
 | 数据源 | 说明 | 需要 API Key |
 |:---|:---|:---:|
-| Google Patents | 免 Key，走 CORS 代理（默认） | ❌ |
+| Google Patents | 免 Key；需跨域代理，内置 r.jina.ai 兜底+失败自动回退 MCP（默认） | ❌ |
 | USPTO | 美国专利商标局 | ✅ |
 | Lens.org | 全球专利检索 | ✅ |
 | Espacenet (EPO) | 欧洲专利局 OPS，覆盖全球（含非美国），Key 填 `client_id client_secret` | ✅(免费) |
