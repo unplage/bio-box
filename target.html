@@ -131,12 +131,22 @@
                     <span class="lbl">专利接口（结构化检索）</span>
                     <div class="row" style="flex-wrap:nowrap;">
                         <select id="patSrc" style="flex:1;min-width:0;">
+                            <option value="google">Google Patents（免Key）</option>
                             <option value="uspto">USPTO 开放数据门户</option>
                             <option value="lens">Lens.org</option>
+                            <option value="espacenet">Espacenet (EPO)</option>
+                            <option value="mcp">MCP（streamable HTTP）</option>
                         </select>
-                        <input type="password" id="patKey" placeholder="API Key / token" style="flex:1;min-width:0;">
+                        <input type="password" id="patKey" placeholder="API Key / token（免Key可留空）" style="flex:1;min-width:0;">
                     </div>
-                    <div class="hint">USPTO 需在 data.uspto.gov 免费申请 API Key；Lens.org 需申请 token。</div>
+                    <div id="mcpRow" class="row" style="flex-wrap:nowrap;margin-top:.4rem;display:none;">
+                        <input type="text" id="patMcpUrl" placeholder="MCP endpoint 例如 https://gateway.pipeworx.io/patents/mcp" style="flex:1;min-width:0;">
+                        <input type="text" id="patMcpTool" placeholder="工具名（留空自动探测）" style="flex:1;min-width:0;">
+                    </div>
+                    <div style="margin-top:.4rem;">
+                        <label class="chk"><input type="checkbox" id="patDeep" checked> 🔍 专利深度增强（摘要/权利要求/被引/申请人布局）</label>
+                    </div>
+                    <div class="hint">Google Patents 免 Key（走 CORS 代理）；Espacenet 需在 data.epo.org 免费注册申请，Key 填「client_id client_secret」；USPTO/Lens 需 Key；MCP 为 streamable-HTTP 端点，可选 Bearer Key。</div>
                 </div>
             </div>
             <div style="margin-top:.8rem;">
@@ -174,7 +184,7 @@
         <a href="https://clinicaltrials.gov/" target="_blank">ClinicalTrials.gov</a> ·
         <a href="https://platform.opentargets.org/" target="_blank">Open Targets</a> ·
         <a href="https://www.proteinatlas.org/" target="_blank">Human Protein Atlas</a> ·
-        <a href="https://data.uspto.gov/" target="_blank">USPTO(API Key)</a> · <a href="https://www.lens.org/" target="_blank">Lens.org</a> &nbsp;|&nbsp;
+        <a href="https://data.uspto.gov/" target="_blank">USPTO(API Key)</a> · <a href="https://www.lens.org/" target="_blank">Lens.org</a> · <a href="https://patents.google.com/" target="_blank">Google Patents(免Key)</a> · <a href="https://www.epo.org/" target="_blank">Espacenet(EPO)</a> &nbsp;|&nbsp;
         AI: DeepSeek / 小米MiMo / 智谱 / 自定义兼容接口 &nbsp;|&nbsp;
         <a href="clear.html">🧹 数据清理工具</a>
     </footer>
@@ -277,7 +287,9 @@ async function searchPapers(target,maxResults){
   if(!idList.length) return [];
   const u="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?"+new URLSearchParams({
     db:"pubmed",id:idList.join(","),retmode:"xml",rettype:"abstract"}).toString();
-  const r=await withFetch(u); const xml=await r.text();
+  const r=await withFetch(u);
+  if(!r.ok) throw new Error("PubMed efetch HTTP "+r.status);
+  const xml=await r.text();
   return parsePubMedXML(xml);
 }
 function parsePubMedXML(xml){
@@ -309,18 +321,21 @@ async function searchTrials(target,maxResults){
     fields:"NCTId|BriefTitle|OverallStatus|Phase|Condition|InterventionType|InterventionName|LeadSponsorName|StartDate|CompletionDate|BriefSummary|EnrollmentCount",
     "filter.overallStatus":"ACTIVE_NOT_RECRUITING|COMPLETED|RECRUITING|NOT_YET_RECRUITING|ENROLLING_BY_INVITATION|AVAILABLE"}).toString();
   const data=await reqJson(u);
+  const PHASE_MAP={"EARLY_PHASE1":"Phase 1(早期)","PHASE1":"Phase 1","PHASE2":"Phase 2","PHASE3":"Phase 3","PHASE4":"Phase 4"};
   return (data.studies||[]).map(s=>{
     const p=s.protocolSection||{};
     const fmt=d=>d?[d.year,d.month,d.day].filter(Boolean).join("-"):"";
     const st=s.statusSection||{};
     const idm=p.identificationModule||{}, dm=p.designModule||{}, sm=p.statusModule||{};
+    const phRaw=(dm.phases&&dm.phases[0])||"";
     return {
-      id:(idm.nctId)||"", title:(idm.briefTitle)||"", phase:(dm.phases&&dm.phases[0])||"",
+      id:(idm.nctId)||"", title:(idm.briefTitle)||"", phase:PHASE_MAP[phRaw]||phRaw||"",
       status:st.overallStatus||(sm.overallStatus)||"",
       conditions:(p.conditionsModule&&p.conditionsModule.conditions)||[],
-      interventions:((p.armsInterventionsModule&&p.armsInterventionsModule.interventions)||[]).map(a=>"["+(a.interventionType||"")+"] "+a.interventionName).filter(Boolean),
+      interventions:((p.armsInterventionsModule&&p.armsInterventionsModule.interventions)||[]).map(a=>"["+(a.interventionType||a.type||"")+"] "+(a.interventionName||a.name||"")).filter(Boolean),
       sponsor:(p.sponsorCollaboratorsModule&&p.sponsorCollaboratorsModule.leadSponsor&&p.sponsorCollaboratorsModule.leadSponsor.name)||"",
-      startDate:fmt(sm.startDate), completionDate:fmt(sm.completionDate),
+      startDate:(sm.startDateStruct&&sm.startDateStruct.date)||fmt(sm.startDate)||"",
+      completionDate:(sm.completionDateStruct&&sm.completionDateStruct.date)||fmt(sm.completionDate)||"",
       briefSummary:(p.descriptionModule&&p.descriptionModule.briefSummary||"").slice(0,1000),
       enrollment:(dm.enrollmentInfo&&dm.enrollmentInfo.count)||0
     };
@@ -528,15 +543,28 @@ async function getChEMBL(name){
 }
 
 /* ── 专利调研 ───────────────────────────────────────────────── */
-async function searchPatents(target){
+async function searchPatents(target,cb){
   const src=$("patSrc").value, key=($("patKey").value||"").trim();
-  const list = src==="lens" ? await lensSearch(target,key) : await usptoSearch(target,key);
-  return dedupePatents(list);
+  const deep=$("patDeep").checked;
+  let list, ctx=null;
+  if(src==="lens") list=await lensSearch(target,key);
+  else if(src==="google") list=await googlePatentsSearch(target);
+  else if(src==="espacenet") list=await espacenetSearch(target,key);
+  else if(src==="mcp"){ ctx=await mcpPatentSearch(target,key); list=ctx.patents; }
+  else list=await usptoSearch(target,key);
+  list=dedupePatents(list||[]);
+  let insight=null;
+  if(deep&&list.length){
+    const r=await deepEnrichPatents(list,{src,key,target,maxDetail:5,
+      tools:ctx&&ctx.tools, endpoint:ctx&&ctx.endpoint, session:ctx&&ctx.session},cb);
+    list=r.patents; insight=r.insight;
+  }
+  return {patents:list, insight};
 }
 async function usptoSearch(target,key){
   if(!key) throw new Error("请先在设置中填写 USPTO 开放数据门户的 API Key（data.uspto.gov 免费申请）");
   const terms=expandTerms(target).slice(0,3).map(t=>t.replace(/["\\]/g," "));
-  const q=terms.length? terms.map(t=>"inventionTitle:("+t+")").join(" OR ")+" OR "+terms.map(t=>"("+t+")").join(" OR ") : escapeTerm(target);
+  const q=terms.length? terms.map(t=>"inventionTitle:("+t+")").join(" OR ")+" OR "+terms.map(t=>"("+t+")").join(" OR ") : "("+target.replace(/["\\]/g," ").trim()+")";
   const u="https://api.uspto.gov/api/v1/patent/applications/search?"+new URLSearchParams({q,limit:"50",offset:"0"}).toString();
   const r=await reqJson(u,{headers:{"X-API-Key":key}});
   const arr = Array.isArray(r) ? r
@@ -559,11 +587,357 @@ async function lensSearch(name,key){
     include:["title","publication_number","publication_date","assignee"]});
   const r=await withFetch("https://api.lens.org/scholarly/search",{method:"POST",
     headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body});
+  if(!r.ok) throw new Error("Lens.org HTTP "+r.status);
   const d=await r.json();
   return (d&&d.results||[]).map(x=>({number:x.publication_number||"",title:x.title||"",
     assignee:(x.assignee||[]).map(a=>a.assignee_organization||"").join(", "),
     year:(x.publication_date||"").slice(0,4),date:x.publication_date||"",
     link:x.publication_number?`https://www.lens.org/lens/patent/search/result?patent_id=${x.publication_number}`:""})).filter(p=>p.number||p.title);
+}
+
+/* ── Google Patents（免 Key，走 CORS 代理）────────────────── */
+function stripTags(s){ return String(s==null?"":s).replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim(); }
+function googleNum(num){ return String(num||"").replace(/^patent\//,"").replace(/\/.*$/,"").replace(/^US0+/,"").trim(); }
+function familyLegal(fm){
+  try{
+    const agg=fm&&fm.aggregated||{};
+    const list=(agg.country_status||[]);
+    let best=list.find(c=>/^US$/i.test(c.country_code))||list[0];
+    const st=best&&best.best_patent_stage&&best.best_patent_stage.state||"";
+    const cc=best&&best.country_code||"";
+    return st?(st+(cc?" · "+cc:"")):"";
+  }catch(e){ return ""; }
+}
+async function googleXhr(q,num){
+  const exp=encodeURIComponent("q="+q+"&num="+(num||30));
+  const r=await withFetch("https://patents.google.com/xhr/query?url="+exp+"&exp=",{headers:{"Referer":"https://patents.google.com/"}});
+  if(!r.ok) throw new Error("Google Patents HTTP "+r.status);
+  return r.json().catch(()=>null);
+}
+function googleParseItems(d){
+  const items=[];
+  (d&&d.results&&d.results.cluster||[]).forEach(cl=>(cl.result||[]).forEach(x=>{ if(x&&x.patent) items.push(x); }));
+  return items.map(x=>{
+    const p=x.patent||{};
+    const num=String(p.publication_number||x.id||"");
+    const dt=p.grant_date||p.publication_date||p.filing_date||p.priority_date||"";
+    const fm=p.family_metadata||{};
+    const fmAgg=(fm.aggregated||{}).country_status||[];
+    return {
+      number:num, title:stripTags(p.title), assignee:stripTags(p.assignee||""),
+      year:String(dt||"").slice(0,4), date:dt||"",
+      priorityDate:p.priority_date||"", inventors:stripTags(p.inventor||""),
+      snippet:stripTags(p.snippet||""),
+      legal:familyLegal(fm),
+      countries:fmAgg.map(c=>c.country_code).filter(Boolean).slice(0,12),
+      link:num?("https://patents.google.com/patent/"+num.replace(/^patent\//,"").replace(/\/.*$/,"")+"/en"):""
+    };
+  }).filter(p=>p.title&&p.number);
+}
+async function googlePatentsSearch(target){
+  const terms=expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ")+" in:title";
+  const d=await googleXhr(terms||'"'+target+'"',30);
+  return googleParseItems(d);
+}
+async function googleCites(numRaw){
+  const num=googleNum(numRaw);
+  if(!num) return 0;
+  const d=await googleXhr("cites:"+num,5);
+  const n=d&&d.results&&d.results.total_num_results;
+  return Number(n)||0;
+}
+async function googleAssigneePortfolio(assignee){
+  const a=String(assignee||"").replace(/["\\]/g," ").trim();
+  if(!a||!/[\w\u4e00-\u9fa5]/.test(a)) return [];
+  const q='assignee:"'+a+'"';
+  const d=await googleXhr(q,20);
+  return googleParseItems(d).slice(0,12).map(p=>({number:p.number,title:p.title,year:p.year}));
+}
+async function googlePatentDetail(numRaw){
+  const num=googleNum(numRaw);
+  if(!num) return null;
+  const r=await withFetch("https://patents.google.com/patent/"+num+"/en",{headers:{"Referer":"https://patents.google.com/"}});
+  if(!r.ok) return null;
+  const html=await r.text().catch(()=>"");
+  if(!html) return null;
+  const doc=new DOMParser().parseFromString(html,"text/html");
+  const meta=n=>{ const el=doc.querySelector('meta[name="'+n+'"]'); return (el&&el.getAttribute("content")||"").trim(); };
+  const inventors=[...doc.querySelectorAll('meta[name="DC.contributor"]')].map(e=>(e.getAttribute("content")||"").trim()).filter(Boolean);
+  const citations=[...doc.querySelectorAll('meta[name="DC.relation"]')].map(e=>(e.getAttribute("content")||"").trim()).filter(Boolean);
+  const cpcSet=new Set();
+  doc.querySelectorAll('[itemprop="Code"]').forEach(el=>{ const c=(el.textContent||"").trim(); if(c&&c.length>=4&&/\d/.test(c)) cpcSet.add(c); });
+  const lm=html.match(/Legal status[\s\S]*?\)\s*(?:<[^>]*>\s*)*([A-Za-z][A-Za-z ,.\-]{0,50})/);
+  const claimEls=doc.querySelectorAll('.claim-text');
+  return {
+    abstract:meta("DC.description")||"",
+    title:meta("DC.title")||"",
+    inventors:inventors.slice(0,15),
+    citations:citations.slice(0,40),
+    cpc:[...cpcSet].slice(0,12),
+    legal:lm?lm[1].trim():"",
+    claims:claimEls.length||doc.querySelectorAll('.claim').length
+  };
+}
+
+/* ── Espacenet / EPO OPS（免费注册 Key，非美国专利补充）───── */
+function opsEls(root,local){ return root.getElementsByTagNameNS("*",local); }
+function opsVal(el,local){ const ns=opsEls(el,local); return (ns.length&&(ns[0].textContent||"").trim())||""; }
+function opsJoin(bd,local){
+  const ns=bd?opsEls(bd,local):null;
+  if(!ns||!ns.length) return "";
+  const arr=[]; for(let i=0;i<ns.length;i++){ const t=(ns[i].textContent||"").trim(); if(t) arr.push(t); }
+  return arr.join(", ");
+}
+function parseOpsXml(xml){
+  const doc=new DOMParser().parseFromString(xml,"text/xml");
+  const docs=doc.getElementsByTagNameNS("*","exchange-document");
+  const out=[];
+  for(let i=0;i<docs.length;i++){
+    try{
+      const d=docs[i];
+      const bd=opsEls(d,"bibliographic-data")[0]||null;
+      const pub=bd?opsEls(bd,"publication-reference")[0]:null;
+      const did=pub?opsEls(pub,"document-id")[0]:null;
+      const cc=(did?opsVal(did,"country"):"")||d.getAttribute("country")||"";
+      const dn=(did?opsVal(did,"doc-number"):"")||d.getAttribute("doc-number")||"";
+      const kind=(did?opsVal(did,"kind"):"")||d.getAttribute("kind")||"";
+      const date=(did?opsVal(did,"date"):"")||"";
+      const pDate=opsVal(bd||d,"priority-date")||opsVal(bd||d,"date")||"";
+      const title=opsJoin(bd,"invention-title")||"";
+      const applicant=opsJoin(bd,"applicant-name")||"";
+      const inventors=opsJoin(bd,"inventor-name")||"";
+      const number=(cc+dn+kind).trim();
+      const year=(date||pDate||"").slice(0,4);
+      if(!number&&!title) continue;
+      out.push({ number,title,assignee:applicant, year, date:date||pDate||"",
+                 inventors, snippet:"", legal:"", countries:cc?[cc]:[],
+                 link:number?("https://worldwide.espacenet.com/patent/search?q=pn="+encodeURIComponent(number)):"" });
+    }catch(e){}
+  }
+  return out.filter(p=>p.title||p.number);
+}
+async function espacenetSearch(target,key){
+  const parts=(key||"").split(/\s+/).filter(Boolean);
+  if(parts.length<2) throw new Error("Espacenet OPS 需要在 data.epo.org 免费注册申请，Key 填「client_id client_secret」（空格分隔）");
+  const tr=await withFetch("https://auth.epo.org/oauth2/token",{method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:"grant_type=client_credentials&client_id="+encodeURIComponent(parts[0])+"&client_secret="+encodeURIComponent(parts[1])});
+  const tj=await tr.json().catch(()=>null);
+  if(!tr.ok||!tj||!tj.access_token)
+    throw new Error("Espacenet OAuth 失败: "+(tj&&(tj.error_description||tj.error)||("HTTP "+tr.status)));
+  const terms=expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ");
+  const url="https://ops.epo.org/3.2/rest-services/published-data/search?"+new URLSearchParams({q:terms||target,Range:"1-25"}).toString();
+  const r=await withFetch(url,{headers:{Authorization:"Bearer "+tj.access_token,Accept:"application/xml"}});
+  const xml=await r.text().catch(()=>"");
+  if(!r.ok) throw new Error("Espacenet OPS HTTP "+r.status+": "+xml.slice(0,200));
+  return parseOpsXml(xml);
+}
+
+/* ── 专利深度增强（摘要/权利要求/被引/申请人布局）───────── */
+async function mcpPatentDetails(patents,tools,endpoint,key,session,maxN){
+  const detailTool=tools.find(t=>/^get[_\-\s]?patent|patent[_\-\s]?detail/i.test(t.name));
+  if(!detailTool) return;
+  const list=(patents||[]).slice(0,maxN);
+  for(let i=0;i<list.length;i++){
+    if(STOP) break;
+    const p=list[i];
+    const num=googleNum(p.number);
+    if(!num) continue;
+    try{
+      const args=buildMcpArgs(detailTool.schema,detailTool.required,num,num);
+      const text=await mcpCallTool(endpoint,key,session,detailTool.name,args);
+      const parsed=parseMcpText(text).data;
+      const d=(parsed&&parsed.result&&typeof parsed.result==="object")?parsed.result:parsed;
+      if(!d||typeof d!=="object") continue;
+      const inv=Array.isArray(d.inventors)?d.inventors.map(i=>typeof i==="string"?i:(i&&(i.name||i.inventor_name||""))).filter(Boolean).join(", "):(d.first_inventor||"");
+      p.mcpStatus=d.status||d.status_date||d.legal_status||"";
+      if(inv) p.inventors=inv;
+      p.mcpClassification=d.classification||"";
+      p.mcpAbstract=d.abstract||d.description||"";
+      if(p.mcpAbstract||p.mcpStatus||p.mcpClassification) p.mcpDetail=true;
+    }catch(e){}
+  }
+}
+async function deepEnrichPatents(list,opts,cb){
+  const out=list.map(p=>({...p}));
+  const insight={cites:{},assignees:{}};
+  const maxN=Math.min(opts.maxDetail||5,out.length);
+  if(opts.src==="mcp"){
+    if(cb) cb("🔍 MCP 专利详情（状态/发明人/分类）…");
+    try{ await mcpPatentDetails(out,opts.tools,opts.endpoint,opts.key,opts.session,maxN); }catch(e){}
+  } else {
+    const top=out.slice(0,maxN);
+    for(let i=0;i<top.length;i++){
+      if(STOP) break;
+      const p=top[i];
+      const num=googleNum(p.number);
+      if(!num) continue;
+      if(cb) cb("🔍 专利详情增强 "+(i+1)+"/"+top.length+" …");
+      try{
+        const d=await googlePatentDetail(num);
+        if(d){
+          if(d.abstract) p.abstract=d.abstract;
+          if(d.claims) p.claims=d.claims;
+          if(d.citations&&d.citations.length) p.citations=d.citations;
+          if(d.cpc&&d.cpc.length) p.cpc=d.cpc;
+          if(d.legal) p.detailLegal=d.legal;
+          if(d.inventors&&d.inventors.length&&!p.inventors) p.inventors=d.inventors.join(", ");
+        }
+      }catch(e){}
+      try{ const c=await googleCites(num); if(c) p.citedBy=c; }catch(e){}
+    }
+    if(opts.src==="google"){
+      const counts={};
+      out.forEach(p=>{ if(p.assignee) counts[p.assignee]=(counts[p.assignee]||0)+1; });
+      const topA=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]);
+      for(let i=0;i<topA.length;i++){
+        if(STOP) break;
+        if(cb) cb("🧭 申请人布局分析 "+(i+1)+"/"+topA.length+" …");
+        try{ insight.assignees[topA[i]]=await googleAssigneePortfolio(topA[i]); }catch(e){}
+      }
+    }
+  }
+  if(cb) cb("");
+  return {patents:out,insight};
+}
+
+/* ── 通用 MCP（streamable-HTTP）JSON-RPC 客户端 ─────────── */
+function parseMcpText(text){
+  const t=(text||"").trim();
+  if(!t) return {kind:"none",data:null};
+  if(t.startsWith("{")){ try{ return {kind:"json",data:JSON.parse(t)}; }catch(e){} }
+  const dl=t.split("\n").filter(l=>/^\s*data\s*:/.test(l)).map(l=>l.replace(/^\s*data\s*:\s*/,""));
+  if(dl.length){
+    const joined=dl.join("\n");
+    try{ return {kind:"json",data:JSON.parse(joined)}; }catch(e){ return {kind:"text",data:dl.join("\n")}; }
+  }
+  return {kind:"text",data:t};
+}
+async function mcpRequest(endpoint,body,key,session){
+  const headers={"Content-Type":"application/json","Accept":"application/json, text/event-stream","MCP-Protocol-Version":"2025-06-18"};
+  if(key) headers.Authorization="Bearer "+key;
+  if(session) headers["Mcp-Session-Id"]=session;
+  const r=await withFetch(endpoint,{method:"POST",headers,body:JSON.stringify(body)});
+  const raw=await r.text().catch(()=>"");
+  if(!r.ok){ throw new Error("MCP HTTP "+r.status+": "+raw.slice(0,200)); }
+  const sid=(r.headers&&r.headers.get)?(r.headers.get("mcp-session-id")||null):null;
+  const p=parseMcpText(raw);
+  if(p.kind==="json"&&p.data){
+    if(p.data.error) throw new Error("MCP 错误: "+(p.data.error.message||JSON.stringify(p.data.error).slice(0,200)));
+    if(sid) p.data._sessionId=sid;
+    return p.data;
+  }
+  if(p.kind==="text") return { _text:p.data, _sessionId:sid };
+  throw new Error("MCP 响应无法解析: "+raw.slice(0,200));
+}
+async function mcpInitialize(endpoint,key){
+  const d=await mcpRequest(endpoint,{jsonrpc:"2.0",id:1,method:"initialize",
+    params:{protocolVersion:"2025-06-18",capabilities:{},clientInfo:{name:"TargetInfo",version:"1.0"}}},key);
+  const r=d.result||{};
+  const info=r.serverInfo||{};
+  return {name:info.name||"", version:info.version||"", session:(d._sessionId||null)};
+}
+async function mcpListTools(endpoint,key,session){
+  const d=await mcpRequest(endpoint,{jsonrpc:"2.0",id:2,method:"tools/list",params:{}},key,session);
+  const tools=((d.result&&d.result.tools)||[]);
+  return tools.map(t=>({name:t.name,schema:(t.inputSchema&&t.inputSchema.properties)||null,required:(t.inputSchema&&t.inputSchema.required)||[]})).filter(t=>t.name);
+}
+async function mcpCallTool(endpoint,key,session,name,args){
+  const d=await mcpRequest(endpoint,{jsonrpc:"2.0",id:3,method:"tools/call",params:{name,arguments:args}},key,session);
+  const r=d.result||{};
+  if(r.isError) throw new Error("MCP 工具 "+name+" 返回错误: "+JSON.stringify(r).slice(0,200));
+  const out=[];
+  (r.content||[]).forEach(c=>{
+    if(c&&c.type==="text"&&c.text) out.push(c.text);
+    else if(c&&c.type==="resource"&&c.resource) out.push(JSON.stringify(c.resource));
+  });
+  const text=out.join("\n");
+  return (text||(r&&r._text))||JSON.stringify(r).slice(0,2000);
+}
+function pickPatentTool(tools,pref){
+  if(pref&&tools.some(t=>t.name===pref)) return pref;
+  const scored=tools.map(t=>({t,s:((/patent/i.test(t.name))?2:0)+((/search|query|find|lookup/i.test(t.name))?1:0)+((/^search/i.test(t.name))?1:0)})).sort((a,b)=>b.s-a.s);
+  return scored[0]&&scored[0].s?scored[0].t.name:tools[0]&&tools[0].name;
+}
+function buildMcpArgs(schema,required,terms,target){
+  const value=terms||target;
+  if(!schema) return {q:value,limit:30};
+  const keys=Object.keys(schema);
+  const out={};
+  const requiredKey=(required||[]).find(k=>/^(q|query|search|text|question|prompt|input|keyword|keywords|terms?)$/i.test(k));
+  const qKey=requiredKey||keys.find(k=>/^(query|q|search|keyword|keywords)$/i.test(k))||keys.find(k=>/^(text|question|prompt|input|terms?)$/i.test(k))||keys[0];
+  out[qKey]=value;
+  if(keys.indexOf("limit")>=0) out.limit=30;
+  return out;
+}
+function normalizePatent(obj){
+  if(!obj||typeof obj!=="object") return null;
+  const num=String(obj.number||obj.publication_number||obj.application_number||obj.patent_number||obj.patent_id||obj.patentNumber||obj.publicationNumber||obj.applicationNumber||obj.id||"");
+  const title=obj.title||obj.inventionTitle||obj.name||"";
+  const dt=obj.grant_date||obj.publication_date||obj.filing_date||obj.date||obj.grantDate||obj.publicationDate||obj.filingDate||"";
+  let aff="";
+  if(typeof obj.assignee==="string") aff=obj.assignee;
+  else if(Array.isArray(obj.assignee)) aff=obj.assignee.map(a=>typeof a==="string"?a:(a&&(a.assignee_organization||a.name||a.organization||""))).filter(Boolean).join(", ");
+  else if(Array.isArray(obj.applicants)) aff=obj.applicants.map(a=>typeof a==="string"?a:(a&&(a.name||a.assignee_organization||""))).filter(Boolean).join(", ");
+  else if(obj.first_applicant) aff=obj.first_applicant;
+  else if(obj.assignee_organization) aff=obj.assignee_organization;
+  else if(obj.inventor) aff=Array.isArray(obj.inventor)?obj.inventor.map(i=>typeof i==="string"?i:(i&&(i.inventor_name||i.name||""))).join(", "):obj.inventor;
+  else if(obj.first_inventor) aff=obj.first_inventor;
+  const s=String(dt||"");
+  const uNum=num.replace(/^patent\//,"").replace(/\/.*$/,"").replace(/^US0+/,"");
+  let inv="";
+  if(Array.isArray(obj.inventors)) inv=obj.inventors.map(i=>typeof i==="string"?i:(i&&(i.name||i.inventor_name||""))).filter(Boolean).join(", ");
+  else if(obj.first_inventor) inv=obj.first_inventor;
+  return { number:num, title:String(title||""), assignee:String(aff||""),
+           year:s.slice(0,4), date:s, inventors:inv,
+           priorityDate:obj.priority_date||obj.priorityDate||"",
+           snippet:String(obj.snippet||""),
+           legal:obj.legal||obj.legal_status||"",
+           countries:(Array.isArray(obj.countries)?obj.countries:[]),
+           mcpStatus:obj.status||obj.status_date||obj.legal_status||"",
+           mcpClassification:obj.classification||"",
+           link:uNum?("https://patents.google.com/patent/"+uNum+"/en"):"" };
+}
+async function mcpPatentSearch(target,key){
+  const endpoint=($("patMcpUrl").value||"").trim().replace(/\/+$/,"");
+  const toolPref=($("patMcpTool").value||"").trim();
+  if(!endpoint) throw new Error("请先在设置中填写 MCP endpoint（streamable-HTTP 地址）");
+  const init=await mcpInitialize(endpoint,key);
+  const tools=await mcpListTools(endpoint,key,init.session);
+  if(!tools.length) throw new Error("MCP 服务器未提供任何工具");
+  const tool=pickPatentTool(tools,toolPref);
+  const terms=expandTerms(target).slice(0,2).join(" OR ");
+  const tSchema=(tools.find(t=>t.name===tool)||{});
+  let args=buildMcpArgs(tSchema.schema,tSchema.required,terms,target);
+  let text;
+  try{ text=await mcpCallTool(endpoint,key,init.session,tool,args); }
+  catch(e){
+    if(!/参数|invalid|required|schema|validation/i.test(e.message)) throw e;
+    const alt=buildMcpArgs(tSchema.schema,tSchema.required,target,terms);
+    text=await mcpCallTool(endpoint,key,init.session,tool,alt);
+  }
+  const parsed=parseMcpText(text).data;
+  const arr = Array.isArray(parsed)?parsed
+    : (parsed&&(parsed.patents||parsed.results||parsed.data||parsed.items)) || [];
+  let list;
+  if(Array.isArray(arr)) list=arr.map(normalizePatent).filter(p=>p&&(p.number||p.title)&&p.title);
+  else if(parsed&&typeof parsed==="object"){
+    const arr2=parsed.patents||parsed.results||parsed.items||parsed.hits||[];
+    if(Array.isArray(arr2)&&arr2.length) list=arr2.map(normalizePatent).filter(p=>p&&(p.number||p.title)&&p.title);
+  }
+  if(!list){
+    const txt=String(text||"").trim();
+    if(txt&&!txt.startsWith("{")){
+      list=txt.split(/\r?\n/).map(l=>l.replace(/^[-*\s\d.]+/,"").split(" | ")).filter(x=>x&&x.length).map(x=>{
+        const num=String(x[0]||"").trim(), title=String(x[1]||"").trim(), aff=String(x[2]||"").trim();
+        const year=String(x[3]||"").trim();
+        if(!num&&!title) return null;
+        return { number:num, title:title||num, assignee:aff, year:/^\d{4}$/.test(year)?year:"", date:year,
+                 link:num?("https://patents.google.com/patent/"+num.replace(/^US0+/,"").replace(/\/.*$/,"")+"/en"):"" };
+      }).filter(Boolean).slice(0,30);
+    } else throw new Error("MCP 工具 "+tool+" 返回了无法解析的结果");
+  }
+  return { patents:list, tools, endpoint, key, session:init.session };
 }
 
 /* ── LLM 调用（多供应商 + CORS 回退）─────────────────────── */
@@ -573,7 +947,7 @@ function activeProvider(){
     return { name:"自定义", base:($("customBase").value||"").trim().replace(/\/+$/,""),
              model:($("customModel").value||"").trim()||"gpt-4o-mini", webSearch:false };
   }
-  const p=PROVIDERS[k]; return Object.assign({},p,{model:($("modelSel").value||"")});
+  const p=PROVIDERS[k]||PROVIDERS.deepseek; return Object.assign({},p,{model:($("modelSel").value||"")});
 }
 async function llmChat(user,{system,webSearch}={}){
   const p=activeProvider(), key=$("apiKey").value.trim();
@@ -643,7 +1017,8 @@ function countStatus(t){ const m={}; t.forEach(x=>{ const k=x.status||"未知"; 
 function condsText(t){ const s=new Set(); t.forEach(x=>(x.conditions||[]).forEach(c=>{ if(c) s.add(c); })); return [...s].slice(0,8).join("、")||"—"; }
 function buildReport(o){
   const r={ targetName:o.name, detail:o.detail, papers:o.papers||[], trials:o.trials||[], drugs:o.drugs||[],
-            patents:o.patents||[], molecules:o.molecules||[], target_overview:"", research_progress:"", clinical_landscape:"",
+            patents:o.patents||[], molecules:o.molecules||[], patentInsight:o.patentInsight||null,
+            target_overview:"", research_progress:"", clinical_landscape:"",
             key_findings:"", future_outlook:"", web_summary:"", patent_landscape:"" };
   const d=r.detail;
   if(d&&d.geneSymbol){
@@ -762,14 +1137,24 @@ async function enhance(report,cb){
   if(report.patents&&report.patents.length){
     if(STOP) return;
     if(cb) cb(97,"📜 AI 专利格局解读 ...");
-    const sum=clipText(report.patents.map(p=>" - "+p.year+" | "+(p.assignee||"—")+" | "+p.number+" | "+p.title).join("\n"),2800);
+    const sum=clipText(report.patents.slice(0,15).map(p=>{
+      let s=" - "+p.year+" | "+(p.assignee||"—")+" | "+p.number+" | "+p.title;
+      const bits=[];
+      if(p.legal||p.detailLegal) bits.push("状态:"+(p.detailLegal||p.legal));
+      if(p.citedBy) bits.push("被引"+p.citedBy);
+      if(p.claims) bits.push("约"+p.claims+"项权利要求");
+      if(bits.length) s+=" ["+bits.join(", ")+"]";
+      if(p.abstract) s+="\n    摘要: "+p.abstract.slice(0,160);
+      return s;
+    }).join("\n")+(report.patentInsight&&report.patentInsight.assignees?
+      "\n\n主要申请人布局:\n"+Object.entries(report.patentInsight.assignees).filter(([,v])=>v&&v.length).map(([a,ps])=>` ${a}: ${ps.length}件`).join("\n"):""),4000);
     try{ const t=await llmChat(PROMPTS.patent_landscape(report.targetName,sum)); if(t) report.patent_landscape=t; }catch(e){}
   }
 }
 
 /* ── 主流程 ─────────────────────────────────────────────────── */
 let REPORT=null;
-function setProg(v,txt){ $("barFill").style.width=(v|0)+"%"; $("status").textContent=(txt||"")+(v?` (${v}%)`:""); }
+function setProg(v,txt){ const vv=Math.max(0,Math.min(100,v|0)); $("barFill").style.width=vv+"%"; $("status").textContent=(txt||"")+(vv?` (${vv}%)`:""); }
 function showErr(e){
   const box=$("errbox"); box.classList.remove("hidden");
   box.textContent="❌ 生成失败："+(e&&e.message?e.message:e);
@@ -788,7 +1173,7 @@ async function run(){
   const useLLM=$("useLLM").checked;
   const on=src=>$("src"+src).checked;
   const errs=[];
-  let detail=null, papers=[], trials=[], drugs=[], patents=[], molecules=[];
+  let detail=null, papers=[], trials=[], drugs=[], patents=[], molecules=[], patentInsight=null;
   try{
     if(on("Papers")){ setProg(8,"搜索文献 (PubMed)...");
       try{ papers=await Promise.race([searchPapers(name,40),withTimeout(50000)]); setProg(18,""); }
@@ -804,12 +1189,10 @@ async function run(){
         const uni=await Promise.race([getUniProt(detail&&detail.geneSymbol||name),withTimeout(40000)]).catch(()=>null);
         const hpa=await Promise.race([getHPA(detail&&detail.geneSymbol||name),withTimeout(40000)]).catch(()=>null);
         const pdb=await Promise.race([getPDB(detail&&detail.geneSymbol||name,uni&&uni.accession),withTimeout(40000)]).catch(()=>null);
+        if(!detail&&(uni||hpa||(pdb&&pdb.length))) detail={};
         if(uni&&detail) Object.assign(detail,uni);
         if(hpa&&detail) detail.hpa=hpa;
-        if(pdb&&pdb.length){
-          if(!detail) detail={};
-          detail.pdb=pdb;
-        }
+        if(pdb&&pdb.length&&detail) detail.pdb=pdb;
         setProg(50,"");
       }catch(e){ if(!STOP) errs.push("靶点信息: "+e.message); } }
     if(STOP) return;
@@ -822,11 +1205,14 @@ async function run(){
       }catch(e){ if(!STOP) errs.push("药物: "+e.message); } }
     if(STOP) return;
     if(on("Patents")){ setProg(66,"检索专利…");
-      try{ patents=await Promise.race([searchPatents(name),withTimeout(45000)]); }
+      try{
+        const res=await Promise.race([searchPatents(name,(t)=>{ if(t) setProg(70,t); }),withTimeout(120000)]);
+        patents=res.patents||[]; patentInsight=res.insight||null;
+      }
       catch(e){ if(!STOP) errs.push("专利: "+e.message); }
       setProg(70,""); }
     if(STOP) return;
-    const report=buildReport({name:name,detail,papers,trials,drugs,patents,molecules});
+    const report=buildReport({name:name,detail,papers,trials,drugs,patents,molecules,patentInsight});
     if(useLLM){ setProg(72,"AI 增强…"); await enhance(report,setProg); }
     if(STOP) return;
     REPORT=report;
@@ -853,7 +1239,7 @@ function render(r,errs){
   const mi=$("metrics"); mi.innerHTML="";
   [["📄 文献",r.papers.length],["🧪 临床",r.trials.length],["💊 药物",r.drugs.length],["🧬 分子",r.molecules?r.molecules.length:0],["📜 专利",r.patents.length]].
     forEach(([l,n])=>{ const c=document.createElement("div"); c.className="mcard"; c.innerHTML=`<b>${n}</b><span>${l}</span>`; mi.appendChild(c); });
-  if(errs&&errs.length){ const b=document.createElement("div"); b.className="errbox"; b.textContent="部分数据源失败：\n"+errs.join("\n"); mi.parentElement.insertBefore(b,mi); }
+  if(errs&&errs.length){ const b=document.createElement("div"); b.className="errbox"; b.textContent="部分数据源失败：\n"+errs.join("\n"); if(mi.parentElement) mi.parentElement.insertBefore(b,mi); }
 
   const d=r.detail;
   const a=addPanel("🧬 靶点概述与背景");
@@ -871,7 +1257,7 @@ function render(r,errs){
       a.body.insertAdjacentHTML("beforeend",`<div style="background:#f8f9fa;border:1px solid var(--border);border-radius:6px;padding:.5rem;font-family:monospace;font-size:.8rem;word-break:break-all;max-height:120px;overflow-y:auto">${esc(displaySeq)}</div>`);
     }
   }
-  a.body.insertAdjacentHTML("beforeend",`<div class="note">${esc(r.target_overview).replace(/\\n/g,"<br>")}</div>`);
+  a.body.insertAdjacentHTML("beforeend",`<div class="note">${esc(r.target_overview).replace(/\n/g,"<br>")}</div>`);
   a.open();
 
   const hpa=r.detail&&r.detail.hpa;
@@ -879,7 +1265,7 @@ function render(r,errs){
     const hp=addPanel("🧬 表达谱 & 抗体可及性（Human Protein Atlas）");
     const rows=[];
     const add=(k,v)=>v&&(v!=="—")?rows.push(`<tr><td style="white-space:nowrap">${esc(k)}</td><td>${esc(v)}</td></tr>`):0;
-    add("蛋白经历",hpa.proteinTissue?(hpa.proteinTissue+(hpa.proteinTissueScore?" \u00b7 score "+hpa.proteinTissueScore:"")):"");
+    add("蛋白组织特异",hpa.proteinTissue?(hpa.proteinTissue+(hpa.proteinTissueScore?" \u00b7 score "+hpa.proteinTissueScore:"")):"");
     add("癌中RNA特异",hpa.rnaCancer?(hpa.rnaCancer+(hpa.rnaCancerScore?" \u00b7 score "+hpa.rnaCancerScore:"")):"");
     add("亚细胞定位",hpa.subMain||hpa.subcell);
     add("分泌(Secretome)",hpa.secretome);
@@ -901,7 +1287,7 @@ function render(r,errs){
   }
 
   const b=addPanel("📈 研究进展"," "+r.papers.length+"篇");
-  b.body.insertAdjacentHTML("beforeend",`<p>${esc(r.research_progress).replace(/\\n/g,"<br>")}</p>`);
+  b.body.insertAdjacentHTML("beforeend",`<p>${esc(r.research_progress).replace(/\n/g,"<br>")}</p>`);
   const yc=countYear(r.papers);
   if(Object.keys(yc).length){
     const max=Math.max(...Object.values(yc));
@@ -910,7 +1296,7 @@ function render(r,errs){
       `<div style="display:inline-block;width:55%;height:14px;background:var(--soft);border-radius:3px;vertical-align:middle"><div style="width:${(c/max*100).toFixed(1)}%;height:14px;background:var(--mid);border-radius:3px"></div></div>`+
       `<span style="font-size:.78rem;color:#888;margin-left:6px">${c}</span></div>`).join("")+"</div>");
   }
-  b.body.insertAdjacentHTML("beforeend",`<div style="margin-top:.6rem;font-size:.82rem;color:#888">${esc(r.key_findings).replace(/\\n/g,"<br>")}</div>`);
+  b.body.insertAdjacentHTML("beforeend",`<div style="margin-top:.6rem;font-size:.82rem;color:#888">${esc(r.key_findings).replace(/\n/g,"<br>")}</div>`);
   b.open();
 
   if(r.papers.length){
@@ -926,7 +1312,7 @@ function render(r,errs){
   }
 
   const c=addPanel("🧪 临床试验",r.trials.length+"项");
-  c.body.insertAdjacentHTML("beforeend",`<p>${esc(r.clinical_landscape).replace(/\\n/g,"<br>")}</p>`);
+  c.body.insertAdjacentHTML("beforeend",`<p>${esc(r.clinical_landscape).replace(/\n/g,"<br>")}</p>`);
   const ph=countPhase(r.trials);
   if(Object.keys(ph).length)c.body.insertAdjacentHTML("beforeend",`<p style="margin-top:.4rem">${Object.entries(ph).map(([k,v])=>`<span class="empty" style="margin-right:6px">${esc(k)}：${v}</span>`).join("")}</p>`);
   if(r.trials.length){
@@ -940,18 +1326,59 @@ function render(r,errs){
     const rows=r.drugs.map(d=>`<tr><td>${esc(d.name)}</td><td>${esc(d.company||"—")}</td><td>${esc(d.phase)}</td><td>${esc(d.mechanism).slice(0,60)}</td><td>${esc(d.disease)}</td></tr>`).join("");
     dg.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>药物</th><th>公司</th><th>阶段</th><th>机制</th><th>适应症</th></tr></thead><tbody>${rows}</tbody></table>`);
   } else dg.body.insertAdjacentHTML("beforeend",`<p class="empty">暂未从 Open Targets 获取到药物信息。</p>`);
-  dg.body.insertAdjacentHTML("beforeend",`<div class="note">${esc(r.future_outlook).replace(/\\n/g,"<br>")}</div>`);
+  dg.body.insertAdjacentHTML("beforeend",`<div class="note">${esc(r.future_outlook).replace(/\n/g,"<br>")}</div>`);
   if(r.drugs.length)dg.open();
 
   const pt=addPanel("📜 专利调研",r.patents.length+"项");
-  if(r.patent_landscape)pt.body.insertAdjacentHTML("beforeend",`<div class="AI">${esc(r.patent_landscape).replace(/\\n/g,"<br>")}</div>`);
+  if(r.patent_landscape)pt.body.insertAdjacentHTML("beforeend",`<div class="AI">${esc(r.patent_landscape).replace(/\n/g,"<br>")}</div>`);
   if(r.patents.length){
-    const rows=r.patents.slice(0,30).map(p=>`<tr><td>${esc(p.number)}</td><td>${esc(p.title).slice(0,60)}</td><td>${esc(p.assignee).slice(0,30)}</td><td>${esc(p.year)}</td>`+(p.link?`<td><a href="${p.link}" target="_blank">查看</a></td>`:"<td></td>")+"</tr>").join("");
-    pt.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>专利号</th><th>标题</th><th>申请人</th><th>年份</th><th>链接</th></tr></thead><tbody>${rows}</tbody></table>`);
+    const rows=r.patents.slice(0,30).map(p=>{
+      const badges=[];
+      if(p.year) badges.push(p.year);
+      if(p.legal||p.detailLegal) badges.push(p.detailLegal||p.legal);
+      if(p.citedBy) badges.push("被引 "+p.citedBy);
+      if(p.claims) badges.push("约"+p.claims+"项权利要求");
+      if(p.mcpStatus) badges.push(String(p.mcpStatus).slice(0,20));
+      const badgeHtml=badges.length?`<div class="hint">${badges.map(esc).join(" · ")}</div>`:"";
+      const meta=(p.abstract||p.snippet||p.mcpAbstract)?`<div class="a">${esc((p.abstract||p.mcpAbstract||p.snippet).slice(0,130))}…</div>`:"";
+      return `<tr><td>${esc(p.number)}</td><td>${esc(p.title).slice(0,60)}${badgeHtml}${meta}</td><td>${esc(p.assignee).slice(0,30)}</td>`+(p.link?`<td><a href="${p.link}" target="_blank" style="color:var(--mid)">查看</a></td>`:"<td></td>")+"</tr>";
+    }).join("");
+    pt.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>专利号</th><th>标题</th><th>申请人</th><th>链接</th></tr></thead><tbody>${rows}</tbody></table>`);
+  }
+  const pIns=r.patentInsight;
+  if(pIns&&pIns.assignees){
+    const entries=Object.entries(pIns.assignees).filter(([,v])=>v&&v.length);
+    if(entries.length){
+      const blk=entries.map(([a,ps])=>{
+        const top=ps.slice(0,8).map(x=>`- ${x.number} | ${x.title}`).join("\n");
+        return `【${a}】${ps.length} 件`+(top?`\n${top}`:"");
+      }).join("\n\n");
+      pt.body.insertAdjacentHTML("beforeend",`<div class="note"><div class="lbl">🧭 主要申请人布局</div><div style="white-space:pre-wrap;font-size:.82rem">${esc(blk)}</div></div>`);
+    }
+  }
+  const detailed=r.patents.filter(p=>p.abstract||p.mcpAbstract||p.mcpDetail||(p.citations&&p.citations.length)||p.cpc||p.detailLegal||p.inventors);
+  if(detailed.length){
+    const dblk=detailed.slice(0,5).map(p=>{
+      let s=`<div class="paper"><div class="t">${esc(p.number)} · ${esc(p.title)}</div>`;
+      if(p.abstract||p.mcpAbstract) s+=`<div class="m">摘要：${esc((p.abstract||p.mcpAbstract).slice(0,400))}${(p.abstract||p.mcpAbstract).length>400?"…":""}</div>`;
+      const bits=[];
+      if(p.cpc&&p.cpc.length) bits.push("CPC: "+p.cpc.join("; "));
+      if(p.claims) bits.push("权利要求约 "+p.claims+" 项");
+      if(p.detailLegal) bits.push("法律状态: "+p.detailLegal);
+      if(p.mcpStatus) bits.push("USPTO状态: "+p.mcpStatus);
+      if(p.mcpClassification) bits.push("分类: "+p.mcpClassification);
+      if(p.inventors) bits.push("发明人: "+p.inventors.slice(0,80));
+      if(p.countries&&p.countries.length) bits.push("同族国家: "+p.countries.join(", "));
+      if(bits.length) s+=`<div class="m">${esc(bits.join("　"))}</div>`;
+      if(p.citations&&p.citations.length) s+=`<div class="m">引用的专利（${p.citations.length}）: ${p.citations.slice(0,6).map(esc).join(", ")}${p.citations.length>6?" …":""}</div>`;
+      s+=`</div>`;
+      return s;
+    }).join("");
+    pt.body.insertAdjacentHTML("beforeend",`<div style="margin-top:.6rem"><div class="lbl">📄 专利详情（摘要/权利要求/引用）</div>${dblk}</div>`);
   }
   if(r.patent_landscape||r.patents.length)pt.open();
 
-  if(r.web_summary){ const w=addPanel("🧠 AI 综合情报研判"); w.body.insertAdjacentHTML("beforeend",`<div class="AI">${esc(r.web_summary).replace(/\\n/g,"<br>")}</div>`); w.open(); }
+  if(r.web_summary){ const w=addPanel("🧠 AI 综合情报研判"); w.body.insertAdjacentHTML("beforeend",`<div class="AI">${esc(r.web_summary).replace(/\n/g,"<br>")}</div>`); w.open(); }
   if(r.molecules&&r.molecules.length){
     const mo=addPanel("🔬 靶向活性分子（ChEMBL）",r.molecules.length+"个");
     const rows=r.molecules.slice(0,12).map(m=>`<tr><td>${esc(m.name)}</td><td>${m.chembl?`<a href="https://www.ebi.ac.uk/chembl/compound_report_card/${esc(m.chembl)}/" target="_blank" style="color:var(--mid)">${esc(m.chembl)}</a>`:"—"}</td><td>${esc(m.pchembl||"—")}</td></tr>`).join("");
@@ -963,7 +1390,7 @@ function render(r,errs){
 /* ── 导出 ─────────────────────────────────────────────────────────── */
 function markdown(r){
   let m=`# 靶点 ${String(r.targetName).toUpperCase()} 研究进展与临床分析报告\n\n`;
-  m+=`> 生成：${new Date().toLocaleString()}　数据源：PubMed · ClinicalTrials.gov · Open Targets · USPTO\n\n`;
+  m+=`> 生成：${new Date().toLocaleString()}　数据源：PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · HPA · Google Patents · USPTO · Lens.org · Espacenet · MCP\n\n`;
   m+=`## 一、靶点概述\n${r.target_overview}\n\n`;
   if(r.detail&&r.detail.sequence) m+=`### 氨基酸序列（${r.detail.sequenceLength||r.detail.sequence.length} aa）\n\`\`\`\n${r.detail.sequence}\n\`\`\`\n\n`;
   m+=`## 二、研究进展\n${r.research_progress}\n\n## 三、核心文献\n${r.key_findings}\n\n## 四、临床概况\n${r.clinical_landscape}\n\n`;
@@ -972,7 +1399,32 @@ function markdown(r){
   if(r.trials.length){ m+=`## 临床试验（${r.trials.length}项）\n`; r.trials.forEach(t=>m+=`- ${t.id} | ${t.title} | ${t.phase} | ${t.status}\n`); m+="\n"; }
   if(r.drugs.length){ m+=`## 药物（${r.drugs.length}个）\n`; r.drugs.forEach(d=>m+=`- ${d.name} [${d.phase}] ${d.company} — ${d.mechanism}\n`); m+="\n"; }
   if(r.molecules&&r.molecules.length){ m+=`## 靶向活性分子（${r.molecules.length}个）\n`; r.molecules.forEach(x=>m+=`- ${x.name} (${x.chembl})\n`); m+="\n"; }
-  if(r.patents.length){ m+=`## 专利（${r.patents.length}项）\n`; r.patents.forEach(p=>m+=`- ${p.number} | ${p.title} | ${p.assignee} | ${p.year}\n`); m+="\n"; }
+  if(r.patents.length){
+    m+=`## 专利（${r.patents.length}项）\n`;
+    r.patents.forEach(p=>{
+      let line=`- ${p.number} | ${p.title} | ${p.assignee} | ${p.year}`;
+      const bits=[];
+      if(p.legal||p.detailLegal) bits.push("状态:"+(p.detailLegal||p.legal));
+      if(p.citedBy) bits.push("被引"+p.citedBy);
+      if(p.claims) bits.push("约"+p.claims+"项权利要求");
+      if(p.mcpStatus) bits.push("USPTO:"+String(p.mcpStatus).slice(0,40));
+      if(bits.length) line+=`（${bits.join("，")}）`;
+      m+=line+"\n";
+      if(p.abstract) m+=`  - 摘要：${p.abstract.slice(0,300)}\n`;
+    });
+    m+="\n";
+  }
+  if(r.patentInsight&&r.patentInsight.assignees){
+    const entries=Object.entries(r.patentInsight.assignees).filter(([,v])=>v&&v.length);
+    if(entries.length){
+      m+=`## 主要申请人布局\n`;
+      entries.forEach(([a,ps])=>{
+        m+=`- **${a}**：${ps.length} 件\n`;
+        ps.slice(0,8).forEach(x=>m+=`  - ${x.number} | ${x.title}\n`);
+      });
+      m+="\n";
+    }
+  }
   if(r.patent_landscape)m+=`## 专利调研\n${r.patent_landscape}\n\n`;
   if(r.web_summary)m+=`## AI 综合情报研判\n${r.web_summary}\n\n`;
   const h=r.detail&&r.detail.hpa;
@@ -1015,7 +1467,7 @@ function generatePPT(r){
   s1.addText(String(r.targetName).toUpperCase(),{x:1,y:2.8,w:8,h:0.9,fontSize:36,color:"#5DADE2",fontFace:FONT,bold:true,align:"center"});
   s1.addShape(pptx.ShapeType.rect,{x:3.5,y:4.0,w:3,h:0.04,fill:{color:COL.mid}});
   s1.addText("生成日期："+new Date().toLocaleString(),{x:1,y:4.3,w:8,h:0.5,fontSize:14,color:COL.gray,fontFace:FONT,align:"center"});
-  s1.addText("数据来源：PubMed · ClinicalTrials.gov · Open Targets · USPTO · ChEMBL · HPA",{x:1,y:4.8,w:8,h:0.5,fontSize:11,color:COL.gray,fontFace:FONT,align:"center"});
+  s1.addText("数据来源：PubMed · ClinicalTrials.gov · Open Targets · USPTO · ChEMBL · HPA · Google Patents · Espacenet",{x:1,y:4.8,w:8,h:0.5,fontSize:11,color:COL.gray,fontFace:FONT,align:"center"});
 
   // ===== Slide 2: 靶点概述 =====
   const s2=pptx.addSlide();
@@ -1129,8 +1581,14 @@ function generatePPT(r){
     s8.addText(r.patent_landscape,{x:0.7,y:1.3,w:8.6,h:2.3,fontSize:11,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.2, valign:"top"});
   }
   if(r.patents.length){
-    const ptRows=[["专利号","标题","申请人","年份"]].concat(r.patents.slice(0,12).map(p=>[p.number||"—",(p.title||"").slice(0,50),(p.assignee||"—").slice(0,25),p.year||"—"]));
-    s8.addTable(ptRows.map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:8,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0}}))),{x:0.3,y:3.9,w:9.4,h:Math.min(ptRows.length*0.35,2.8),border:{type:"solid",pt:0.5,color:COL.gray}});
+    const ptRows=[["专利号","标题","申请人","年份"]].concat(r.patents.slice(0,12).map(p=>{
+      const bits=[];
+      if(p.legal||p.detailLegal) bits.push(p.detailLegal||p.legal);
+      if(p.citedBy) bits.push("被引"+p.citedBy);
+      if(p.claims) bits.push("约"+p.claims+"权利要求");
+      return [p.number||"—",(p.title||"").slice(0,40)+(bits.length?("\n"+(bits.join(", "))):""),(p.assignee||"—").slice(0,25),p.year||"—"];
+    }));
+    s8.addTable(ptRows.map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:8,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0}}))),{x:0.3,y:3.9,w:9.4,h:Math.min(ptRows.length*0.42,3.4),border:{type:"solid",pt:0.5,color:COL.gray}});
   }
   addFooter(s8);
 
@@ -1163,7 +1621,7 @@ function generatePPT(r){
     {text:"蛋白质结构：",options:{bold:true}},{text:"PDB (RCSB)\n",options:{}},
     {text:"药物管线：",options:{bold:true}},{text:"Open Targets Drug & Clinical Candidates\n",options:{}},
     {text:"活性分子：",options:{bold:true}},{text:"ChEMBL (EBI)\n",options:{}},
-    {text:"专利数据：",options:{bold:true}},{text:"USPTO / PatentsView / Lens.org\n",options:{}},
+    {text:"专利数据：",options:{bold:true}},{text:"Google Patents(免Key) / USPTO / Lens.org / Espacenet(EPO) / MCP\n",options:{}},
     {text:"AI 分析：",options:{bold:true}},{text:"DeepSeek / 小米MiMo / 智谱GLM / 自定义兼容接口\n\n",options:{}},
     {text:"报告由 TargetInfo 靶点调研报告生成器 自动生成",options:{bold:true,color:COL.mid}}
   ],{x:0.5,y:1.3,w:9,h:4.5,fontSize:12,color:COL.txt,fontFace:FONT,lineSpacingMultiple:1.5, valign:"top"});
@@ -1193,7 +1651,7 @@ function generateWord(r){
 
   html+=`<h1>靶点调研报告</h1>
   <h2 style="text-align:center;border:none;color:#2E86C1">${esc(String(r.targetName).toUpperCase())}</h2>
-  <p style="text-align:center;color:#7F8C8D">生成日期：${new Date().toLocaleString()}<br>数据来源：PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · HPA · USPTO</p>
+  <p style="text-align:center;color:#7F8C8D">生成日期：${new Date().toLocaleString()}<br>数据来源：PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · HPA · Google Patents · USPTO · Lens.org · Espacenet · MCP</p>
   <hr>`;
 
   const d=r.detail;
@@ -1278,9 +1736,25 @@ function generateWord(r){
     if(r.patents.length){
       html+=`<table><tr><th>专利号</th><th>标题</th><th>申请人</th><th>年份</th><th>链接</th></tr>`;
       r.patents.slice(0,20).forEach(p=>{
-        html+=`<tr><td>${esc(p.number)}</td><td>${esc(p.title).slice(0,50)}</td><td>${esc(p.assignee).slice(0,25)}</td><td>${esc(p.year)}</td><td>${p.link?`<a href="${p.link}">查看</a>`:""}</td></tr>`;
+        let t=esc(p.title).slice(0,50);
+        const bits=[];
+        if(p.legal||p.detailLegal) bits.push("状态:"+(p.detailLegal||p.legal));
+        if(p.citedBy) bits.push("被引"+p.citedBy);
+        if(p.claims) bits.push("约"+p.claims+"项权利要求");
+        if(bits.length) t+=`<br><span style="color:#7F8C8D;font-size:8pt">${esc(bits.join("，"))}</span>`;
+        if(p.abstract) t+=`<br><span style="color:#7F8C8D;font-size:8pt">摘要：${esc(p.abstract.slice(0,160))}…</span>`;
+        html+=`<tr><td>${esc(p.number)}</td><td>${t}</td><td>${esc(p.assignee).slice(0,25)}</td><td>${esc(p.year)}</td><td>${p.link?`<a href="${p.link}">查看</a>`:""}</td></tr>`;
       });
       html+=`</table>`;
+    }
+    if(r.patentInsight&&r.patentInsight.assignees){
+      const entries=Object.entries(r.patentInsight.assignees).filter(([,v])=>v&&v.length);
+      if(entries.length){
+        html+=`<h3>主要申请人布局</h3>`;
+        entries.forEach(([a,ps])=>{
+          html+=`<p><b>${esc(a)}</b>（${ps.length} 件）：${ps.slice(0,6).map(x=>esc(x.number+" "+x.title)).join("；")}</p>`;
+        });
+      }
     }
   }
 
@@ -1293,7 +1767,7 @@ function generateWord(r){
     <li>蛋白质结构：<a href="https://www.rcsb.org/">PDB</a></li>
     <li>药物管线：Open Targets Drug & Clinical Candidates</li>
     <li>活性分子：<a href="https://www.ebi.ac.uk/chembl/">ChEMBL (EBI)</a></li>
-    <li>专利数据：USPTO / Lens.org</li>
+    <li>专利数据：Google Patents(免Key) / USPTO / Lens.org / Espacenet(EPO) / MCP</li>
     <li>AI 分析：DeepSeek / 小米MiMo / 智谱GLM / 自定义兼容接口</li>
   </ul>
   <p style="text-align:center;color:#2E86C1;font-weight:bold">报告由 TargetInfo 靶点调研报告生成器 自动生成</p>`;
@@ -1311,7 +1785,8 @@ function init(){
   const sel=$("providerSel"), ms=$("modelSel"), mList=$("modelList");
   function fillModels(){
     mList.innerHTML="";
-    const list=PROVIDERS[sel.value].models||[];
+    const cfg=PROVIDERS[sel.value]||PROVIDERS.deepseek;
+    const list=(cfg&&cfg.models)||[];
     if(list.length) list.forEach(([label,val])=>{ const o=document.createElement("option"); o.value=val; o.textContent=label; mList.appendChild(o); });
     const saved=ls.get("model-"+sel.value,"");
     if(sel.value==="custom"){
@@ -1324,14 +1799,23 @@ function init(){
     }
     $("customRow").style.display = sel.value==="custom"?"block":"none";
   }
+  function syncPatUI(){
+    const v=$("patSrc").value;
+    $("patKey").style.display = (v==="google")?"none":"";
+    $("patKey").placeholder = (v==="espacenet")?"client_id client_secret（EPO注册）":(v==="mcp")?"Bearer Key（可留空）":"API Key / token（免Key可留空）";
+    $("mcpRow").style.display = (v==="mcp")?"flex":"none";
+  }
   sel.addEventListener("change",()=>{ ls.set("providerSel",sel.value); fillModels(); });
   ms.addEventListener("input",()=>{ if(sel.value!=="custom") ls.set("model-"+sel.value,ms.value); });
   $("customBase").addEventListener("input",()=>ls.set("customBase",$("customBase").value));
   $("customModel").addEventListener("input",()=>ls.set("customModel",$("customModel").value));
   $("apiKey").addEventListener("input",()=>ls.set("apiKey",$("apiKey").value));
   $("corsProxy").addEventListener("input",()=>ls.set("corsProxy",$("corsProxy").value));
-  $("patSrc").addEventListener("change",()=>ls.set("patSrc",$("patSrc").value));
+  $("patSrc").addEventListener("change",()=>{ ls.set("patSrc",$("patSrc").value); syncPatUI(); });
   $("patKey").addEventListener("input",()=>ls.set("patKey",$("patKey").value));
+  $("patMcpUrl").addEventListener("input",()=>ls.set("patMcpUrl",$("patMcpUrl").value));
+  $("patMcpTool").addEventListener("input",()=>ls.set("patMcpTool",$("patMcpTool").value));
+  $("patDeep").addEventListener("change",()=>ls.set("patDeep",$("patDeep").checked));
   $("useLLM").addEventListener("change",()=>ls.set("useLLM",$("useLLM").checked));
   ["Papers","Trials","Target","Drugs","Patents"].forEach(k=>{
     const el=$("src"+k); const startVal=localStorage.getItem("src"+k);
@@ -1339,12 +1823,17 @@ function init(){
     el.addEventListener("change",()=>ls.set("src"+k, el.checked));
   });
   if(ls.get("providerSel"))sel.value=ls.get("providerSel");
+  if(!PROVIDERS[sel.value]) sel.value="deepseek";
   $("apiKey").value=ls.get("apiKey","");
   $("customBase").value=ls.get("customBase","");
   $("customModel").value=ls.get("customModel","");
   $("corsProxy").value=ls.get("corsProxy","");
-  $("patSrc").value=ls.get("patSrc","uspto");
+  $("patSrc").value=ls.get("patSrc","google");
   $("patKey").value=ls.get("patKey","");
+  $("patMcpUrl").value=ls.get("patMcpUrl","");
+  $("patMcpTool").value=ls.get("patMcpTool","");
+  $("patDeep").checked = ls.get("patDeep",true);
+  syncPatUI();
   $("useLLM").checked = ls.get("useLLM",true);
   fillModels();
   $("startBtn").addEventListener("click",run);

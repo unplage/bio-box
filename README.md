@@ -29,7 +29,7 @@
 
 ### ✨ 功能特性
 
-- **多数据源整合**：PubMed、ClinicalTrials.gov、Open Targets、UniProt、ChEMBL、Human Protein Atlas、USPTO/Lens.org 专利
+- **多数据源整合**：PubMed、ClinicalTrials.gov、Open Targets、UniProt、ChEMBL、Human Protein Atlas、Google Patents/USPTO/Lens.org/Espacenet/MCP 专利
 - **AI 智能分析**：支持 DeepSeek、小米 MiMo、智谱 GLM、自定义 OpenAI 兼容接口
 - **联网情报分析**：智谱 GLM 支持实时联网搜索获取最新行业情报
 - **一键生成报告**：Markdown、JSON、PPT 多格式导出
@@ -109,8 +109,14 @@ start target.html
 
 | 数据源 | 说明 | 需要 API Key |
 |:---|:---|:---:|
+| Google Patents | 免 Key，走 CORS 代理（默认） | ❌ |
 | USPTO | 美国专利商标局 | ✅ |
 | Lens.org | 全球专利检索 | ✅ |
+| Espacenet (EPO) | 欧洲专利局 OPS，覆盖全球（含非美国），Key 填 `client_id client_secret` | ✅(免费) |
+| MCP (streamable HTTP) | 任意免 Key/带 Key 的 MCP 端点 | 可选 |
+
+> **深度增强**：勾选「🔍 专利深度增强」后，会对 Top 5 专利抓取摘要/权利要求数/被引次数/CPC/法律状态，并对主要申请人做布局分析；MCP 来源则调用其 `get_patent` 类工具获取 USPTO 申请状态/发明人/分类。
+> **MCP 用法**：专利接口选择「MCP（streamable HTTP）」，填入端点地址（如 `https://gateway.pipeworx.io/patents/mcp`）；工具名可留空自动探测，也支持给可选 `Bearer Key`。
 
 ### 📋 使用流程
 
@@ -138,7 +144,7 @@ start target.html
 4. **📚 文献列表** - PubMed 检索结果详情
 5. **🧪 临床试验** - ClinicalTrials.gov 试验数据
 6. **💊 药物研发管线** - Open Targets 药物信息
-7. **📜 专利调研** - USPTO/Lens.org 专利数据
+7. **📜 专利调研** - Google Patents/USPTO/Lens.org/Espacenet/MCP 专利数据（含摘要、权利要求、被引、申请人布局）
 8. **🧠 AI 综合情报研判** - AI 分析与建议
 9. **🔬 靶向活性分子** - ChEMBL 化合物线索
 
