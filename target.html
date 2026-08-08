@@ -216,7 +216,8 @@ async function reqJson(url,opts){
   const text = await r.text().catch(()=>"");
   let j=null; try{ j=JSON.parse(text); }catch(e){}
   if(!r.ok){ throw new Error("HTTP "+r.status+": "+(j?JSON.stringify(j).slice(0,300):text.slice(0,300))); }
-  return j || text;
+  if(j===null) throw new Error("JSON 解析失败: "+text.slice(0,200));
+  return j;
 }
 
 /* ── LLM 供应商（OpenAI 兼容）──────────────────────────────── */
@@ -425,11 +426,11 @@ async function getPDB(gene,uniprotAcc){
         operator:"exact_match",value:"UniProt",
         negation:false}});
     } else if(gene){
-      // 仅按基因名搜索（使用 organism gene name 属性，区分大小写）
+      // 仅按基因名搜索（使用 organism gene name 属性，不区分大小写）
       nodes.push({type:"terminal",service:"text",parameters:{
         attribute:"rcsb_entity_source_organism.rcsb_gene_name.value",
         operator:"exact_match",value:gene,
-        case_sensitive:true,
+        case_sensitive:false,
         negation:false}});
     }
     if(!nodes.length) return [];
@@ -461,7 +462,7 @@ async function getPDB(gene,uniprotAcc){
       doi:e.rcsb_primary_citation&&e.rcsb_primary_citation.pdbx_database_id_DOI||"",
       link:e.rcsb_id?"https://www.rcsb.org/structure/"+e.rcsb_id:""
     }));
-  }catch(e){ return []; }
+  }catch(e){ console.error("getPDB error:", e); return []; }
 }
 
 /* ── Human Protein Atlas（表达谱/定位/抗体可及性）────────────── */
@@ -805,7 +806,10 @@ async function run(){
         const pdb=await Promise.race([getPDB(detail&&detail.geneSymbol||name,uni&&uni.accession),withTimeout(40000)]).catch(()=>null);
         if(uni&&detail) Object.assign(detail,uni);
         if(hpa&&detail) detail.hpa=hpa;
-        if(pdb&&pdb.length&&detail) detail.pdb=pdb;
+        if(pdb&&pdb.length){
+          if(!detail) detail={};
+          detail.pdb=pdb;
+        }
         setProg(50,"");
       }catch(e){ if(!STOP) errs.push("靶点信息: "+e.message); } }
     if(STOP) return;
