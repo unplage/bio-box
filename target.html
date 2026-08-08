@@ -445,7 +445,7 @@ async function getPDB(gene,uniprotAcc){
     // Step 2: 使用 GraphQL 获取详细信息
     const gql=`query($ids:[String!]!]{
       entries(entry_ids:$ids){
-        rcsb_id title exptl{method} refine{ls_d_res_high}
+        rcsb_id struct{title} exptl{method} refine{ls_d_res_high}
         rcsb_primary_citation{year pdbx_database_id_PubMed pdbx_database_id_DOI}
       }
     }`;
@@ -453,7 +453,7 @@ async function getPDB(gene,uniprotAcc){
       {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:gql,variables:{ids:pdbIds}})});
     const entries=d&&d.data&&d.data.entries||[];
     return entries.map(e=>({
-      pdbId:e.rcsb_id||"", title:e.title||"",
+      pdbId:e.rcsb_id||"", title:e.struct&&e.struct.title||"",
       method:e.exptl&&e.exptl[0]&&e.exptl[0].method||"",
       resolution:e.refine&&e.refine[0]&&e.refine[0].ls_d_res_high||"",
       year:e.rcsb_primary_citation&&e.rcsb_primary_citation.year||"",
