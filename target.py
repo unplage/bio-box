@@ -551,17 +551,42 @@ class ReportContent(BaseModel):
 # ─── PubMed Literature Search ──────────────────────────────────────────────
 
 
-async def search_papers(target: str, max_results: int = 40, years_back: int = 20) -> List[Paper]:
+async def search_papers(target: str, max_results: int = 40, years_back: int = 20,
+                        sort: str = 'relevance', article_types: str = '') -> List[Paper]:
     await _ncbi_limiter.acquire()
     now_year = datetime.now().year
     terms = _expand_query_terms(target)
     query_parts = [f'({t}[Title/Abstract])' for t in terms]
     query = ' OR '.join(query_parts)
 
+    # Build article type filter
+    at_map = {
+        '综述+临床+系统评价': 'review[pt] OR clinical trial[pt] OR systematic review[pt]',
+        '全部': '',
+        '仅综述': 'review[pt]',
+        '仅临床试验': 'clinical trial[pt]',
+        '仅系统评价': 'systematic review[pt]',
+        'Meta分析+RCT': 'meta-analysis[pt] OR randomized controlled trial[pt]',
+        'Meta分析': 'meta-analysis[pt]',
+        'RCT': 'randomized controlled trial[pt]',
+        '病例报告': 'case reports[pt]',
+    }
+    at_filter = at_map.get(article_types, at_map['综述+临床+系统评价'])
+    if at_filter:
+        term_str = f'({query}) AND ({at_filter})'
+    else:
+        term_str = f'({query})'
+
+    sort_map = {
+        '相关性': 'relevance',
+        '最新发表': 'pub_date',
+        '被引最多': 'relevance',
+    }
+
     params = {
         'db': 'pubmed',
-        'term': f'({query}) AND (review[pt] OR clinical trial[pt] OR systematic review[pt])',
-        'retmax': max_results, 'retmode': 'json', 'sort': 'relevance',
+        'term': term_str,
+        'retmax': max_results, 'retmode': 'json', 'sort': sort_map.get(sort, 'relevance'),
         'email': PUBMED_EMAIL,
     }
     if years_back and years_back > 0:
@@ -712,16 +737,22 @@ def _parse_single_article(article_elem) -> Optional[Paper]:
 # ─── OpenAlex Literature Search ──────────────────────────────────────────
 
 
-async def search_openalex(target: str, max_results: int = 10) -> List[Paper]:
+async def search_openalex(target: str, max_results: int = 10, sort: str = '') -> List[Paper]:
     await _openalex_limiter.acquire()
     if not OPENALEX_KEY:
         return []
     terms = _expand_query_terms(target)
     query = ' OR '.join(terms)
+    sort_map = {
+        '相关性': 'relevance_score:desc',
+        '最新发表': 'publication_date:desc',
+        '被引最多': 'cited_by_count:desc',
+    }
+    sort_val = sort_map.get(sort, 'cited_by_count:desc')
     params = {
         'search': query,
         'per_page': min(max_results, 50),
-        'sort': 'cited_by_count:desc',
+        'sort': sort_val,
         'filter': 'type:article|review',
     }
     headers = {}
@@ -812,7 +843,9 @@ async def search_semantic_scholar(target: str, max_results: int = 10) -> List[Pa
 # ─── ClinicalTrials.gov API ────────────────────────────────────────────────
 
 
-async def search_trials(target: str, max_results: int = 20) -> List[ClinicalTrial]:
+async def search_trials(target: str, max_results: int = 20,
+                        sort: str = '', phase_filter: str = '',
+                        intervention_type: str = '') -> List[ClinicalTrial]:
     await _ctgov_limiter.acquire()
     terms = _expand_query_terms(target)
     query = ' OR '.join(terms)
@@ -824,6 +857,40 @@ async def search_trials(target: str, max_results: int = 20) -> List[ClinicalTria
                   'BriefSummary|EnrollmentCount|LocationCountry',
         'filter.overallStatus': 'ACTIVE_NOT_RECRUITING|COMPLETED|RECRUITING|NOT_YET_RECRUITING|ENROLLING_BY_INVITATION|AVAILABLE',
     }
+    # Sort
+    sort_map = {
+        '默认': '',
+        '入组最多': 'EnrollmentCount:desc',
+        '最新更新': 'LastUpdatePostDate:desc',
+        '最早开始': 'StartDate:asc',
+    }
+    sort_val = sort_map.get(sort, '')
+    if sort_val:
+        params['sort'] = sort_val
+    # Phase filter
+    phase_map = {
+        'Phase 1': 'AREA[Phase]PHASE1',
+        'Phase 2': 'AREA[Phase]PHASE2',
+        'Phase 3': 'AREA[Phase]PHASE3',
+        'Phase 4': 'AREA[Phase]PHASE4',
+        '早期': 'AREA[Phase]EARLY_PHASE1',
+        '不可用': 'AREA[Phase]NA',
+    }
+    phase_val = phase_map.get(phase_filter, '')
+    # Intervention type filter
+    iv_map = {
+        '药物': 'AREA[InterventionType]DRUG',
+        '生物制品': 'AREA[InterventionType]BIOLOGICAL',
+        '器械': 'AREA[InterventionType]DEVICE',
+        '手术': 'AREA[InterventionType]PROCEDURE',
+        '行为': 'AREA[InterventionType]BEHAVIORAL',
+        '其他': 'AREA[InterventionType]OTHER',
+    }
+    iv_val = iv_map.get(intervention_type, '')
+    # Combine advanced filters
+    adv_filters = [f for f in [phase_val, iv_val] if f]
+    if adv_filters:
+        params['filter.advanced'] = ' AND '.join(adv_filters)
     async with httpx.AsyncClient(timeout=60, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', f'{CT_API_BASE}/studies', params=params)
@@ -1909,14 +1976,24 @@ async def uspto_search(target: str, key: str) -> List[dict]:
         except Exception:
             return []
 
-async def lens_search(name: str, key: str) -> List[dict]:
+async def lens_search(name: str, key: str, size: int = 30, sort: str = '',
+                      jurisdiction: str = '') -> List[dict]:
     if not key:
         return []
     body = {
         'query_number': 1, 'query_text_1': 'title_claims_and_abstract',
-        'query_value_1': name, 'size': 30,
+        'query_value_1': name, 'size': size,
         'include': ['title', 'publication_number', 'publication_date', 'assignee'],
     }
+    if jurisdiction and jurisdiction != '全部':
+        body['query_jurisdiction'] = jurisdiction
+    sort_map = {
+        '最新公开': [{'field': 'publication_date', 'order': 'desc'}],
+        '被引最多': [{'field': 'cited_by_count', 'order': 'desc'}],
+    }
+    sort_val = sort_map.get(sort, [])
+    if sort_val:
+        body['sort'] = sort_val
     async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'POST',
@@ -2188,11 +2265,13 @@ async def deep_enrich_patents(patents: List[dict], *, src: str, key: str = '', t
             await asyncio.sleep(0.8)
     return out, insight
 
-async def google_patents_search(target: str) -> List[dict]:
+async def google_patents_search(target: str, num: int = 30, country: str = '') -> List[dict]:
     terms = _expand_query_terms(target)[:3]
     q_terms = [f'"{t.replace(chr(34), " ").strip()}"' for t in terms]
     q = ' OR '.join(q_terms) + ' in:title' if q_terms else f'"{target}"'
-    data = await google_xhr(q, 30)
+    if country and country != '全部':
+        q += f' country:{country}'
+    data = await google_xhr(q, num)
     return google_patents_parse(data)
 
 def google_patents_parse(data: dict) -> List[dict]:
@@ -2237,7 +2316,8 @@ def _family_legal(fm: dict) -> str:
     except Exception:
         return ''
 
-async def espacenet_search(target: str, key: str) -> List[dict]:
+async def espacenet_search(target: str, key: str, range_end: int = 25,
+                           country: str = '') -> List[dict]:
     parts = (key or '').split()
     if len(parts) < 2:
         return []
@@ -2256,7 +2336,9 @@ async def espacenet_search(target: str, key: str) -> List[dict]:
             terms = _expand_query_terms(target)[:3]
             q_terms = [f'"{t.replace(chr(34), " ").strip()}"' for t in terms]
             q = ' OR '.join(q_terms) if q_terms else target
-            url = f'https://ops.epo.org/3.2/rest-services/published-data/search?{urlencode({"q": q, "Range": "1-25"})}'
+            if country and country != '全部':
+                q += f' AND pn={country}*'
+            url = f'https://ops.epo.org/3.2/rest-services/published-data/search?{urlencode({"q": q, "Range": f"1-{range_end}"})}'
             resp = await _request_with_retry(client, 'GET', url,
                 headers={'Authorization': f'Bearer {token}', 'Accept': 'application/xml'},
                 max_retries=2)
@@ -2656,11 +2738,12 @@ def _normalize_patent(obj) -> Optional[dict]:
 
 async def search_patents(target: str, src: str = 'google', key: str = '',
                          deep: bool = True, mcp_url: str = '', mcp_tool: str = '',
-                         progress_cb=None) -> dict:
+                         progress_cb=None, num: int = 30, sort: str = '',
+                         country: str = '') -> dict:
     note, eff_src, insight, mcp_ctx = '', src, None, None
     if src == 'google':
         try:
-            patents = await google_patents_search(target)
+            patents = await google_patents_search(target, num=num, country=country)
         except Exception:
             try:
                 mcp_result = await mcp_patent_search(target, PATENT_MCP_FALLBACK, '', '')
@@ -2671,7 +2754,7 @@ async def search_patents(target: str, src: str = 'google', key: str = '',
             except Exception:
                 note = '专利主源检索失败，仅返回 Patent9 中国专利结果。'
                 try:
-                    p9 = await patent9_search(target, 10)
+                    p9 = await patent9_search(target, self.patent_count)
                     normalized = []
                     for p in p9:
                         np = _normalize_patent(p)
@@ -2693,9 +2776,9 @@ async def search_patents(target: str, src: str = 'google', key: str = '',
     elif src == 'uspto':
         patents = await uspto_search(target, key)
     elif src == 'lens':
-        patents = await lens_search(target, key)
+        patents = await lens_search(target, key, size=num, sort=sort, jurisdiction=country)
     elif src == 'espacenet':
-        patents = await espacenet_search(target, key)
+        patents = await espacenet_search(target, key, range_end=num, country=country)
     elif src == 'mcp':
         try:
             endpoint = (mcp_url or '').strip().rstrip('/')
@@ -2706,7 +2789,7 @@ async def search_patents(target: str, src: str = 'google', key: str = '',
             mcp_ctx = mcp_result
         except Exception as e:
             try:
-                p9 = await patent9_search(target, 10)
+                p9 = await patent9_search(target, self.patent_count)
                 normalized = []
                 for p in p9:
                     np = _normalize_patent(p)
@@ -2727,7 +2810,7 @@ async def search_patents(target: str, src: str = 'google', key: str = '',
         if np:
             normalized.append(np)
     try:
-        p9 = await patent9_search(target, 10)
+        p9 = await patent9_search(target, self.patent_count)
         seen_n = {p.get('number') for p in normalized}
         for p in p9:
             np = _normalize_patent(p)
@@ -3537,31 +3620,33 @@ def _paper_key(p) -> str:
     return id(p)
 
 
-async def _cached_search(key: str, kind: str, fn) -> Tuple[Any, bool]:
+async def _cached_search(key: str, kind: str, fn, no_cache: bool = False) -> Tuple[Any, bool]:
     """Return (data, cached). data is a list of models/dicts, or a dict for patents."""
-    try:
-        raw = await asyncio.to_thread(cache_get, key)
-        if raw is not None:
-            arr = json.loads(raw)
-            if kind == 'patents' and isinstance(arr, dict):
-                return arr, True
-            if isinstance(arr, list):
-                if kind == 'patents':
-                    return [dict(x) for x in arr], True
-                model = _MODEL_MAP.get(kind)
-                if model and arr and isinstance(arr[0], dict):
-                    return [model(**x) for x in arr], True
-                if not arr:
-                    return [], True
-    except Exception:
-        pass
+    if not no_cache:
+        try:
+            raw = await asyncio.to_thread(cache_get, key)
+            if raw is not None:
+                arr = json.loads(raw)
+                if kind == 'patents' and isinstance(arr, dict):
+                    return arr, True
+                if isinstance(arr, list):
+                    if kind == 'patents':
+                        return [dict(x) for x in arr], True
+                    model = _MODEL_MAP.get(kind)
+                    if model and arr and isinstance(arr[0], dict):
+                        return [model(**x) for x in arr], True
+                    if not arr:
+                        return [], True
+        except Exception:
+            pass
     data = await fn()
-    try:
-        await asyncio.to_thread(cache_set, key, json.dumps(
-            data if kind == 'patents' else [x.model_dump() for x in data],
-            ensure_ascii=False, default=list))
-    except Exception:
-        pass
+    if not no_cache:
+        try:
+            await asyncio.to_thread(cache_set, key, json.dumps(
+                data if kind == 'patents' else [x.model_dump() for x in data],
+                ensure_ascii=False, default=list))
+        except Exception:
+            pass
     return data, False
 
 
@@ -4482,7 +4567,11 @@ class PipelineWorker(QThread):
                  use_llm=True, src_papers=True, src_trials=True, src_target=True,
                  src_drugs=True, src_patents=True, patent_src='google', patent_key='',
                  mcp_url='', mcp_tool='', pat_deep=True, year_range='20',
-                 ncbi_key='', intl_trials=False, ai_cites=True, save_hist=True):
+                 ncbi_key='', intl_trials=False, ai_cites=True, save_hist=True,
+                 no_cache=False,
+                 paper_count='40', paper_sort='相关性', article_types='综述+临床+系统评价',
+                 trial_count='20', trial_sort='默认', trial_phase='全部', intervention_type='全部',
+                 patent_count='30', patent_sort='默认', patent_country='全部'):
         super().__init__()
         self.target_name = target_name
         self.gene = gene; self.mutation = mutation
@@ -4497,6 +4586,17 @@ class PipelineWorker(QThread):
         self.pat_deep = pat_deep; self.year_range = year_range
         self.ncbi_key = ncbi_key; self.intl_trials = intl_trials
         self.ai_cites = ai_cites; self.save_hist = save_hist
+        self.no_cache = no_cache
+        self.paper_count = int(paper_count)
+        self.paper_sort = paper_sort
+        self.article_types = article_types
+        self.trial_count = int(trial_count)
+        self.trial_sort = trial_sort
+        self.trial_phase = trial_phase
+        self.intervention_type = intervention_type
+        self.patent_count = int(patent_count)
+        self.patent_sort = patent_sort
+        self.patent_country = patent_country
         self._stop = False
 
     def request_stop(self):
@@ -4542,7 +4642,9 @@ class PipelineWorker(QThread):
             try:
                 res, cached = await _limiter.run(_cached_search(
                     f'papers:{self.target_name}:{self.year_range}', 'papers',
-                    lambda: search_papers(gene_sym, 40, _year_backs(self.year_range))))
+                    lambda: search_papers(gene_sym, self.paper_count, _year_backs(self.year_range),
+                                         sort=self.paper_sort, article_types=self.article_types),
+                    no_cache=self.no_cache))
                 papers = res
                 if cached: cached_flags.append('文献(缓存)')
                 p.emit(12, '文献: PubMed ' + str(len(papers)) + '篇')
@@ -4550,10 +4652,12 @@ class PipelineWorker(QThread):
                 if self.mutation:
                     res2, _ = await _limiter.run(_cached_search(
                         f'papers:{self.target_name}:mut', 'papers',
-                        lambda: search_papers(self.target_name, 20, _year_backs(self.year_range))))
+                        lambda: search_papers(self.target_name, 20, _year_backs(self.year_range),
+                                             sort=self.paper_sort, article_types=self.article_types),
+                        no_cache=self.no_cache))
                     seen = {_paper_key(p) for p in papers}
                     papers.extend(p for p in res2 if _paper_key(p) not in seen)
-                oa = await _limiter.run(search_openalex(self.target_name, 10))
+                oa = await _limiter.run(search_openalex(self.target_name, 10, sort=self.paper_sort))
                 ss = await _limiter.run(search_semantic_scholar(self.target_name, 10))
                 papers.extend(oa); papers.extend(ss)
             except Exception as e:
@@ -4566,12 +4670,16 @@ class PipelineWorker(QThread):
             try:
                 res, cached = await _limiter.run(_cached_search(
                     f'trials:{gene_sym}', 'trials',
-                    lambda: search_trials(gene_sym, 20)))
+                    lambda: search_trials(gene_sym, self.trial_count,
+                                         sort=self.trial_sort, phase_filter=self.trial_phase,
+                                         intervention_type=self.intervention_type),
+                    no_cache=self.no_cache))
                 trials = res
                 if cached: cached_flags.append('临床(缓存)')
                 if self.mutation:
                     res2, _ = await _cached_search(f'trials:{self.target_name}:mut', 'trials',
-                                                   lambda: search_trials(self.target_name, 10))
+                                                   lambda: search_trials(self.target_name, 10),
+                                                   no_cache=self.no_cache)
                     seen = {_trial_key(t) for t in trials}
                     trials.extend(t for t in res2 if _trial_key(t) not in seen)
                 p.emit(25, '临床: ' + str(len(trials)) + '项')
@@ -4640,13 +4748,15 @@ class PipelineWorker(QThread):
             p.emit(50, '正在获取药物信息 (Open Targets, ChEMBL)...')
             try:
                 res, cached = await _limiter.run(_cached_search(
-                    f'drugs:{gene_sym}', 'drugs', lambda: get_drugs(self.target_name)))
+                    f'drugs:{gene_sym}', 'drugs', lambda: get_drugs(self.target_name),
+                    no_cache=self.no_cache))
                 drugs = res
                 if cached: cached_flags.append('药物(缓存)')
                 if not cached:
                     await _enrich_drugs_with_company(drugs)
                 res_m, cached_m = await _limiter.run(_cached_search(
-                    f'chembl:{gene_sym}', 'molecules', lambda: get_chembl(gene_sym)))
+                    f'chembl:{gene_sym}', 'molecules', lambda: get_chembl(gene_sym),
+                    no_cache=self.no_cache))
                 molecules = res_m
                 if cached_m: cached_flags.append('分子(缓存)')
             except Exception as e:
@@ -4661,9 +4771,11 @@ class PipelineWorker(QThread):
                     return await search_patents(
                         gene_sym, self.patent_src, self.patent_key,
                         deep=self.pat_deep, mcp_url=self.mcp_url, mcp_tool=self.mcp_tool,
-                        progress_cb=lambda t: p.emit(66, t))
+                        progress_cb=lambda t: p.emit(66, t),
+                        num=self.patent_count, sort=self.patent_sort, country=self.patent_country)
                 res, cached = await _limiter.run(_cached_search(
-                    f'patents:{gene_sym}:{self.patent_src}', 'patents', _patents_fetch))
+                    f'patents:{gene_sym}:{self.patent_src}', 'patents', _patents_fetch,
+                    no_cache=self.no_cache))
                 if res and isinstance(res, dict):
                     patents = res.get('patents') or []
                     patent_insight = res.get('insight')
@@ -4889,9 +5001,20 @@ class MainWindow(QMainWindow):
         self.chk_intl.setChecked(str(s.value('intlTrials', 'false')).lower() in ('true', '1'))
         self.chk_ai_cites.setChecked(str(s.value('aiCites', 'true')).lower() in ('true', '1'))
         self.chk_save_hist.setChecked(str(s.value('saveHist', 'true')).lower() in ('true', '1'))
+        self.chk_no_cache.setChecked(str(s.value('noCache', 'false')).lower() in ('true', '1'))
         self.chk_use_llm.setChecked(str(s.value('useLLM', 'true')).lower() in ('true', '1'))
         self.year_combo.setCurrentText(s.value('yearRange', '20'))
         self.ncbi_key_input.setText(s.value('ncbiKey', ''))
+        self.combo_paper_count.setCurrentText(s.value('paperCount', '40'))
+        self.combo_paper_sort.setCurrentText(s.value('paperSort', '相关性'))
+        self.combo_article_type.setCurrentText(s.value('articleType', '综述+临床+系统评价'))
+        self.combo_trial_count.setCurrentText(s.value('trialCount', '20'))
+        self.combo_trial_sort.setCurrentText(s.value('trialSort', '默认'))
+        self.combo_trial_phase.setCurrentText(s.value('trialPhase', '全部'))
+        self.combo_intervention.setCurrentText(s.value('interventionType', '全部'))
+        self.combo_patent_count.setCurrentText(s.value('patentCount', '30'))
+        self.combo_patent_sort.setCurrentText(s.value('patentSort', '默认'))
+        self.combo_patent_country.setCurrentText(s.value('patentCountry', '全部'))
         for cb, key in self._settings_sources():
             v = s.value(key, None)
             if v is not None:
@@ -4908,9 +5031,20 @@ class MainWindow(QMainWindow):
         self.chk_intl.toggled.connect(self._settings_changed)
         self.chk_ai_cites.toggled.connect(self._settings_changed)
         self.chk_save_hist.toggled.connect(self._settings_changed)
+        self.chk_no_cache.toggled.connect(self._settings_changed)
         self.chk_use_llm.toggled.connect(self._settings_changed)
         self.year_combo.currentIndexChanged.connect(self._settings_changed)
         self.ncbi_key_input.textChanged.connect(self._settings_changed)
+        self.combo_paper_count.currentIndexChanged.connect(self._settings_changed)
+        self.combo_paper_sort.currentIndexChanged.connect(self._settings_changed)
+        self.combo_article_type.currentIndexChanged.connect(self._settings_changed)
+        self.combo_trial_count.currentIndexChanged.connect(self._settings_changed)
+        self.combo_trial_sort.currentIndexChanged.connect(self._settings_changed)
+        self.combo_trial_phase.currentIndexChanged.connect(self._settings_changed)
+        self.combo_intervention.currentIndexChanged.connect(self._settings_changed)
+        self.combo_patent_count.currentIndexChanged.connect(self._settings_changed)
+        self.combo_patent_sort.currentIndexChanged.connect(self._settings_changed)
+        self.combo_patent_country.currentIndexChanged.connect(self._settings_changed)
         for cb, _ in self._settings_sources():
             cb.toggled.connect(self._settings_changed)
 
@@ -4930,7 +5064,18 @@ class MainWindow(QMainWindow):
         s.setValue('intlTrials', self.chk_intl.isChecked())
         s.setValue('aiCites', self.chk_ai_cites.isChecked())
         s.setValue('saveHist', self.chk_save_hist.isChecked())
+        s.setValue('noCache', self.chk_no_cache.isChecked())
         s.setValue('useLLM', self.chk_use_llm.isChecked())
+        s.setValue('paperCount', self.combo_paper_count.currentText())
+        s.setValue('paperSort', self.combo_paper_sort.currentText())
+        s.setValue('articleType', self.combo_article_type.currentText())
+        s.setValue('trialCount', self.combo_trial_count.currentText())
+        s.setValue('trialSort', self.combo_trial_sort.currentText())
+        s.setValue('trialPhase', self.combo_trial_phase.currentText())
+        s.setValue('interventionType', self.combo_intervention.currentText())
+        s.setValue('patentCount', self.combo_patent_count.currentText())
+        s.setValue('patentSort', self.combo_patent_sort.currentText())
+        s.setValue('patentCountry', self.combo_patent_country.currentText())
         for cb, key in self._settings_sources():
             s.setValue(key, cb.isChecked())
         s.sync()
@@ -5021,7 +5166,9 @@ class MainWindow(QMainWindow):
         self.chk_use_llm = QCheckBox('启用AI增强'); self.chk_use_llm.setChecked(True)
         self.chk_ai_cites = QCheckBox('AI结构化引用'); self.chk_ai_cites.setChecked(True)
         self.chk_save_hist = QCheckBox('自动保存历史'); self.chk_save_hist.setChecked(True)
-        row3.addWidget(self.chk_use_llm); row3.addWidget(self.chk_ai_cites); row3.addWidget(self.chk_save_hist)
+        self.chk_no_cache = QCheckBox('不使用缓存'); self.chk_no_cache.setChecked(False)
+        row3.addWidget(self.chk_use_llm); row3.addWidget(self.chk_ai_cites)
+        row3.addWidget(self.chk_save_hist); row3.addWidget(self.chk_no_cache)
         row3.addStretch()
         settings_layout.addLayout(row3)
 
@@ -5070,6 +5217,59 @@ class MainWindow(QMainWindow):
         self.chk_intl = QCheckBox('国际临床覆盖(ISRCTN/ChiCTR)')
         row5.addWidget(self.chk_intl)
         settings_layout.addLayout(row5)
+
+        # Row 6: 查询条件配置
+        row6 = QHBoxLayout()
+        # 文献配置
+        row6.addWidget(QLabel('文献:'))
+        self.combo_paper_count = QComboBox()
+        self.combo_paper_count.addItems(['20', '40', '60', '100', '200'])
+        self.combo_paper_count.setCurrentText('40')
+        row6.addWidget(self.combo_paper_count)
+        self.combo_paper_sort = QComboBox()
+        self.combo_paper_sort.addItems(['相关性', '最新发表', '被引最多'])
+        self.combo_paper_sort.setCurrentText('相关性')
+        row6.addWidget(self.combo_paper_sort)
+        self.combo_article_type = QComboBox()
+        self.combo_article_type.addItems(['综述+临床+系统评价', '全部', '仅综述', '仅临床试验', '仅系统评价', 'Meta分析+RCT', 'Meta分析', 'RCT', '病例报告'])
+        self.combo_article_type.setCurrentText('综述+临床+系统评价')
+        row6.addWidget(self.combo_article_type)
+        row6.addWidget(QLabel('|'))
+        # 临床配置
+        row6.addWidget(QLabel('临床:'))
+        self.combo_trial_count = QComboBox()
+        self.combo_trial_count.addItems(['10', '20', '50', '100', '200'])
+        self.combo_trial_count.setCurrentText('20')
+        row6.addWidget(self.combo_trial_count)
+        self.combo_trial_sort = QComboBox()
+        self.combo_trial_sort.addItems(['默认', '入组最多', '最新更新', '最早开始'])
+        self.combo_trial_sort.setCurrentText('默认')
+        row6.addWidget(self.combo_trial_sort)
+        self.combo_trial_phase = QComboBox()
+        self.combo_trial_phase.addItems(['全部', 'Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', '早期', '不可用'])
+        self.combo_trial_phase.setCurrentText('全部')
+        row6.addWidget(self.combo_trial_phase)
+        self.combo_intervention = QComboBox()
+        self.combo_intervention.addItems(['全部', '药物', '生物制品', '器械', '手术', '行为', '其他'])
+        self.combo_intervention.setCurrentText('全部')
+        row6.addWidget(self.combo_intervention)
+        row6.addWidget(QLabel('|'))
+        # 专利配置
+        row6.addWidget(QLabel('专利:'))
+        self.combo_patent_count = QComboBox()
+        self.combo_patent_count.addItems(['10', '20', '30', '50', '100'])
+        self.combo_patent_count.setCurrentText('30')
+        row6.addWidget(self.combo_patent_count)
+        self.combo_patent_sort = QComboBox()
+        self.combo_patent_sort.addItems(['默认', '最新公开', '被引最多'])
+        self.combo_patent_sort.setCurrentText('默认')
+        row6.addWidget(self.combo_patent_sort)
+        self.combo_patent_country = QComboBox()
+        self.combo_patent_country.addItems(['全部', 'US', 'CN', 'EP', 'JP', 'KR', 'WO'])
+        self.combo_patent_country.setCurrentText('全部')
+        row6.addWidget(self.combo_patent_country)
+        row6.addStretch()
+        settings_layout.addLayout(row6)
 
         self.settings_group.setLayout(QVBoxLayout())
         self.settings_group.layout().addWidget(settings_widget)
@@ -5174,6 +5374,17 @@ class MainWindow(QMainWindow):
             intl_trials=self.chk_intl.isChecked(),
             ai_cites=self.chk_ai_cites.isChecked(),
             save_hist=self.chk_save_hist.isChecked(),
+            no_cache=self.chk_no_cache.isChecked(),
+            paper_count=self.combo_paper_count.currentText(),
+            paper_sort=self.combo_paper_sort.currentText(),
+            article_types=self.combo_article_type.currentText(),
+            trial_count=self.combo_trial_count.currentText(),
+            trial_sort=self.combo_trial_sort.currentText(),
+            trial_phase=self.combo_trial_phase.currentText(),
+            intervention_type=self.combo_intervention.currentText(),
+            patent_count=self.combo_patent_count.currentText(),
+            patent_sort=self.combo_patent_sort.currentText(),
+            patent_country=self.combo_patent_country.currentText(),
         )
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)

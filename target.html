@@ -183,6 +183,63 @@
             <div style="margin-top:.8rem;">
                 <label class="chk"><input type="checkbox" id="useLLM" checked> 🧠 用 AI 基于已检索数据增强报告、做综合研判与专利解读</label>
             </div>
+            <div class="grid2" style="margin-top:.8rem;border-top:1px solid #ddd;padding-top:.8rem;">
+                <div>
+                    <span class="lbl">文献设置</span>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.3rem;">
+                        <label style="font-size:12px;">条数:</label>
+                        <select id="paperCount" style="font-size:12px;padding:2px 4px;">
+                            <option value="20">20</option><option value="40" selected>40</option><option value="60">60</option><option value="100">100</option><option value="200">200</option>
+                        </select>
+                        <label style="font-size:12px;">排序:</label>
+                        <select id="paperSort" style="font-size:12px;padding:2px 4px;">
+                            <option value="relevance" selected>相关性</option><option value="pub_date">最新发表</option><option value="cited">被引最多</option>
+                        </select>
+                        <label style="font-size:12px;">类型:</label>
+                        <select id="articleType" style="font-size:12px;padding:2px 4px;">
+                            <option value="review+clinical+systematic" selected>综述+临床+系统评价</option><option value="all">全部</option><option value="review">仅综述</option><option value="clinical">仅临床试验</option><option value="systematic">仅系统评价</option><option value="meta+rct">Meta分析+RCT</option><option value="meta">Meta分析</option><option value="rct">RCT</option><option value="case">病例报告</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <span class="lbl">临床设置</span>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.3rem;">
+                        <label style="font-size:12px;">条数:</label>
+                        <select id="trialCount" style="font-size:12px;padding:2px 4px;">
+                            <option value="10">10</option><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option><option value="200">200</option>
+                        </select>
+                        <label style="font-size:12px;">排序:</label>
+                        <select id="trialSort" style="font-size:12px;padding:2px 4px;">
+                            <option value="" selected>默认</option><option value="EnrollmentCount:desc">入组最多</option><option value="LastUpdatePostDate:desc">最新更新</option><option value="StartDate:asc">最早开始</option>
+                        </select>
+                        <label style="font-size:12px;">阶段:</label>
+                        <select id="trialPhase" style="font-size:12px;padding:2px 4px;">
+                            <option value="" selected>全部</option><option value="PHASE1">Phase 1</option><option value="PHASE2">Phase 2</option><option value="PHASE3">Phase 3</option><option value="PHASE4">Phase 4</option><option value="EARLY_PHASE1">早期</option><option value="NA">不可用</option>
+                        </select>
+                        <label style="font-size:12px;">干预:</label>
+                        <select id="interventionType" style="font-size:12px;padding:2px 4px;">
+                            <option value="" selected>全部</option><option value="DRUG">药物</option><option value="BIOLOGICAL">生物制品</option><option value="DEVICE">器械</option><option value="PROCEDURE">手术</option><option value="BEHAVIORAL">行为</option><option value="OTHER">其他</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <span class="lbl">专利设置</span>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.3rem;">
+                        <label style="font-size:12px;">条数:</label>
+                        <select id="patentCount" style="font-size:12px;padding:2px 4px;">
+                            <option value="10">10</option><option value="20">20</option><option value="30" selected>30</option><option value="50">50</option><option value="100">100</option>
+                        </select>
+                        <label style="font-size:12px;">排序:</label>
+                        <select id="patentSort" style="font-size:12px;padding:2px 4px;">
+                            <option value="" selected>默认</option><option value="date">最新公开</option><option value="cited">被引最多</option>
+                        </select>
+                        <label style="font-size:12px;">国家:</label>
+                        <select id="patentCountry" style="font-size:12px;padding:2px 4px;">
+                            <option value="" selected>全部</option><option value="US">US</option><option value="CN">CN</option><option value="EP">EP</option><option value="JP">JP</option><option value="KR">KR</option><option value="WO">WO</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
         </details>
     </div>
 
@@ -486,10 +543,11 @@ function ncbiKey(){ return ($("ncbiKey")?$("ncbiKey").value:"").trim(); }
 function ncbiParams(extra){
   const k=ncbiKey(); return Object.assign({},extra, k?{api_key:k}:{});
 }
-async function esearchPubMed(term,maxResults){
+async function esearchPubMed(term,maxResults,sort){
   const yrRaw=($("yearRange")?$("yearRange").value:"20")||"20";
   const now=new Date().getFullYear();
-  const base={db:"pubmed",term,retmax:maxResults,retmode:"json",sort:"relevance"};
+  const sortVal=sort||"relevance";
+  const base={db:"pubmed",term,retmax:maxResults,retmode:"json",sort:sortVal};
   if(yrRaw&&yrRaw!=="0"){ base.mindate=now-Number(yrRaw); base.maxdate=now; base.datetype="pdat"; }
   const u="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"+new URLSearchParams(ncbiParams(base)).toString();
   const r=await qFetch(u,{},{retries:2});
@@ -497,13 +555,26 @@ async function esearchPubMed(term,maxResults){
   const j=await r.json().catch(()=>null);
   return (j&&j.esearchresult&&j.esearchresult.idlist)||[];
 }
-async function searchPapers(target,maxResults){
+async function searchPapers(target,maxResults,sort,articleType){
   const terms=expandTerms(target);
   const q=terms.map(x=>"("+x+"[Title/Abstract])").join(" OR ");
+  const AT_MAP={
+    "review+clinical+systematic":"review[pt] OR clinical trial[pt] OR systematic review[pt]",
+    "all":"",
+    "review":"review[pt]",
+    "clinical":"clinical trial[pt]",
+    "systematic":"systematic review[pt]",
+    "meta+rct":"meta-analysis[pt] OR randomized controlled trial[pt]",
+    "meta":"meta-analysis[pt]",
+    "rct":"randomized controlled trial[pt]",
+    "case":"case reports[pt]"
+  };
+  const atFilter=AT_MAP[articleType]||AT_MAP["review+clinical+systematic"];
   let idList=[];
   try{
-    idList=await esearchPubMed(`(${q}) AND (review[pt] OR clinical trial[pt] OR systematic review[pt])`,maxResults);
-    if(!idList.length) idList=await esearchPubMed(`(${q})`,maxResults);
+    const termStr=atFilter?`(${q}) AND (${atFilter})`:`(${q})`;
+    idList=await esearchPubMed(termStr,maxResults,sort);
+    if(!idList.length) idList=await esearchPubMed(`(${q})`,maxResults,sort);
   }catch(e){ return []; }
   if(!idList.length) return [];
   const u="https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?"+new URLSearchParams(ncbiParams({
@@ -544,11 +615,18 @@ function parsePubMedXML(xml){
 }
 
 /* ── ClinicalTrials.gov v2 ───────────────────────────────────── */
-async function searchTrials(target,maxResults){
-  const u="https://clinicaltrials.gov/api/v2/studies?"+new URLSearchParams({
+async function searchTrials(target,maxResults,sort,phaseFilter,interventionType){
+  const params={
     "query.term":expandTerms(target).join(" OR "),pageSize:Math.min(maxResults,100),format:"json",
     fields:"NCTId|BriefTitle|OverallStatus|Phase|Condition|InterventionType|InterventionName|LeadSponsorName|StartDate|CompletionDate|BriefSummary|EnrollmentCount|LocationCountry",
-    "filter.overallStatus":"ACTIVE_NOT_RECRUITING|COMPLETED|RECRUITING|NOT_YET_RECRUITING|ENROLLING_BY_INVITATION|AVAILABLE"}).toString();
+    "filter.overallStatus":"ACTIVE_NOT_RECRUITING|COMPLETED|RECRUITING|NOT_YET_RECRUITING|ENROLLING_BY_INVITATION|AVAILABLE"
+  };
+  if(sort) params.sort=sort;
+  const advFilters=[];
+  if(phaseFilter) advFilters.push("AREA[Phase]"+phaseFilter);
+  if(interventionType) advFilters.push("AREA[InterventionType]"+interventionType);
+  if(advFilters.length) params["filter.advanced"]=advFilters.join(" AND ");
+  const u="https://clinicaltrials.gov/api/v2/studies?"+new URLSearchParams(params).toString();
   const data=await reqJson(u);
   const PHASE_MAP={"EARLY_PHASE1":"Phase 1(早期)","PHASE1":"Phase 1","PHASE2":"Phase 2","PHASE3":"Phase 3","PHASE4":"Phase 4"};
   return (data.studies||[]).map(s=>{
@@ -605,8 +683,8 @@ async function searchICTRP(target){
       countries:[x.countries||""].filter(Boolean), source:"WHO ICTRP"})).filter(t=>t.id||t.title).slice(0,10);
   }catch(e){ return []; }
 }
-async function searchTrialsIntl(target,maxResults){
-  const nct=await searchTrials(target,maxResults);
+async function searchTrialsIntl(target,maxResults,sort,phaseFilter,interventionType){
+  const nct=await searchTrials(target,maxResults,sort,phaseFilter,interventionType);
   if(!($("intlTrials")&&$("intlTrials").checked)) return nct;
   const [eu,who]=await Promise.all([searchEUCtis(target).catch(()=>[]), searchICTRP(target).catch(()=>[])]);
   const seen=new Set(nct.map(t=>t.id));
@@ -890,10 +968,13 @@ const PATENT_MCP_FALLBACK="https://gateway.pipeworx.io/patents/mcp";
 async function searchPatents(target,cb){
   const src=$("patSrc").value, key=($("patKey").value||"").trim();
   const deep=$("patDeep").checked;
+  const patNum=Number($("patentCount").value)||30;
+  const patSort=$("patentSort").value||"";
+  const patCountry=$("patentCountry").value||"";
   let list, ctx=null, note="", effSrc=src;
-  if(src==="lens") list=await lensSearch(target,key);
+  if(src==="lens") list=await lensSearch(target,key,patNum,patSort,patCountry);
   else if(src==="google"){
-    try{ list=await googlePatentsSearch(target); }
+    try{ list=await googlePatentsSearch(target,patNum,patCountry); }
     catch(e){
       // Google 代理链全部失败 → 免Key MCP 自动回退
       const fb=await keylessMCPFallback(target);
@@ -905,9 +986,9 @@ async function searchPatents(target,cb){
       if(fb&&fb.patents&&fb.patents.length){ list=fb.patents; ctx=fb.ctx; effSrc="mcp"; note="Google 未检索到结果，已自动回退到 MCP 免Key 来源（pipeworx）。"; }
     }
   }
-  else if(src==="espacenet") list=await espacenetSearch(target,key);
+  else if(src==="espacenet") list=await espacenetSearch(target,key,patNum,patCountry);
   else if(src==="mcp"){ ctx=await mcpPatentSearch(target,key); list=ctx.patents; }
-  else list=await usptoSearch(target,key);
+  else list=await usptoSearch(target,key,patNum);
   list=dedupePatents(list||[]);
   let insight=null;
   if(deep&&list.length){
@@ -927,11 +1008,11 @@ async function keylessMCPFallback(target){
   }
   return null;
 }
-async function usptoSearch(target,key){
+async function usptoSearch(target,key,num){
   if(!key) throw new Error("请先在设置中填写 USPTO 开放数据门户的 API Key（data.uspto.gov 免费申请）");
   const terms=expandTerms(target).slice(0,3).map(t=>t.replace(/["\\]/g," "));
   const q=terms.length? terms.map(t=>"inventionTitle:("+t+")").join(" OR ")+" OR "+terms.map(t=>"("+t+")").join(" OR ") : "("+target.replace(/["\\]/g," ").trim()+")";
-  const u="https://api.uspto.gov/api/v1/patent/applications/search?"+new URLSearchParams({q,limit:"50",offset:"0"}).toString();
+  const u="https://api.uspto.gov/api/v1/patent/applications/search?"+new URLSearchParams({q,limit:String(num||50),offset:"0"}).toString();
   const r=await reqJson(u,{headers:{"X-API-Key":key}});
   const arr = Array.isArray(r) ? r
       : (r&&r.patentBag) || (r&&r.data&&r.data.patentBag) || (r&&r.data) || [];
@@ -947,12 +1028,15 @@ async function usptoSearch(target,key){
              link:num?("https://patents.google.com/patent/US"+num.replace(/^US/,"")):"" };
   }).filter(p=>p.title);
 }
-async function lensSearch(name,key){
+async function lensSearch(name,key,size,sort,jurisdiction){
   if(!key) throw new Error("Lens.org 需要在设置中填写 token");
-  const body=JSON.stringify({query_number:1,query_text_1:"title_claims_and_abstract",query_value_1:name,size:30,
-    include:["title","publication_number","publication_date","assignee"]});
+  const body={query_number:1,query_text_1:"title_claims_and_abstract",query_value_1:name,size:size||30,
+    include:["title","publication_number","publication_date","assignee"]};
+  if(jurisdiction) body.query_jurisdiction=jurisdiction;
+  if(sort==="date") body.sort=[{field:"publication_date",order:"desc"}];
+  else if(sort==="cited") body.sort=[{field:"cited_by_count",order:"desc"}];
   const r=await withFetch("https://api.lens.org/scholarly/search",{method:"POST",
-    headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body});
+    headers:{Authorization:"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify(body)});
   if(!r.ok) throw new Error("Lens.org HTTP "+r.status);
   const d=await r.json();
   return (d&&d.results||[]).map(x=>({number:x.publication_number||"",title:x.title||"",
@@ -1045,9 +1129,10 @@ function googleParseItems(d){
     };
   }).filter(p=>p.title&&p.number);
 }
-async function googlePatentsSearch(target){
-  const terms=expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ")+" in:title";
-  const d=await googleXhr(terms||'"'+target+'"',30);
+async function googlePatentsSearch(target,num,country){
+  let terms=expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ")+" in:title";
+  if(country) terms+=' country:'+country;
+  const d=await googleXhr(terms||'"'+target+'"',num||30);
   return googleParseItems(d);
 }
 async function googleCites(numRaw){
@@ -1131,7 +1216,7 @@ function parseOpsXml(xml){
   }
   return out.filter(p=>p.title||p.number);
 }
-async function espacenetSearch(target,key){
+async function espacenetSearch(target,key,range,country){
   const parts=(key||"").split(/\s+/).filter(Boolean);
   if(parts.length<2) throw new Error("Espacenet OPS 需要在 data.epo.org 免费注册申请，Key 填「client_id client_secret」（空格分隔）");
   const tr=await withFetch("https://auth.epo.org/oauth2/token",{method:"POST",
@@ -1140,8 +1225,9 @@ async function espacenetSearch(target,key){
   const tj=await tr.json().catch(()=>null);
   if(!tr.ok||!tj||!tj.access_token)
     throw new Error("Espacenet OAuth 失败: "+(tj&&(tj.error_description||tj.error)||("HTTP "+tr.status)));
-  const terms=expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ");
-  const url="https://ops.epo.org/3.2/rest-services/published-data/search?"+new URLSearchParams({q:terms||target,Range:"1-25"}).toString();
+  let terms=expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ");
+  if(country) terms+=' AND pn='+country+'*';
+  const url="https://ops.epo.org/3.2/rest-services/published-data/search?"+new URLSearchParams({q:terms||target,Range:"1-"+(range||25)}).toString();
   const r=await withFetch(url,{headers:{Authorization:"Bearer "+tj.access_token,Accept:"application/xml"}});
   const xml=await r.text().catch(()=>"");
   if(!r.ok) throw new Error("Espacenet OPS HTTP "+r.status+": "+xml.slice(0,200));
@@ -1683,10 +1769,13 @@ async function run(){
   try{
     if(on("Papers")){ setProg(8,"搜索文献 (PubMed)…");
       try{
-        const res=await Promise.race([cachedSearch("papers:"+pt.raw,()=>searchPapers(gene,40)),withTimeout(50000)]);
+        const paperCount=Number($("paperCount").value)||40;
+        const paperSort=$("paperSort").value||"relevance";
+        const articleType=$("articleType").value||"review+clinical+systematic";
+        const res=await Promise.race([cachedSearch("papers:"+pt.raw,()=>searchPapers(gene,paperCount,paperSort,articleType)),withTimeout(50000)]);
         papers=res.data; if(res.cached) cachedFlags.push("文献(缓存)");
         if(mutation){
-          const res2=await Promise.race([cachedSearch("papers:"+pt.raw+":mut",()=>searchPapers(pt.raw,20)).catch(()=>({data:[],cached:false})),withTimeout(40000)]);
+          const res2=await Promise.race([cachedSearch("papers:"+pt.raw+":mut",()=>searchPapers(pt.raw,20,paperSort,articleType)).catch(()=>({data:[],cached:false})),withTimeout(40000)]);
           const mut=(res2.data||[]).filter(p=>!papers.some(x=>x.pmid&&x.pmid===p.pmid));
           papers=papers.concat(mut);
         }
@@ -1695,10 +1784,14 @@ async function run(){
     if(STOP) return;
     if(on("Trials")){ setProg(26,"查询临床试验…");
       try{
-        const res=await Promise.race([cachedSearch("trials:"+gene,()=>searchTrialsIntl(gene,20)),withTimeout(60000)]);
+        const trialCount=Number($("trialCount").value)||20;
+        const trialSort=$("trialSort").value||"";
+        const trialPhase=$("trialPhase").value||"";
+        const interventionType=$("interventionType").value||"";
+        const res=await Promise.race([cachedSearch("trials:"+gene,()=>searchTrialsIntl(gene,trialCount,trialSort,trialPhase,interventionType)),withTimeout(60000)]);
         trials=res.data; if(res.cached) cachedFlags.push("临床(缓存)");
         if(mutation){
-          const res2=await Promise.race([cachedSearch("trials:"+pt.raw+":mut",()=>searchTrialsIntl(pt.raw,10)).catch(()=>({data:[],cached:false})),withTimeout(45000)]);
+          const res2=await Promise.race([cachedSearch("trials:"+pt.raw+":mut",()=>searchTrialsIntl(pt.raw,10,trialSort,trialPhase,interventionType)).catch(()=>({data:[],cached:false})),withTimeout(45000)]);
           const extra=(res2.data||[]).filter(t=>!trials.some(x=>x.id&&x.id===t.id));
           trials=trials.concat(extra);
         }
@@ -2615,6 +2708,9 @@ function init(){
   $("intlTrials").addEventListener("change",()=>ls.set("intlTrials",$("intlTrials").checked));
   $("aiCites").addEventListener("change",()=>ls.set("aiCites",$("aiCites").checked));
   $("saveHist").addEventListener("change",()=>ls.set("saveHist",$("saveHist").checked));
+  ["paperCount","paperSort","articleType","trialCount","trialSort","trialPhase","interventionType","patentCount","patentSort","patentCountry"].forEach(id=>{
+    $(id).addEventListener("change",()=>ls.set(id,$(id).value));
+  });
   ["Papers","Trials","Target","Drugs","Patents"].forEach(k=>{
     const el=$("src"+k); const startVal=localStorage.getItem("src"+k);
     el.checked = startVal===null? true : startVal==="true";
@@ -2636,6 +2732,16 @@ function init(){
   $("intlTrials").checked = ls.get("intlTrials",false);
   $("aiCites").checked = ls.get("aiCites",true);
   $("saveHist").checked = ls.get("saveHist",true);
+  $("paperCount").value=ls.get("paperCount","40");
+  $("paperSort").value=ls.get("paperSort","relevance");
+  $("articleType").value=ls.get("articleType","review+clinical+systematic");
+  $("trialCount").value=ls.get("trialCount","20");
+  $("trialSort").value=ls.get("trialSort","");
+  $("trialPhase").value=ls.get("trialPhase","");
+  $("interventionType").value=ls.get("interventionType","");
+  $("patentCount").value=ls.get("patentCount","30");
+  $("patentSort").value=ls.get("patentSort","");
+  $("patentCountry").value=ls.get("patentCountry","");
   syncPatUI();
   $("useLLM").checked = ls.get("useLLM",true);
   fillModels();
