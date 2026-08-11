@@ -860,7 +860,7 @@ async function getChEMBL(name){
 async function getClinPGx(gene){
   try{
     if(!gene) return [];
-    const u="https://api.clinpgx.org/data/summaryAnnotation?"+new URLSearchParams({
+    const u="https://api.clinpgx.org/v1/data/summaryAnnotation?"+new URLSearchParams({
       "location.genes.symbol":gene, "view":"max"}).toString();
     const j=await reqJson(u);
     const arr=(j&&Array.isArray(j.data))?j.data:[];

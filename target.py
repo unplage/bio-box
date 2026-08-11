@@ -5,12 +5,12 @@ TargetInfo -- 靶点调研报告生成器（PyQt5 桌面版）
 
 数据源：
   文献: PubMed, OpenAlex, Semantic Scholar
-  临床: ClinicalTrials.gov, ISRCTN, ANZCTR, ChiCTR
-  靶点: Open Targets, UniProt, ClinVar, PharmGKB, KEGG
+  临床: ClinicalTrials.gov, ISRCTN, ChiCTR
+  靶点: Open Targets, UniProt, ClinVar, ClinPGx, KEGG
   蛋白: PDB, AlphaFold DB, STRING DB
   表达: Human Protein Atlas, GTEx
-  药物: Open Targets, ChEMBL, PubChem, DGIdb
-  专利: Google Patents, USPTO, Lens.org, Espacenet, MCP
+  药物: Open Targets, ChEMBL, PubChem, KEGG
+  专利: Google Patents, Patent9, drugfuture, USPTO, Lens.org, Espacenet, MCP
   AI  : DeepSeek / 小米 MiMo / 智谱 GLM / 自定义 OpenAI 兼容接口
 """
 
@@ -20,13 +20,15 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import sys
+import tempfile
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode, quote, unquote
 
 import httpx
 from html import escape
@@ -42,13 +44,13 @@ from PyQt5.QtWidgets import (
     QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QSplitter, QTabWidget,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer, QSettings
 from PyQt5.QtGui import QFont, QDesktopServices
 
 # PPT
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
+from pptx.dml.color import RGBColor as PPT_RGBColor
 from pptx.enum.text import PP_ALIGN
 from pptx.enum.shapes import MSO_SHAPE
 
@@ -71,7 +73,6 @@ load_dotenv()
 PUBMED_EMAIL = os.getenv('PUBMED_EMAIL', 'user@example.com')
 NCBI_API_KEY = os.getenv('NCBI_API_KEY', '')  # optional, raises rate limit
 OPENALEX_KEY = os.getenv('OPENALEX_KEY', '')
-PHARMGKB_KEY = os.getenv('PHARMGKB_KEY', '')
 
 # API Base URLs
 PUBMED_SEARCH_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi'
@@ -89,14 +90,15 @@ STRING_API_URL = 'https://string-db.org/api'
 PUBCHEM_URL = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug'
 KEGG_URL = 'https://rest.kegg.jp'
 DGIDB_URL = 'https://dgidb.org/api/v2'
-PHARMGKB_URL = 'https://api.pharmgkb.org/v1'
+CLINPGX_URL = 'https://api.clinpgx.org/v1'  # PharmGKB 已于 2025 年更名为 ClinPGx，旧 api.pharmgkb.org 已关停
 OPENALEX_URL = 'https://api.openalex.org'
 SEMANTIC_SCHOLAR_URL = 'https://api.semanticscholar.org/graph/v1'
 GTEX_URL = 'https://gtexportal.org/api/v2'
 
-ISRCTN_URL = 'https://www.isrctn.com/api/study'
-ANZCTR_URL = 'https://www.anzctr.org.au/TrialSearch.aspx'
-CHICTR_SEARCH = 'https://www.chictr.org.cn/searchproj.aspx'
+ISRCTN_URL = 'https://www.isrctn.com/search'
+CHICTR_BASES = ('https://trialsearch.chictr.org.cn', 'https://www.chictr.org.cn')
+PATENT9_URL = 'https://www.patent9.com'
+DRUGFUTURE_URL = 'http://www2.drugfuture.com/cnpat'
 CLINVAR_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi'
 CLINVAR_FETCH_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
 
@@ -320,6 +322,9 @@ class PatentInfo(BaseModel):
     link: str = ''
     snippet: str = ''
     priority_date: str = ''
+    application_no: str = ''
+    cn_download: str = ''
+    cn_fulltext: str = ''
 
 
 class MoleculeInfo(BaseModel):
@@ -405,13 +410,15 @@ class DGIdbInteraction(BaseModel):
     source: str = 'DGIdb'
 
 
-class PharmGKBAssociation(BaseModel):
+class ClinPGxAssociation(BaseModel):
     drug_name: str = ''
     gene_symbol: str = ''
     association_type: str = ''
     significance: str = ''
     level: str = ''
-    source: str = 'PharmGKB'
+    disease: str = ''
+    evidence: str = ''
+    source: str = 'ClinPGx'
 
 
 class ClinVarRecord(BaseModel):
@@ -449,8 +456,10 @@ class TargetDetail(BaseModel):
     string_interactions: List[StringInteraction] = []
     pubchem: List[PubChemCompound] = []
     kegg_pathways: List[KEGGPathway] = []
+    kegg_disease: List[str] = []
+    kegg_drugs: List[str] = []
     dgidb: List[DGIdbInteraction] = []
-    pharmgkb: List[PharmGKBAssociation] = []
+    clinpgx: List[ClinPGxAssociation] = []
     clinvar: List[ClinVarRecord] = []
     gtex: List[GTExExpression] = []
     mutation: str = ''
@@ -471,6 +480,7 @@ class ReportContent(BaseModel):
     patent_note: str = ''
     cached_flags: List[str] = []
     increment_note: str = ''
+    errors: List[str] = []
     target_overview: str = ''
     research_progress: str = ''
     clinical_landscape: str = ''
@@ -499,8 +509,11 @@ async def search_papers(target: str, max_results: int = 40, years_back: int = 20
         'term': f'({query}) AND (review[pt] OR clinical trial[pt] OR systematic review[pt])',
         'retmax': max_results, 'retmode': 'json', 'sort': 'relevance',
         'email': PUBMED_EMAIL,
-        'mindate': str(now_year - years_back), 'maxdate': str(now_year), 'datetype': 'pdat',
     }
+    if years_back and years_back > 0:
+        params['mindate'] = str(now_year - years_back)
+        params['maxdate'] = str(now_year)
+        params['datetype'] = 'pdat'
     if NCBI_API_KEY:
         params['api_key'] = NCBI_API_KEY
 
@@ -806,116 +819,156 @@ def _parse_study(study: dict) -> ClinicalTrial:
 # ─── ISRCTN ──────────────────────────────────────────────────────────────
 
 
+def _parse_isrctn_page(html: str, max_results: int) -> List[ClinicalTrial]:
+    """Parse ISRCTN search page. Result rows look like
+    <a href="https://www.isrctn.com/ISRCTN12345678">Study title</a>."""
+    trials = []
+    seen = set()
+    for m in re.finditer(r'<a[^>]+href="([^"]*ISRCTN\d{6,9}[^"]*)"[^>]*>(.*?)</a>',
+                         html, re.I | re.S):
+        id_match = re.search(r'(ISRCTN\d{6,9})', m.group(1))
+        if not id_match:
+            continue
+        rid = id_match.group(1)
+        if rid in seen:
+            continue
+        seen.add(rid)
+        title = re.sub(r'<[^>]+>', '', m.group(2))
+        title = re.sub(r'\s+', ' ', title).strip()
+        trials.append(ClinicalTrial(nct_id=rid, title=title or '', source='ISRCTN'))
+        if len(trials) >= max_results:
+            break
+    if not trials:
+        for m in re.finditer(r'<h3[^>]*>([^<]*ISRCTN\d{6,9}[^<]*)</h3>', html, re.I):
+            text = re.sub(r'\s+', ' ', m.group(1)).strip()
+            id_match = re.search(r'(ISRCTN\d{6,9})', text)
+            if id_match and id_match.group(1) not in seen:
+                seen.add(id_match.group(1))
+                trials.append(ClinicalTrial(
+                    nct_id=id_match.group(1),
+                    title=re.sub(r'\s*ISRCTN\d{6,9}\s*', '', text),
+                    source='ISRCTN'))
+                if len(trials) >= max_results:
+                    break
+    return trials
+
+
 async def search_isrctn(target: str, max_results: int = 5) -> List[ClinicalTrial]:
+    """
+    ISRCTN retired the JSON API. The search page runs a Play framework
+    cookie challenge: GET /search -> 303 -> /holding page whose JS sets a
+    CHK cookie (urlencoded redirect) -> actual results page.
+    We replay that flow manually and parse the HTML.
+    """
     terms = _expand_query_terms(target)
-    query = ' OR '.join(terms)
-    params = {'q': query, 'format': 'json', 'pageSize': min(max_results, 20)}
-    async with httpx.AsyncClient(timeout=30) as client:
-        try:
-            resp = await _request_with_retry(client, 'GET', ISRCTN_URL, params=params, max_retries=1)
-            if resp.status_code != 200:
-                return []
-            data = resp.json()
-            results = data.get('data', []) or data.get('results', []) or []
-            if isinstance(results, dict):
-                results = results.get('items', [])
-            trials = []
-            for r in results[:max_results]:
-                trials.append(ClinicalTrial(
-                    nct_id=r.get('isrctn', '') or r.get('id', ''),
-                    title=r.get('title', '') or '',
-                    phase=r.get('phase', '') or '',
-                    status=r.get('status', '') or '',
-                    conditions=[r.get('condition', '')] if r.get('condition') else [],
-                    sponsor=r.get('sponsor', '') or '',
-                    source='ISRCTN',
-                ))
-            return trials
-        except Exception:
-            return []
-
-
-# ─── ANZCTR ──────────────────────────────────────────────────────────────
-
-
-async def search_anzctr(target: str, max_results: int = 5) -> List[ClinicalTrial]:
-    terms = _expand_query_terms(target)
-    query = ' OR '.join(terms)
-    params = {
-        'searchTxt': query,
-        'format': 'json',
-        'pageSize': min(max_results, 20),
+    query = ' OR '.join(terms[:3])
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en',
     }
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, follow_redirects=False, headers=headers) as client:
         try:
-            resp = await _request_with_retry(client, 'GET', ANZCTR_URL, params=params, max_retries=1)
+            resp = await client.get(ISRCTN_URL, params={'q': query, 'pageSize': min(max_results, 20)})
+            if resp.status_code not in (200, 303):
+                return []
+            base = str(resp.url)
+            for _ in range(5):
+                if resp.status_code == 303 and resp.headers.get('location'):
+                    loc = resp.headers['location']
+                    base = str(httpx.URL(base).join(loc))
+                    resp = await client.get(base)
+                else:
+                    break
+            if 'holding' in str(resp.url).lower():
+                chk = None
+                try:
+                    chk = client.cookies.get('CHK')
+                except Exception:
+                    chk = None
+                if chk:
+                    try:
+                        nxt = unquote(chk)
+                    except Exception:
+                        nxt = chk
+                    if nxt.startswith('/'):
+                        resp = await client.get('https://www.isrctn.com' + nxt)
+                    elif nxt.startswith('http'):
+                        resp = await client.get(nxt)
             if resp.status_code != 200:
                 return []
-            content_type = resp.headers.get('content-type', '')
-            if 'json' not in content_type:
-                return []
-            data = resp.json()
-            results = data.get('data', []) or []
-            trials = []
-            for r in results[:max_results]:
-                trials.append(ClinicalTrial(
-                    nct_id=r.get('actrn', '') or r.get('trialId', '') or '',
-                    title=r.get('title', '') or r.get('publicTitle', '') or '',
-                    phase=r.get('phase', '') or '',
-                    status=r.get('status', '') or r.get('recruitmentStatus', '') or '',
-                    conditions=[r.get('condition', '')] if r.get('condition') else [],
-                    sponsor=r.get('sponsor', '') or r.get('primarySponsor', '') or '',
-                    countries=['Australia'],
-                    source='ANZCTR',
-                ))
-            return trials
+            return _parse_isrctn_page(resp.text, max_results)
         except Exception:
             return []
 
 
-# ─── ChiCTR (中国临床试验注册中心) ──────────────────────────────────────
+# ─── ChiCTR (中国临床试验注册中心, 新平台) ─────────────────────────────────
 
 
 async def search_chictr(target: str, max_results: int = 5) -> List[ClinicalTrial]:
     """
-    ChiCTR has no formal JSON API. We scrape the search page with requests + lxml.
-    Falls back gracefully on failure.
+    ChiCTR migrated to a SPA at trialsearch.chictr.org.cn (2025+).
+    No stable public API is documented, so we probe several plausible
+    REST endpoints defensively and degrade to [] on any failure.
     """
     terms = _expand_query_terms(target)
     query = ' '.join(terms[:2])
-    params = {'keyword': query, 'page': '1', 'pageSize': str(min(max_results, 10))}
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
+        'Accept': 'application/json,text/html',
         'Accept-Language': 'zh-CN,zh;q=0.9',
     }
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        try:
-            resp = await client.get(CHICTR_SEARCH, params=params, headers=headers)
-            if resp.status_code != 200:
-                return []
-            from lxml import html as lh
-            tree = lh.fromstring(resp.text)
-            rows = tree.xpath("//table[@id='resultTable']//tr") or \
-                   tree.xpath('//table[contains(@class,"list")]//tr') or \
-                   tree.xpath('//div[contains(@class,"result")]//tr')
-            if not rows:
-                return []
-            trials = []
-            for row in rows[1:max_results+1]:
-                cols = row.xpath('.//td')
-                if len(cols) >= 3:
-                    reg_num = ''.join(cols[0].xpath('.//text()')).strip()
-                    title = ''.join(cols[1].xpath('.//text()')).strip() if len(cols) > 1 else ''
-                    status = ''.join(cols[2].xpath('.//text()')).strip() if len(cols) > 2 else ''
-                    if reg_num:
-                        trials.append(ClinicalTrial(
-                            nct_id=reg_num, title=title,
-                            status=status, source='ChiCTR',
-                        ))
-            return trials
-        except Exception:
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers=headers) as client:
+        data = None
+        for base in ('https://trialsearch.chictr.org.cn', 'https://www.chictr.org.cn'):
+            if data:
+                break
+            for path, params in (
+                ('/api/search', {'keyword': query, 'page': 1, 'size': max_results}),
+                ('/api/trials/search', {'keyword': query, 'pageNum': 1, 'pageSize': max_results}),
+                ('/api/clinicalTrial/query', {'title': query, 'pageNum': 1, 'pageSize': max_results}),
+            ):
+                try:
+                    resp = await client.get(base + path, params=params)
+                    if resp.status_code == 200 and 'json' in (resp.headers.get('content-type') or ''):
+                        try:
+                            j = resp.json()
+                        except Exception:
+                            continue
+                        if j is None:
+                            continue
+                        data = j.get('data') if isinstance(j, dict) else j
+                        if isinstance(data, dict) and not data:
+                            data = None
+                        if data is not None:
+                            break
+                except Exception:
+                    continue
+        if not data:
             return []
+        if isinstance(data, dict):
+            rows = (data.get('list') or data.get('records') or data.get('rows')
+                    or data.get('items') or data.get('content') or [])
+        else:
+            rows = data if isinstance(data, list) else []
+        if not rows:
+            return []
+        trials = []
+        for r in rows[:max_results]:
+            if not isinstance(r, dict):
+                continue
+            tid = str(r.get('regNo') or r.get('registrationNumber') or r.get('chiCTR')
+                      or r.get('registrationNo') or r.get('id') or '')
+            title = str(r.get('title') or r.get('publicTitle') or r.get('trialTitle') or '')
+            cond = r.get('condition') or r.get('disease') or ''
+            trials.append(ClinicalTrial(
+                nct_id=tid, title=title,
+                status=str(r.get('status') or ''),
+                conditions=[cond] if cond else [],
+                sponsor=str(r.get('sponsor') or r.get('applicant') or ''),
+                source='ChiCTR',
+            ))
+        return [t for t in trials if t.nct_id or t.title]
 
 
 # ─── Open Targets GraphQL ──────────────────────────────────────────────────
@@ -1499,12 +1552,33 @@ async def get_kegg_pathways(gene: str) -> List[KEGGPathway]:
             return []
 
 
+async def _kegg_gene_id(client: httpx.AsyncClient, gene: str) -> str:
+    """Resolve a gene symbol to its KEGG entry id (e.g. hsa:1956)."""
+    if not gene:
+        return ''
+    if gene.startswith('hsa:'):
+        return gene
+    try:
+        find_resp = await _request_with_retry(
+            client, 'GET', f'{KEGG_URL}/find/genes/{gene}', max_retries=2)
+        if find_resp.status_code == 200:
+            for line in find_resp.text.strip().split('\n'):
+                if '\t' in line:
+                    return line.split('\t')[0].strip()
+    except Exception:
+        pass
+    return ''
+
+
 async def get_kegg_disease(gene: str) -> List[str]:
     if not gene:
         return []
     async with httpx.AsyncClient(timeout=30) as client:
         try:
-            url = f'{KEGG_URL}/link/disease/hsa:{gene}'
+            kegg_id = await _kegg_gene_id(client, gene)
+            if not kegg_id:
+                return []
+            url = f'{KEGG_URL}/link/disease/{kegg_id}'
             resp = await _request_with_retry(client, 'GET', url, max_retries=2)
             if resp.status_code != 200:
                 return []
@@ -1524,7 +1598,10 @@ async def get_kegg_drugs(gene: str) -> List[str]:
         return []
     async with httpx.AsyncClient(timeout=30) as client:
         try:
-            url = f'{KEGG_URL}/link/drug/hsa:{gene}'
+            kegg_id = await _kegg_gene_id(client, gene)
+            if not kegg_id:
+                return []
+            url = f'{KEGG_URL}/link/drug/{kegg_id}'
             resp = await _request_with_retry(client, 'GET', url, max_retries=2)
             if resp.status_code != 200:
                 return []
@@ -1567,30 +1644,63 @@ async def get_dgidb(gene: str) -> List[DGIdbInteraction]:
             return []
 
 
-# ─── PharmGKB ──────────────────────────────────────────────────────────────
+# ─── ClinPGx (原 PharmGKB，2025-07 更名；免 Key) ──────────────────────────
 
 
-async def get_pharmgkb(gene: str) -> List[PharmGKBAssociation]:
-    if not gene or not PHARMGKB_KEY:
+async def get_clinpgx(gene: str) -> List[ClinPGxAssociation]:
+    """
+    ClinPGx REST API v1 (api.clinpgx.org, 免 Key, 限速 ~2 req/s):
+    GET /data/summaryAnnotation?location.genes.symbol=<gene>&view=max
+    Old api.pharmgkb.org was shut down 2026-07-20.
+    """
+    if not gene:
         return []
     async with httpx.AsyncClient(timeout=30) as client:
         try:
-            headers = {'Authorization': f'Bearer {PHARMGKB_KEY}'}
-            resp = await _request_with_retry(client, 'GET',
-                                             f'{PHARMGKB_URL}/drug',
-                                             params={'gene': gene, 'limit': 10},
-                                             headers=headers, max_retries=2)
+            resp = await _request_with_retry(
+                client, 'GET', f'{CLINPGX_URL}/data/summaryAnnotation',
+                params={'location.genes.symbol': gene, 'view': 'max'}, max_retries=2)
             if resp.status_code != 200:
                 return []
-            data = resp.json()
+            data = (resp.json() or {}).get('data', []) or []
+            if not isinstance(data, list):
+                return []
             results = []
-            for item in (data.get('data', []) or []):
-                results.append(PharmGKBAssociation(
-                    drug_name=item.get('name', '') or item.get('drugName', '') or '',
-                    gene_symbol=item.get('gene', '') or '',
-                    association_type=item.get('type', '') or '',
-                    significance=item.get('significance', '') or '',
-                    level=item.get('level', '') or '',
+            for item in data[:10]:
+                if not isinstance(item, dict):
+                    continue
+                chems = item.get('relatedChemicals') or []
+                drug = ''
+                if isinstance(chems, list) and chems:
+                    c0 = chems[0]
+                    drug = str(c0.get('name', '') or '') if isinstance(c0, dict) else str(c0 or '')
+                level = item.get('levelOfEvidence') or {}
+                level_txt = ''
+                if isinstance(level, dict):
+                    level_txt = str(level.get('description') or '')
+                name_txt = str(item.get('name') or '')
+                m = re.search(r'(level\s+\d+)', name_txt, re.I)
+                if m:
+                    level_txt = m.group(1).title()
+                elif level_txt:
+                    level_txt = level_txt[:120]
+                types = item.get('types') or []
+                if not isinstance(types, list):
+                    types = [types]
+                type_txt = ', '.join(str(t) for t in types if t)
+                diseases = item.get('relatedDiseases') or []
+                disease = ''
+                if isinstance(diseases, list) and diseases:
+                    d0 = diseases[0]
+                    disease = str(d0.get('name', '') or '') if isinstance(d0, dict) else str(d0 or '')
+                results.append(ClinPGxAssociation(
+                    drug_name=drug,
+                    gene_symbol=gene,
+                    association_type=type_txt,
+                    significance=name_txt,
+                    level=level_txt,
+                    disease=disease,
+                    evidence=name_txt,
                 ))
             return results
         except Exception:
@@ -1766,22 +1876,254 @@ async def lens_search(name: str, key: str) -> List[dict]:
         except Exception:
             return []
 
+async def _google_fetch_text(url: str, timeout: float = 8.0) -> str:
+    """Fetch a Google Patents URL trying direct + fallback proxies (Python has no CORS,
+    so direct is tried first; proxies only as fallback)."""
+    attempts = [('直连', url, None)]
+    attempts.append(('r.jina.ai', 'https://r.jina.ai/' + url, 5.0))
+    attempts.append(('r.jina.ai', 'https://r.jina.ai/' + url, 10.0))
+    attempts.append(('allorigins', 'https://api.allorigins.win/raw?url=' + quote(url, safe=''), None))
+    attempts.append(('whateverorigin', 'https://whateverorigin.org/get?url=' + quote(url, safe=''), None))
+    errors = []
+    prev_jina = False
+    for label, u, t in attempts:
+        try:
+            async with httpx.AsyncClient(timeout=t or timeout, follow_redirects=True) as client:
+                resp = await _request_with_retry(client, 'GET', u,
+                                                 headers={'Referer': 'https://patents.google.com/',
+                                                          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
+                                                 max_retries=2)
+                if resp.status_code != 200:
+                    errors.append(f'{label}: HTTP {resp.status_code}')
+                    continue
+                body = resp.text
+                # r.jina.ai returns Markdown-wrapped content
+                if label == 'r.jina.ai' and 'Markdown Content:' in body:
+                    body = body.split('Markdown Content:', 1)[1].strip()
+                # whateverorigin wraps JSON as {"contents":"..."}
+                if label == 'whateverorigin':
+                    try:
+                        w = json.loads(body)
+                        if isinstance(w, dict) and isinstance(w.get('contents'), str):
+                            body = w['contents']
+                    except Exception:
+                        pass
+                if not body:
+                    errors.append(f'{label}: 空响应')
+                    continue
+                return body
+        except Exception as e:
+            errors.append(f'{label}: {str(e)[:80]}')
+        if label == 'r.jina.ai' and prev_jina:
+            await asyncio.sleep(0.4)
+        prev_jina = (label == 'r.jina.ai')
+    raise RuntimeError('Google Patents 请求失败（已尝试: ' + '；'.join(errors) + '）')
+
 async def google_xhr(q: str, num: int = 30) -> dict:
     exp = urlencode({'q': q, 'num': num})
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await _request_with_retry(client, 'GET',
-            f'https://patents.google.com/xhr/query?url={exp}',
-            headers={'Referer': 'https://patents.google.com/'},
-            max_retries=2)
-        if resp.status_code != 200:
-            raise RuntimeError(f'Google Patents HTTP {resp.status_code}')
-        return resp.json()
+    text = await _google_fetch_text('https://patents.google.com/xhr/query?url=' + exp)
+    parsed = json.loads(text)
+    if not isinstance(parsed, dict):
+        raise RuntimeError('Google Patents XHR 响应非 JSON')
+    return parsed
+
+async def google_patent_detail(num_raw: str) -> Optional[dict]:
+    num = _google_num(num_raw)
+    if not num:
+        return None
+    try:
+        html = await _google_fetch_text(f'https://patents.google.com/patent/{num}/en', timeout=7.0)
+    except Exception:
+        return None
+    if '<meta' not in html and '<html' not in html:
+        return None
+    from lxml import html as lh
+    try:
+        doc = lh.fromstring(html)
+    except Exception:
+        return None
+
+    def meta_val(name: str) -> str:
+        els = doc.xpath(f'//meta[@name="{name}"]/@content')
+        return (els[0] if els else '').strip()
+
+    inventors = [v.strip() for v in doc.xpath('//meta[@name="DC.contributor"]/@content') if v.strip()][:15]
+    citations = [v.strip() for v in doc.xpath('//meta[@name="DC.relation"]/@content') if v.strip()][:40]
+    cpc_set = set()
+    for c in doc.xpath('//*[@itemprop="Code"]/text()'):
+        c = (c or '').strip()
+        if len(c) >= 4 and re.search(r'\d', c):
+            cpc_set.add(c)
+    claim_els = doc.xpath('//*[contains(@class, "claim-text")]') or doc.xpath('//*[contains(@class, "claim")]')
+    legal_m = re.search(r'Legal status[\s\S]*?\)\s*(?:<[^>]*>\s*)*([A-Za-z][A-Za-z ,.\-]{0,50})', html)
+    return {
+        'abstract': meta_val('DC.description'),
+        'title': meta_val('DC.title'),
+        'inventors': ', '.join(inventors),
+        'citations': citations,
+        'cpc': list(cpc_set)[:12],
+        'legal': legal_m.group(1).strip() if legal_m else '',
+        'claims': len(claim_els),
+    }
+
+async def google_cites(num_raw: str) -> int:
+    num = _google_num(num_raw)
+    if not num:
+        return 0
+    try:
+        d = await google_xhr('cites:' + num, 5)
+        n = ((d.get('results') or {}).get('total_num_results') or 0)
+        return int(n)
+    except Exception:
+        return 0
+
+async def google_assignee_portfolio(assignee: str) -> List[dict]:
+    a = str(assignee or '').replace('"', ' ').replace('\\', ' ').strip()
+    if not a or not re.search(r'[\w\u4e00-\u9fa5]', a):
+        return []
+    try:
+        d = await google_xhr(f'assignee:"{a}"', 20)
+        return google_patents_parse(d)[:12]
+    except Exception:
+        return []
+
+async def mcp_patent_details(patents: List[dict], tools, endpoint: str, key: str, session, max_n: int) -> None:
+    detail_tool = None
+    for t in (tools or []):
+        if re.search(r'^get[_\-\s]?patent|patent[_\-\s]?detail', t.get('name', ''), re.I):
+            detail_tool = t
+            break
+    if not detail_tool:
+        return
+    async with httpx.AsyncClient(timeout=60) as client:
+        for p in patents[:max_n]:
+            num = _google_num(p.get('number', ''))
+            if not num:
+                continue
+            try:
+                args = _build_mcp_args(detail_tool.get('schema'), detail_tool.get('required', []), num, num)
+                text = await _mcp_tool_call(client, endpoint, key, session, detail_tool['name'], args)
+                parsed = _parse_mcp_text(text)
+                d = parsed.get('data') if isinstance(parsed, dict) else parsed
+                if isinstance(d, dict) and isinstance(d.get('result'), dict):
+                    d = d['result']
+                if not isinstance(d, dict):
+                    continue
+                inv = ','.join(i if isinstance(i, str) else (i.get('name') or i.get('inventor_name') or '') for i in (d.get('inventors') or [])) if isinstance(d.get('inventors'), list) else (d.get('first_inventor') or '')
+                p['mcp_status'] = d.get('status') or d.get('status_date') or d.get('legal_status') or ''
+                if inv:
+                    p['inventors'] = inv
+                p['mcp_classification'] = d.get('classification') or ''
+                p['mcp_abstract'] = d.get('abstract') or d.get('description') or ''
+                if p.get('mcp_abstract') or p.get('mcp_status') or p.get('mcp_classification'):
+                    p['mcp_detail'] = True
+            except Exception:
+                continue
+
+async def deep_enrich_patents(patents: List[dict], *, src: str, key: str = '', target: str = '',
+                               tools=None, endpoint: str = '', session=None,
+                               max_detail: int = 5, progress_cb=None) -> Tuple[List[dict], dict]:
+    out = []
+    for p in patents:
+        out.append(dict(p))
+    insight = {'cites': {}, 'assignees': {}}
+    max_n = min(max_detail, len(out))
+    if src == 'mcp':
+        if progress_cb:
+            progress_cb('🔍 MCP 专利详情（状态/发明人/分类）…')
+        try:
+            await mcp_patent_details(out, tools, endpoint, key, session, max_n)
+        except Exception:
+            pass
+    else:
+        for i, p in enumerate(out[:max_n]):
+            if progress_cb:
+                progress_cb(f'🔍 专利详情增强 {i+1}/{max_n} …')
+            num = _google_num(p.get('number', ''))
+            if not num:
+                continue
+            try:
+                d = await google_patent_detail(num)
+                if d:
+                    if d.get('abstract'):
+                        p['abstract'] = d['abstract']
+                    if d.get('claims'):
+                        p['claims'] = d['claims']
+                    if d.get('citations'):
+                        p['citations'] = d['citations']
+                    if d.get('cpc'):
+                        p['cpc'] = d['cpc']
+                    if d.get('legal'):
+                        p['detail_legal'] = d['legal']
+                    if d.get('inventors') and not p.get('inventors'):
+                        p['inventors'] = d['inventors']
+            except Exception:
+                pass
+            try:
+                c = await google_cites(num)
+                if c:
+                    p['cited_by'] = c
+            except Exception:
+                pass
+            if i < max_n - 1:
+                await asyncio.sleep(0.3)
+        if src == 'google':
+            counts = {}
+            for p in out:
+                if p.get('assignee'):
+                    counts[p['assignee']] = counts.get(p['assignee'], 0) + 1
+            top_a = [a for a, _ in sorted(counts.items(), key=lambda x: -x[1])[:2]]
+            for a in top_a:
+                if progress_cb:
+                    progress_cb(f'🧭 申请人布局分析: {a}')
+                try:
+                    insight['assignees'][a] = await google_assignee_portfolio(a)
+                except Exception:
+                    pass
+                await asyncio.sleep(0.3)
+    cn_patents = [p for p in out if p.get('application_no')]
+    for i, p in enumerate(cn_patents[:4]):
+        if progress_cb:
+            progress_cb(f'🇨🇳 中国专利深度增强 {i + 1}/{min(4, len(cn_patents))} …')
+        try:
+            d9 = await patent9_details(p['application_no'])
+            if d9:
+                if d9.get('abstract'):
+                    p['abstract'] = d9['abstract']
+                if d9.get('cpc'):
+                    p['cpc'] = d9['cpc']
+                if d9.get('inventors'):
+                    p['inventors'] = d9['inventors']
+                if d9.get('main_ipc'):
+                    p['main_ipc'] = d9['main_ipc']
+                pr = d9.get('priority', '')
+                if pr:
+                    pm = re.search(r'(\d{4}\.\d{2}\.\d{2})', pr)
+                    if pm:
+                        p['priority_date'] = pm.group(1)
+                    pc = re.findall(r'\b([A-Z]{2})\b', pr.split('\n')[0] if '\n' in pr else pr)
+                    if pc and not p.get('countries'):
+                        p['countries'] = pc
+                if d9.get('agent'):
+                    p['agent'] = d9['agent']
+                if d9.get('wo'):
+                    p['wo'] = d9['wo']
+        except Exception:
+            pass
+        if not p.get('cn_fulltext') and p.get('cn_download'):
+            p['cn_fulltext'] = await drugfuture_cn_fulltext(p['application_no'], progress_cb)
+        if i < len(cn_patents[:4]) - 1:
+            await asyncio.sleep(0.8)
+    return out, insight
 
 async def google_patents_search(target: str) -> List[dict]:
     terms = _expand_query_terms(target)[:3]
     q_terms = [f'"{t.replace(chr(34), " ").strip()}"' for t in terms]
     q = ' OR '.join(q_terms) + ' in:title' if q_terms else f'"{target}"'
     data = await google_xhr(q, 30)
+    return google_patents_parse(data)
+
+def google_patents_parse(data: dict) -> List[dict]:
     items = []
     clusters = data.get('results', {}).get('cluster', []) if isinstance(data.get('results'), dict) else []
     for cl in clusters:
@@ -1888,6 +2230,207 @@ def _parse_espacenet_xml(xml: str) -> List[dict]:
     except Exception:
         pass
     return out
+
+try:
+    import ddddocr as _ddddocr
+    _OCR = _ddddocr.DdddOcr(show_ad=False)
+except Exception:
+    _OCR = None
+
+
+# ─── Patent9 (中国专利, 免Key) ────────────────────────────────────────────────
+
+
+def _p9_text(part: str) -> str:
+    t = re.sub(r'<br\s*/?>', '\n', part)
+    t = re.sub(r'</(?:div|li|p|tr|td)>', '\n', t, flags=re.I)
+    t = re.sub(r'<[^>]+>', '', t)
+    t = re.sub(r'&nbsp;', ' ', t)
+    t = re.sub(r'[ \t\u3000]+', ' ', t)
+    t = re.sub(r'\n\s*\n+', '\n', t)
+    return t
+
+
+def _p9_grab(text: str, label: str) -> str:
+    m = re.search(re.escape(label) + r'[：:]\s*([^\n]*?)(?=\s*(?:申请号|公开号|主分类号|申请人|申请日|公开日|发明人|摘要)[：:]|\n|$)', text)
+    return m.group(1).strip() if m else ''
+
+
+def _parse_patent9_results(html: str, max_results: int) -> List[dict]:
+    parts = re.split(r'<div class="title">', html)
+    out = []
+    for part in parts[1:]:
+        if len(out) >= max_results:
+            break
+        title_line = re.sub(r'<[^>]+>', '', part[:part.find('</div>')])
+        title_line = re.sub(r'\s+', ' ', title_line).strip()
+        m = re.match(r'\d+[：:]\s*\[([^\]]*)\]\s*(.*)$', title_line)
+        kind = m.group(1) if m else ''
+        title = re.sub(r'\s*#imgabs\d+#\s*', '', (m.group(2) if m else title_line)).strip()
+        no_m = re.search(r"PatentNo:'([^']+)'", part)
+        appno = no_m.group(1) if no_m else ''
+        text = _p9_text(part)
+        pub = _p9_grab(text, '公开号')
+        pubdate = _p9_grab(text, '公开日')
+        abstract = _p9_grab(text, '摘要')
+        abstract = re.sub(r'\s*#imgabs\d+#\s*', '', abstract)
+        cn_dl = ''
+        cdm = re.search(r'href="(http[^"]*verify\.aspx\?cnpatentno=[^"]+)"', part)
+        if cdm:
+            cn_dl = cdm.group(1)
+        elif appno:
+            cn_dl = f'{DRUGFUTURE_URL}/verify.aspx?cnpatentno={appno}'
+        if not appno and not pub:
+            continue
+        out.append({
+            'number': pub or appno,
+            'application_no': appno,
+            'title': title,
+            'kind': kind,
+            'assignee': _p9_grab(text, '申请人'),
+            'year': pubdate[:4],
+            'date': pubdate,
+            'inventors': _p9_grab(text, '发明人'),
+            'abstract': abstract,
+            'snippet': abstract,
+            'priority_date': '',
+            'cpc': [],
+            'link': '',
+            'cn_download': cn_dl,
+            'countries': ['CN'],
+            'source': 'Patent9',
+        })
+    return out
+
+
+async def patent9_search(target: str, max_results: int = 10) -> List[dict]:
+    terms = _expand_query_terms(target)[:3]
+    query = ' '.join(terms) if terms else target
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+    }
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as client:
+        try:
+            resp = await _request_with_retry(client, 'GET', PATENT9_URL + '/search.aspx',
+                                             params={'k': query, 't': 'all',
+                                                     'c': 'PatentName,Abstract', 'p': '1'},
+                                             max_retries=2)
+            if resp.status_code != 200:
+                return []
+            return _parse_patent9_results(resp.text, max_results)
+        except Exception:
+            return []
+
+
+def _parse_patent9_details(html: str, application_no: str) -> dict:
+    fields = {}
+    for m in re.finditer(r'<tr>\s*<th>([^<]*)</th>\s*<td>(.*?)</td>\s*</tr>', html, re.I | re.S):
+        label = m.group(1).strip()
+        value = re.sub(r'<[^>]+>', '', m.group(2))
+        value = re.sub(r'\s+', ' ', value).strip()
+        if value:
+            fields[label] = value
+    if not fields:
+        return {}
+    abstract_m = re.search(r'<div class="abstract-box">(.*?)</div>', html, re.I | re.S)
+    if abstract_m:
+        fields['摘要'] = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', abstract_m.group(1))).strip()
+    return {
+        'application_no': fields.get('专利申请号', application_no),
+        'app_date': fields.get('申请日', ''),
+        'pub_no': fields.get('公开(公告)号', ''),
+        'pub_date': fields.get('公开(公告)日', ''),
+        'main_ipc': fields.get('主分类号', ''),
+        'cpc': fields.get('分类号', '').split(),
+        'priority': fields.get('优先权', ''),
+        'assignee': fields.get('申请(专利权)人', ''),
+        'address': fields.get('地址', ''),
+        'inventors': fields.get('发明(设计)人', ''),
+        'pct': fields.get('国际申请', ''),
+        'wo': fields.get('国际公布', ''),
+        'agent': fields.get('专利代理机构', ''),
+        'patent_type': fields.get('专利类型', ''),
+        'abstract': fields.get('摘要', ''),
+    }
+
+
+async def patent9_details(application_no: str) -> dict:
+    if not application_no:
+        return {}
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+    }
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as client:
+        try:
+            resp = await _request_with_retry(client, 'POST', PATENT9_URL + '/PatentDetails.aspx',
+                                             data={'PatentNo': application_no}, max_retries=2)
+            if resp.status_code != 200:
+                return {}
+            return _parse_patent9_details(resp.text, application_no)
+        except Exception:
+            return {}
+
+
+# ─── drugfuture 中国专利全文 (验证码 OCR, 可选依赖) ──────────────────────────
+
+
+async def drugfuture_cn_fulltext(application_no: str, progress_cb=None) -> str:
+    """
+    Resolve the drugfuture PDF full-text URL for a CN application number.
+    Requires the optional ddddocr package for the graphic CAPTCHA.
+    Returns '' (not None) on any failure so callers can skip quietly.
+    """
+    if not _OCR or not application_no:
+        return ''
+    if progress_cb:
+        progress_cb(f'🛡️ drugfuture 验证码识别 {application_no} …')
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': f'{DRUGFUTURE_URL}/verify.aspx',
+    }
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True, headers=headers) as client:
+        try:
+            r = await client.post(f'{DRUGFUTURE_URL}/verify.aspx',
+                                  data={'cnpatentno': application_no, 'Common': '1'})
+            if r.status_code != 200:
+                return ''
+            fm = re.search(r'<form[^>]*action="([^"]+)"[^>]*>', r.text, re.I)
+            action = fm.group(1) if fm else 'search.aspx'
+            if action.startswith('/'):
+                action = f'{DRUGFUTURE_URL}{action}'
+            elif not action.startswith('http'):
+                action = f'{DRUGFUTURE_URL}/{action}'
+            img_m = re.search(r'src="([^"]*VerifyCode\.aspx[^"]*)"', r.text, re.I)
+            if not img_m:
+                return ''
+            img_url = img_m.group(1)
+            if img_url.startswith('/'):
+                img_url = 'http://www2.drugfuture.com' + img_url
+            elif not img_url.startswith('http'):
+                img_url = f'{DRUGFUTURE_URL}/{img_url}'
+            ir = await client.get(img_url)
+            if ir.status_code != 200 or not ir.content:
+                return ''
+            try:
+                code = str(_OCR.classification(ir.content)).strip()
+            except Exception:
+                return ''
+            if not code:
+                return ''
+            rr = await client.post(action, data={'cnpatentno': application_no, 'common': '1', 'ValidCode': code})
+            if rr.status_code != 200:
+                return ''
+            for m in re.finditer(r'href="([^"]+\.pdf[^"]*)"', rr.text, re.I):
+                url = m.group(1)
+                if url.startswith('/'):
+                    url = 'http://www2.drugfuture.com' + url
+                return url
+            return ''
+        except Exception:
+            return ''
+
 
 async def mcp_patent_search(target: str, endpoint: str, key: str, tool_pref: str = '') -> dict:
     if not endpoint:
@@ -2029,13 +2572,20 @@ def _normalize_patent(obj) -> Optional[dict]:
         'snippet': obj.get('snippet', '') or obj.get('abstract', '') or '',
         'legal': obj.get('legal', '') or obj.get('legal_status', '') or '',
         'countries': obj.get('countries', []) if isinstance(obj.get('countries'), list) else [],
-        'link': f'https://patents.google.com/patent/{link_num}/en' if link_num else '',
+        'link': obj.get('link', '') or (f'https://patents.google.com/patent/{link_num}/en' if link_num else ''),
         'claims': int(obj.get('claims', 0) or 0),
         'citations': obj.get('citations', []) if isinstance(obj.get('citations'), list) else [],
         'cpc': obj.get('cpc', []) if isinstance(obj.get('cpc'), list) else [],
+        'application_no': obj.get('application_no', '') or '',
+        'cn_download': obj.get('cn_download', '') or '',
+        'cn_fulltext': obj.get('cn_fulltext', '') or '',
+        'kind': obj.get('kind', '') or '',
     }
 
-async def search_patents(target: str, src: str = 'google', key: str = '') -> dict:
+async def search_patents(target: str, src: str = 'google', key: str = '',
+                         deep: bool = True, mcp_url: str = '', mcp_tool: str = '',
+                         progress_cb=None) -> dict:
+    note, eff_src, insight, mcp_ctx = '', src, None, None
     if src == 'google':
         try:
             patents = await google_patents_search(target)
@@ -2043,8 +2593,31 @@ async def search_patents(target: str, src: str = 'google', key: str = '') -> dic
             try:
                 mcp_result = await mcp_patent_search(target, PATENT_MCP_FALLBACK, '', '')
                 patents = mcp_result.get('patents', [])
+                eff_src = 'mcp'
+                mcp_ctx = mcp_result
+                note = 'Google 代理链不可用，已自动回退到 MCP 免Key 来源（pipeworx）。'
             except Exception:
-                return {'patents': [], 'insight': None, 'note': '专利检索全部失败'}
+                note = '专利主源检索失败，仅返回 Patent9 中国专利结果。'
+                try:
+                    p9 = await patent9_search(target, 10)
+                    normalized = []
+                    for p in p9:
+                        np = _normalize_patent(p)
+                        if np and (np.get('number') or np.get('application_no')):
+                            normalized.append(np)
+                    return {'patents': normalized, 'insight': None, 'note': note}
+                except Exception:
+                    return {'patents': [], 'insight': None, 'note': '专利检索全部失败'}
+        if not patents and not note:
+            try:
+                mcp_result = await mcp_patent_search(target, PATENT_MCP_FALLBACK, '', '')
+                if mcp_result.get('patents'):
+                    patents = mcp_result['patents']
+                    eff_src = 'mcp'
+                    mcp_ctx = mcp_result
+                    note = 'Google 未检索到结果，已自动回退到 MCP 免Key 来源（pipeworx）。'
+            except Exception:
+                pass
     elif src == 'uspto':
         patents = await uspto_search(target, key)
     elif src == 'lens':
@@ -2053,12 +2626,26 @@ async def search_patents(target: str, src: str = 'google', key: str = '') -> dic
         patents = await espacenet_search(target, key)
     elif src == 'mcp':
         try:
-            parts = (key or '').split()
-            mcp_endpoint = parts[0] if parts else ''
-            mcp_result = await mcp_patent_search(target, mcp_endpoint, key, '')
+            endpoint = (mcp_url or '').strip().rstrip('/')
+            if not endpoint:
+                return {'patents': [], 'insight': None, 'note': '请先在设置中填写 MCP endpoint'}
+            mcp_result = await mcp_patent_search(target, endpoint, key, mcp_tool or '')
             patents = mcp_result.get('patents', [])
-        except Exception:
-            return {'patents': [], 'insight': None, 'note': 'MCP 检索失败'}
+            mcp_ctx = mcp_result
+        except Exception as e:
+            try:
+                p9 = await patent9_search(target, 10)
+                normalized = []
+                for p in p9:
+                    np = _normalize_patent(p)
+                    if np and (np.get('number') or np.get('application_no')):
+                        normalized.append(np)
+                if normalized:
+                    return {'patents': normalized, 'insight': None,
+                            'note': f'MCP 检索失败（{str(e)[:80]}），仅返回 Patent9 中国专利结果。'}
+            except Exception:
+                pass
+            return {'patents': [], 'insight': None, 'note': f'MCP 检索失败: {str(e)[:120]}'}
     else:
         patents = await google_patents_search(target)
     patents = _dedupe_patents(patents or [])
@@ -2067,7 +2654,32 @@ async def search_patents(target: str, src: str = 'google', key: str = '') -> dic
         np = _normalize_patent(p)
         if np:
             normalized.append(np)
-    return {'patents': normalized, 'insight': None, 'note': ''}
+    try:
+        p9 = await patent9_search(target, 10)
+        seen_n = {p.get('number') for p in normalized}
+        for p in p9:
+            np = _normalize_patent(p)
+            if np and (np.get('number') or np.get('application_no')) and np.get('number') not in seen_n:
+                normalized.append(np)
+                seen_n.add(np['number'])
+                if not note:
+                    note = f'Patent9 自动补充中国专利 {len(p9)} 条。'
+    except Exception:
+        pass
+    if deep and normalized:
+        if progress_cb:
+            progress_cb('🔍 专利深度增强…')
+        try:
+            enriched, insight = await deep_enrich_patents(
+                normalized, src=eff_src, key=key, target=target,
+                tools=(mcp_ctx or {}).get('tools'),
+                endpoint=(mcp_ctx or {}).get('endpoint'),
+                session=(mcp_ctx or {}).get('session'),
+            )
+            normalized = enriched
+        except Exception:
+            pass
+    return {'patents': normalized, 'insight': insight, 'note': note}
 
 
 # ─── LLM / AI ──────────────────────────────────────────────────────────────
@@ -2085,6 +2697,10 @@ LLM_PROVIDERS = {
         'name': '智谱 GLM', 'base': 'https://open.bigmodel.cn/api/paas/v4',
         'models': ['GLM-4.7-Flash', 'GLM-4.7-Plus'],
         'web_search': True,
+    },
+    'custom': {
+        'name': '自定义', 'base': '', 'editable': True,
+        'models': ['gpt-4o-mini', 'deepseek-chat', 'moonshot-v1-8k', 'qwen-max'],
     },
 }
 
@@ -2151,19 +2767,58 @@ async def llm_json(user: str, provider: str, api_key: str, model: str, system: s
     p = LLM_PROVIDERS.get(provider, LLM_PROVIDERS['deepseek'])
     base = base_url or p['base']
     messages = [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}] if system else [{'role': 'user', 'content': user}]
-    body = {'model': model, 'messages': messages, 'temperature': 0.4, 'stream': False, 'response_format': {'type': 'json_object'}}
-    async with httpx.AsyncClient(timeout=120) as client:
+
+    def _clean_and_parse(text: str) -> Optional[dict]:
+        if not text:
+            return None
+        cleaned = re.sub(r'^```json\s*', '', text).replace('```', '').strip()
+        try:
+            o = json.loads(cleaned)
+            if isinstance(o, dict):
+                return o
+        except Exception:
+            pass
+        m = re.search(r'\{[\s\S]*\}', text)
+        if m:
+            try:
+                o = json.loads(m.group(0))
+                if isinstance(o, dict):
+                    return o
+            except Exception:
+                pass
+        return None
+
+    async def _post(body: dict):
         try:
             resp = await _request_with_retry(client, 'POST', f'{base}/chat/completions',
                 json=body, headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
                 max_retries=2)
             if resp.status_code != 200:
-                return {}
-            text = (resp.json().get('choices') or [{}])[0].get('message', {}).get('content', '') or ''
-            cleaned = re.sub(r'^```json\s*', '', text).replace(r'```', '').strip()
-            return json.loads(cleaned) if cleaned else {}
+                return None
+            return (resp.json().get('choices') or [{}])[0].get('message', {}).get('content', '') or ''
         except Exception:
-            return {}
+            return None
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        # Strategy 1: response_format json_object
+        try:
+            text = await _post({'model': model, 'messages': messages, 'temperature': 0.4,
+                                'stream': False, 'response_format': {'type': 'json_object'}})
+            o = _clean_and_parse(text)
+            if o:
+                return o
+        except Exception:
+            pass
+        # Strategy 2: plain chat then extract JSON (some providers reject response_format)
+        try:
+            text = await _post({'model': model, 'messages': messages, 'temperature': 0.4,
+                                'stream': False})
+            o = _clean_and_parse(text)
+            if o:
+                return o
+        except Exception:
+            pass
+        return {}
 
 async def llm_chat_with_search(user: str, provider: str, api_key: str, model: str, system: str = '', base_url: str = '') -> str:
     if not api_key or not model:
@@ -2252,6 +2907,9 @@ def build_report(target_name: str, gene: str, mutation: str,
             mcp_classification=str(p.get('mcp_classification', '') or ''),
             mcp_abstract=str(p.get('mcp_abstract', '') or ''),
             priority_date=str(p.get('priority_date', '') or ''),
+            application_no=str(p.get('application_no', '') or ''),
+            cn_download=str(p.get('cn_download', '') or ''),
+            cn_fulltext=str(p.get('cn_fulltext', '') or ''),
         ))
 
     # Target overview (rule-based)
@@ -2273,7 +2931,7 @@ def build_report(target_name: str, gene: str, mutation: str,
         if d.hpa: parts.append(f'HPA表达谱: 组织特异 {d.hpa.protein_tissue or "—"}')
         if d.gtex: parts.append(f'GTEx组织表达: {len(d.gtex)}组织')
         if d.clinvar: parts.append(f'ClinVar变异: {len(d.clinvar)}条记录')
-        if d.pharmgkb: parts.append(f'PharmGKB药物基因组: {len(d.pharmgkb)}条关联')
+        if d.clinpgx: parts.append(f'ClinPGx药物基因组关联: {len(d.clinpgx)}条')
         if d.dgidb: parts.append(f'DGIdb药物互作: {len(d.dgidb)}条')
         if d.related_diseases: parts.append(f'相关疾病: {", ".join(d.related_diseases)}')
         report.target_overview_raw = '\n'.join(parts)
@@ -2384,6 +3042,9 @@ def _build_sys_context(report: ReportContent) -> str:
         if d.sequence_length: parts.append(f'序列长度: {d.sequence_length} aa')
         if d.hpa and d.hpa.link: parts.append(f'HPA: {d.hpa.link}')
         if d.related_diseases: parts.append(f'相关疾病: {", ".join(d.related_diseases)}')
+        if d.pubchem: parts.append(f'PubChem活性分子: {len(d.pubchem)}条')
+        if d.kegg_disease: parts.append(f'KEGG疾病: {", ".join(d.kegg_disease[:5])}')
+        if d.kegg_drugs: parts.append(f'KEGG药物: {", ".join(d.kegg_drugs[:5])}')
     parts.append(f'\n[文献-{len(report.papers)}篇]' + _clip('\n'.join(f'{i+1}. {p.title} ({p.journal}, {p.year})' for i, p in enumerate(report.papers[:8])), 1800))
     parts.append(f'\n[临床-{len(report.trials)}项]' + _clip('\n'.join(f'{t.nct_id} {t.phase} {t.status} {t.title}' for t in report.trials[:8]), 1500))
     parts.append(f'\n[药物-{len(report.drugs) + len(report.molecules)}个]' + '\n'.join(f'{d.name} [{d.phase}] {d.company} — {d.mechanism_of_action}' for d in report.drugs[:10]) + (f'\n活性分子: {", ".join(m.name for m in report.molecules[:8])}' if report.molecules else ''))
@@ -2392,7 +3053,8 @@ def _build_sys_context(report: ReportContent) -> str:
 
 
 async def enhance_report(report: ReportContent, provider: str, api_key: str, model: str,
-                          progress_callback=None, use_cites: bool = True) -> ReportContent:
+                          progress_callback=None, use_cites: bool = True,
+                          base_url: str = '') -> ReportContent:
     report.citations = {}
     fields = [
         ('target_overview', 'target_overview'),
@@ -2409,7 +3071,7 @@ async def enhance_report(report: ReportContent, provider: str, api_key: str, mod
         try:
             if use_cites:
                 sys_prompt = '你是一名生物医药专家。基于给定数据生成专业分析。请严格返回 JSON：{"text":"分析正文","claims":[{"text":"论断","refs":["PMID:123","NCT04567890"]}]}。refs 只能引用数据中真实出现的编号，没有就留空数组。'
-                o = await llm_json(prompt, provider, api_key, model, system=sys_prompt)
+                o = await llm_json(prompt, provider, api_key, model, system=sys_prompt, base_url=base_url)
                 if o and o.get('text'):
                     setattr(report, field, o['text'])
                     claims = [c for c in (o.get('claims') or []) if c and c.get('text')]
@@ -2425,7 +3087,7 @@ async def enhance_report(report: ReportContent, provider: str, api_key: str, mod
                     continue
         except Exception:
             pass
-        text = await llm_chat(prompt, provider, api_key, model)
+        text = await llm_chat(prompt, provider, api_key, model, base_url=base_url)
         if text:
             setattr(report, field, text)
             refs = _extract_refs(text)
@@ -2441,7 +3103,7 @@ async def enhance_report(report: ReportContent, provider: str, api_key: str, mod
         prompt = LLM_PROMPTS['web_summary'](report.target_name,
                                             d.gene_symbol if d else '',
                                             d.protein_class if d else '')
-        text = await llm_chat_with_search(prompt, provider, api_key, model)
+        text = await llm_chat_with_search(prompt, provider, api_key, model, base_url=base_url)
         if text:
             report.web_summary = text
             refs = _extract_refs(text)
@@ -2452,7 +3114,7 @@ async def enhance_report(report: ReportContent, provider: str, api_key: str, mod
             progress_callback(96, 'AI 综合研判 ...')
         ctx = _build_sys_context(report)
         prompt = LLM_PROMPTS['web_summary_legacy'](ctx)
-        text = await llm_chat(prompt, provider, api_key, model)
+        text = await llm_chat(prompt, provider, api_key, model, base_url=base_url)
         if text:
             report.web_summary = text
             refs = _extract_refs(text)
@@ -2475,7 +3137,7 @@ async def enhance_report(report: ReportContent, provider: str, api_key: str, mod
             summary_parts.append(s)
         summary = _clip('\n'.join(summary_parts), 4000)
         prompt = LLM_PROMPTS['patent_landscape'](report.target_name, summary)
-        text = await llm_chat(prompt, provider, api_key, model)
+        text = await llm_chat(prompt, provider, api_key, model, base_url=base_url)
         if text:
             report.patent_landscape = text
             refs = _extract_refs(text)
@@ -2492,37 +3154,143 @@ def to_markdown(report: ReportContent) -> str:
     NL = chr(10)  # newline
     parts = []
     parts.append('# \u9776\u70b9 ' + name + ' \u7814\u7a76\u8fdb\u5c55\u4e0e\u4e34\u5e8a\u5206\u6790\u62a5\u544a' + NL)
-    parts.append('> \u751f\u6210\uff1a' + datetime.now().strftime("%Y-%m-%d %H:%M") + '  \u6570\u636e\u6e90\uff1aPubMed | OpenAlex | Semantic Scholar' + NL)
+    srcs = ['PubMed', 'OpenAlex', 'Semantic Scholar', 'ClinicalTrials.gov', 'ISRCTN', 'ChiCTR',
+            'Open Targets', 'UniProt', 'PDB', 'AlphaFold', 'HPA', 'GTEx', 'STRING', 'ChEMBL',
+            'PubChem', 'KEGG', 'ClinPGx', 'ClinVar', 'Google Patents', 'Patent9', 'drugfuture',
+            'USPTO', 'Lens.org', 'Espacenet']
+    parts.append('> \u751f\u6210\uff1a' + datetime.now().strftime("%Y-%m-%d %H:%M") + '  \u6570\u636e\u6e90\uff1a' + ' | '.join(srcs) + NL)
+    if report.cached_flags:
+        parts.append('> 缓存: ' + '、'.join(report.cached_flags) + NL)
+    if report.increment_note:
+        parts.append('> ' + report.increment_note + NL)
+    d = report.target_detail
+    if d:
+        det = []
+        if d.gene_symbol: det.append('基因符号: ' + d.gene_symbol)
+        if d.uniprot_id: det.append('UniProt: ' + d.uniprot_id)
+        if d.protein_name: det.append('蛋白名: ' + d.protein_name)
+        if d.protein_class: det.append('蛋白类别: ' + d.protein_class)
+        if d.tractability: det.append('成药性: ' + ', '.join(d.tractability[:5]))
+        if d.related_diseases: det.append('相关疾病: ' + ', '.join(d.related_diseases[:8]))
+        if d.pubchem: det.append('PubChem活性分子: ' + str(len(d.pubchem)) + '条')
+        if d.kegg_disease: det.append('KEGG疾病: ' + ', '.join(d.kegg_disease[:5]))
+        if d.kegg_drugs: det.append('KEGG药物: ' + ', '.join(d.kegg_drugs[:5]))
+        if d.subcellular: det.append('亚细胞定位: ' + d.subcellular)
+        if d.protein_families: det.append('蛋白家族: ' + d.protein_families)
+        if d.clinpgx:
+            det.append('ClinPGx药物基因组关联: ' + str(len(d.clinpgx)) + '条')
+            for a in d.clinpgx[:12]:
+                bits = []
+                if a.drug_name: bits.append('药物: ' + a.drug_name)
+                if a.level: bits.append('证据级别: ' + a.level)
+                if a.disease: bits.append('疾病: ' + a.disease)
+                if a.association_type: bits.append('类型: ' + a.association_type)
+                if a.evidence: bits.append('证据: ' + a.evidence)
+                det.append('  - ' + ' | '.join(bits))
+        if report.mutation: det.append('变异: ' + report.mutation)
+        if det:
+            parts.append(NL + '## 一、靶点详情' + NL + NL.join('- ' + x for x in det) + NL)
     if report.target_overview:
-        parts.append(NL + '## \u4e00\u3001\u9776\u70b9\u6982\u8ff0' + NL + report.target_overview + NL)
+        parts.append(NL + '## 二、靶点概述' + NL + report.target_overview + NL)
     if report.web_summary:
-        parts.append(NL + '## AI \u7efc\u5408\u60c5\u62a5\u7814\u5224' + NL + report.web_summary + NL)
+        parts.append(NL + '## AI 综合情报研判' + NL + report.web_summary + NL)
     if report.patent_landscape:
-        parts.append(NL + '## \u4e13\u5229\u8c03\u7814' + NL + report.patent_landscape + NL)
-    parts.append(NL + '## \u4e8c\u3001\u7814\u7a76\u8fdb\u5c55' + NL + report.research_progress + NL)
-    parts.append(NL + '## \u4e09\u3001\u6838\u5fc3\u6587\u732e' + NL + report.key_findings + NL)
-    parts.append(NL + '## \u56db\u3001\u4e34\u5e8a\u6982\u51b5' + NL + report.clinical_landscape + NL)
-    parts.append(NL + '## \u4e94\u3001\u836f\u7269\u5c55\u671b' + NL + report.future_outlook + NL)
+        parts.append(NL + '## 专利调研' + NL + report.patent_landscape + NL)
+    parts.append(NL + '## 三、研究进展' + NL + report.research_progress + NL)
+    parts.append(NL + '## 四、核心文献' + NL + report.key_findings + NL)
+    parts.append(NL + '## 五、临床概况' + NL + report.clinical_landscape + NL)
+    parts.append(NL + '## 六、药物展望' + NL + report.future_outlook + NL)
     if report.papers:
-        parts.append(NL + '## \u6587\u732e\uff08' + str(len(report.papers)) + '\u7bc7\uff09' + NL)
+        parts.append(NL + '## 文献（' + str(len(report.papers)) + '篇）' + NL)
         for i, p in enumerate(report.papers, 1):
-            parts.append(str(i) + '. ' + p.title + ' - ' + p.journal + ' (' + p.year + ')' + NL)
+            refs = []
+            if p.pmid: refs.append('PMID:' + p.pmid)
+            if p.doi: refs.append('DOI: ' + p.doi)
+            extra = ' | ' + ' | '.join(refs) if refs else ''
+            parts.append(str(i) + '. ' + p.title + ' - ' + p.journal + ' (' + p.year + ')' + extra + NL)
     if report.trials:
-        parts.append(NL + '## \u4e34\u5e8a\u8bd5\u9a8c\uff08' + str(len(report.trials)) + '\u9879\uff09' + NL)
+        parts.append(NL + '## 临床试验（' + str(len(report.trials)) + '项）' + NL)
         for t in report.trials:
-            parts.append('- ' + t.nct_id + ' | ' + t.title + ' | ' + t.phase + ' | ' + t.status + NL)
+            src = ' [' + t.source + ']' if t.source and t.source != 'ClinicalTrials.gov' else ''
+            extra = ''
+            if t.conditions: extra += ' 适应症: ' + ', '.join(t.conditions[:4])
+            if t.enrollment: extra += ' 入组: ' + str(t.enrollment)
+            parts.append('- ' + t.nct_id + ' | ' + t.title + ' | ' + t.phase + ' | ' + t.status + src + extra + NL)
     if report.drugs:
-        parts.append(NL + '## \u836f\u7269\uff08' + str(len(report.drugs)) + '\u4e2a\uff09' + NL)
+        parts.append(NL + '## 药物（' + str(len(report.drugs)) + '个）' + NL)
         for d in report.drugs:
-            parts.append('- ' + d.name + ' [' + d.phase + '] ' + d.company + ' - ' + d.mechanism_of_action + NL)
+            extra = ' 适应症: ' + d.disease if d.disease else ''
+            parts.append('- ' + d.name + ' [' + d.phase + '] ' + d.company + ' - ' + d.mechanism_of_action + extra + NL)
     if report.molecules:
-        parts.append(NL + '## \u9776\u5411\u6d3b\u6027\u5206\u5b50\uff08' + str(len(report.molecules)) + '\u4e2a\uff09' + NL)
+        parts.append(NL + '## 靶向活性分子（' + str(len(report.molecules)) + '个）' + NL)
         for m in report.molecules:
-            parts.append('- ' + m.name + ' (' + m.chembl + ')' + NL)
+            vals = []
+            if m.pchembl: vals.append('pChEMBL: ' + m.pchembl)
+            if m.best_val: vals.append(m.best_type + ': ' + m.best_val)
+            extra = ' | ' + ' | '.join(vals) if vals else ''
+            parts.append('- ' + m.name + ' (' + m.chembl + ')' + extra + NL)
     if report.patents:
-        parts.append(NL + '## \u4e13\u5229\uff08' + str(len(report.patents)) + '\u9879\uff09' + NL)
+        parts.append(NL + '## 专利（' + str(len(report.patents)) + '项）' + NL)
+        if report.patent_note:
+            parts.append('> ' + report.patent_note + NL)
         for p in report.patents:
-            parts.append('- ' + p.number + ' | ' + p.title + ' | ' + p.assignee + ' | ' + p.year + NL)
+            line = '- ' + p.number + ' | ' + p.title + ' | ' + p.assignee + ' | ' + p.year
+            detl = []
+            if p.date: detl.append('公告: ' + p.date)
+            if p.priority_date: detl.append('优先权: ' + p.priority_date)
+            if p.cited_by: detl.append('被引: ' + str(p.cited_by))
+            if p.claims: detl.append('权利要求数: ' + str(p.claims))
+            if p.detail_legal: detl.append('法律状态: ' + p.detail_legal)
+            if p.application_no: detl.append('申请号: ' + p.application_no)
+            if p.countries: detl.append('国家: ' + ', '.join(p.countries[:6]))
+            if p.inventors: detl.append('发明人: ' + p.inventors)
+            if p.cpc: detl.append('CPC: ' + ', '.join(p.cpc[:4]))
+            if p.mcp_status: detl.append('MCP状态: ' + p.mcp_status)
+            if p.cn_fulltext: detl.append('全文: ' + p.cn_fulltext)
+            elif p.cn_download: detl.append('全文(下载页): ' + p.cn_download)
+            if detl:
+                line += NL + '  ' + ' | '.join(detl)
+            parts.append(line + NL)
+            if p.abstract and p.abstract != p.snippet:
+                parts.append('  > ' + p.abstract[:400] + NL)
+    if report.patent_insight:
+        parts.append(NL + '## 专利申请人布局' + NL + str(report.patent_insight) + NL)
+    td = report.target_detail
+    if td and td.sequence:
+        parts.append(NL + '## 蛋白序列 (FASTA)' + NL)
+        parts.append('>' + (td.gene_symbol or name) + '|' + td.uniprot_id + ' length=' + str(td.sequence_length or len(td.sequence)) + NL)
+        seq = td.sequence
+        for j in range(0, len(seq), 80):
+            parts.append(seq[j:j + 80] + NL)
+    if td and td.hpa:
+        h = td.hpa
+        parts.append(NL + '## 蛋白表达 (HPA)' + NL)
+        for lbl, val in [('蛋白组织表达', h.protein_tissue), ('RNA 肿瘤表达', h.rna_cancer),
+                         ('蛋白肿瘤表达', h.rna_cancer_score), ('亚细胞定位', h.subcell),
+                         ('分子功能', h.molecular_func)]:
+            if val:
+                parts.append('- ' + lbl + ': ' + val + NL)
+    if td and td.pdb:
+        parts.append(NL + '## PDB 结构' + NL)
+        for s in td.pdb:
+            parts.append('- ' + (s.pdb_id or '') + ' | ' + (s.resolution or '') + ' | ' + (s.method or '') + NL)
+    if td and td.alphafold:
+        parts.append(NL + '## AlphaFold 结构' + NL)
+        for s in td.alphafold:
+            parts.append('- ' + (s.uniprot_acc or '') + ' | confidence ' + str(s.confidence) + ' | ' + (s.pdb_url or '') + NL)
+    if report.citations:
+        parts.append(NL + '## 参考文献引用' + NL)
+        for field, refs in report.citations.items():
+            field_zh = {'target_overview': '靶点概述', 'research_progress': '研究进展',
+                        'clinical_landscape': '临床概况', 'key_findings': '核心文献',
+                        'future_outlook': '药物展望'}.get(field, field)
+            parts.append('### ' + field_zh + NL)
+            for r in refs:
+                parts.append('- ' + str(r) + NL)
+    if report.errors:
+        parts.append(NL + '## 数据源失败提示' + NL)
+        for e in report.errors:
+            parts.append('- ' + e + NL)
     return ''.join(parts)
 
 
@@ -2657,6 +3425,71 @@ def cache_set(key: str, value: str) -> None:
     db.close()
 
 
+# ─── Cached search wrapper (24h TTL, mirrors target.html cachedSearch) ─────
+
+
+_MODEL_MAP = {
+    'papers': Paper, 'trials': ClinicalTrial,
+    'drugs': DrugInfo, 'molecules': MoleculeInfo,
+}
+
+
+def _year_backs(v) -> int:
+    """Map UI year_range string to years_back; 0/'0'/'' => 0 (all years)."""
+    try:
+        n = int(v or 0)
+    except Exception:
+        n = 0
+    return max(n, 0)
+
+
+def _trial_key(t) -> str:
+    """Dedup key: prefer registry id, fall back to normalized title."""
+    if t.nct_id:
+        return 'id:' + t.nct_id.lower()
+    if t.title:
+        return 'title:' + re.sub(r'[^a-z0-9]+', '', t.title.lower())
+    return id(t)
+
+
+def _paper_key(p) -> str:
+    if p.pmid:
+        return 'pmid:' + p.pmid.lower()
+    if p.doi:
+        return 'doi:' + p.doi.lower()
+    if p.title:
+        return 'title:' + re.sub(r'[^a-z0-9]+', '', p.title.lower())
+    return id(p)
+
+
+async def _cached_search(key: str, kind: str, fn) -> Tuple[Any, bool]:
+    """Return (data, cached). data is a list of models/dicts, or a dict for patents."""
+    try:
+        raw = await asyncio.to_thread(cache_get, key)
+        if raw is not None:
+            arr = json.loads(raw)
+            if kind == 'patents' and isinstance(arr, dict):
+                return arr, True
+            if isinstance(arr, list):
+                if kind == 'patents':
+                    return [dict(x) for x in arr], True
+                model = _MODEL_MAP.get(kind)
+                if model and arr and isinstance(arr[0], dict):
+                    return [model(**x) for x in arr], True
+                if not arr:
+                    return [], True
+    except Exception:
+        pass
+    data = await fn()
+    try:
+        await asyncio.to_thread(cache_set, key, json.dumps(
+            data if kind == 'patents' else [x.model_dump() for x in data],
+            ensure_ascii=False, default=list))
+    except Exception:
+        pass
+    return data, False
+
+
 # ─── BM25 + Follow-up Q&A ─────────────────────────────────────────────
 
 
@@ -2720,13 +3553,13 @@ def _link_for_ref(ref_id: str) -> str:
 # ─── Export: PPT ──────────────────────────────────────────────────────────
 
 
-DARK_BLUE = RGBColor(0x1B, 0x4F, 0x72)
-MID_BLUE = RGBColor(0x2E, 0x86, 0xC1)
-LIGHT_BLUE = RGBColor(0xD6, 0xEA, 0xF8)
-DARK_GRAY = RGBColor(0x2C, 0x3E, 0x50)
-MED_GRAY = RGBColor(0x7F, 0x8C, 0x8D)
-LIGHT_GRAY = RGBColor(0xEC, 0xF0, 0xF1)
-WHITE_COLOR = RGBColor(0xFF, 0xFF, 0xFF)
+DARK_BLUE = PPT_RGBColor(0x1B, 0x4F, 0x72)
+MID_BLUE = PPT_RGBColor(0x2E, 0x86, 0xC1)
+LIGHT_BLUE = PPT_RGBColor(0xD6, 0xEA, 0xF8)
+DARK_GRAY = PPT_RGBColor(0x2C, 0x3E, 0x50)
+MED_GRAY = PPT_RGBColor(0x7F, 0x8C, 0x8D)
+LIGHT_GRAY = PPT_RGBColor(0xEC, 0xF0, 0xF1)
+WHITE_COLOR = PPT_RGBColor(0xFF, 0xFF, 0xFF)
 SLIDE_W = Inches(13.333)
 SLIDE_H = Inches(7.5)
 FONT_NAME = 'Microsoft YaHei'
@@ -2830,6 +3663,35 @@ def generate_ppt(report: ReportContent) -> bytes:
         tb.text_frame.paragraphs[0].font.size = Pt(13)
         tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
 
+    if report.target_detail and report.target_detail.sequence:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, '蛋白序列 (FASTA)'); _ppt_footer(s)
+        tb = s.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(11.5), Inches(5.5))
+        tb.text_frame.word_wrap = True
+        seq = report.target_detail.sequence
+        tb.text_frame.paragraphs[0].text = '>' + (report.target_detail.gene_symbol or str(report.target_name).upper()) + '|' + report.target_detail.uniprot_id + ' length=' + str(report.target_detail.sequence_length or len(seq))
+        tb.text_frame.paragraphs[0].font.name = FONT_NAME
+        tb.text_frame.paragraphs[0].font.size = Pt(11)
+        for j in range(0, len(seq), 80):
+            para = tb.text_frame.add_paragraph()
+            para.text = seq[j:j + 80]
+            para.font.name = FONT_NAME; para.font.size = Pt(11)
+
+    td = report.target_detail
+    if td and td.clinpgx:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'ClinPGx 药物基因组关联'); _ppt_footer(s)
+        hd = ['药物', '证据级别', '疾病', '类型']
+        r = [[a.drug_name, a.level, a.disease, a.association_type] for a in td.clinpgx[:10]]
+        _ppt_add_table(s, Inches(0.3), Inches(1.4), Inches(12.5), Inches(5.0), hd, r)
+        if td.clinpgx[0].evidence:
+            tb = s.shapes.add_textbox(Inches(0.5), Inches(6.2), Inches(12.3), Inches(0.9))
+            tb.text_frame.word_wrap = True
+            tb.text_frame.paragraphs[0].text = '示例证据: ' + td.clinpgx[0].evidence[:180]
+            tb.text_frame.paragraphs[0].font.name = FONT_NAME
+            tb.text_frame.paragraphs[0].font.size = Pt(10)
+            tb.text_frame.paragraphs[0].font.color.rgb = MED_GRAY
+
     if report.research_progress or report.papers:
         s = prs.slides.add_slide(prs.slide_layouts[6])
         _ppt_header(s, '研究进展')
@@ -2845,13 +3707,31 @@ def generate_ppt(report: ReportContent) -> bytes:
             _ppt_add_table(s, Inches(0.5), Inches(3.0), Inches(12.3), Inches(3.5), hd, r)
         _ppt_footer(s)
 
+    if report.key_findings:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, '核心文献发现'); _ppt_footer(s)
+        tb = s.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(11.5), Inches(5.5))
+        tb.text_frame.word_wrap = True
+        tb.text_frame.paragraphs[0].text = report.key_findings[:900]
+        tb.text_frame.paragraphs[0].font.name = FONT_NAME
+        tb.text_frame.paragraphs[0].font.size = Pt(13)
+        tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
+
     if report.trials:
         s = prs.slides.add_slide(prs.slide_layouts[6])
         _ppt_header(s, '临床试验')
+        y_off = Inches(1.4)
+        if report.clinical_landscape:
+            tb = s.shapes.add_textbox(Inches(0.7), Inches(1.2), Inches(11.9), Inches(1.3))
+            tb.text_frame.word_wrap = True
+            tb.text_frame.paragraphs[0].text = report.clinical_landscape[:260]
+            tb.text_frame.paragraphs[0].font.name = FONT_NAME
+            tb.text_frame.paragraphs[0].font.size = Pt(11)
+            y_off = Inches(2.7)
         hd = ['NCT', '标题', '阶段', '状态']
         r = [[t.nct_id or '', (t.title or '')[:50], t.phase or '', t.status or '']
              for t in report.trials[:12]]
-        _ppt_add_table(s, Inches(0.5), Inches(1.4), Inches(12.3), Inches(5.0), hd, r)
+        _ppt_add_table(s, Inches(0.5), y_off, Inches(12.3), Inches(5.0), hd, r)
         _ppt_footer(s)
 
     if report.drugs:
@@ -2860,6 +3740,15 @@ def generate_ppt(report: ReportContent) -> bytes:
         hd = ['药物', '公司', '阶段', '机制']
         r = [[d.name or '', (d.company or '')[:20], d.phase or '',
               (d.mechanism_of_action or '')[:35]] for d in report.drugs[:12]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.4), Inches(12.3), Inches(5.0), hd, r)
+        _ppt_footer(s)
+
+    if report.molecules:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, '靶向活性分子')
+        hd = ['分子', 'ChEMBL ID', 'pChEMBL', '活性']
+        r = [[m.name or '', m.chembl or '', m.pchembl or '',
+              (m.best_type or '') + ' ' + (m.best_val or '')] for m in report.molecules[:12]]
         _ppt_add_table(s, Inches(0.5), Inches(1.4), Inches(12.3), Inches(5.0), hd, r)
         _ppt_footer(s)
 
@@ -2885,21 +3774,42 @@ def generate_ppt(report: ReportContent) -> bytes:
         else:
             y_off = Inches(1.4)
         hd = ['专利号', '标题', '申请人', '年份']
-        r = [[p.number or '', (p.title or '')[:45], (p.assignee or '')[:20], p.year or '']
+        r = [[(p.number or '') + (' (引' + str(p.cited_by) + ')' if p.cited_by else ''),
+              (p.title or '')[:45], (p.assignee or '')[:20], p.year or '']
              for p in report.patents[:10]]
         _ppt_add_table(s, Inches(0.5), y_off, Inches(12.3), Inches(3.5), hd, r)
+        _ppt_footer(s)
+
+    if report.patents:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, '专利详情')
+        hd = ['专利号', '申请号', '法律状态', '被引', '权利要求', 'CPC']
+        r = []
+        for p in report.patents[:8]:
+            r.append([p.number or '', (p.application_no or '')[:20], (p.detail_legal or '')[:15],
+                      str(p.cited_by or ''), str(p.claims or ''),
+                      ', '.join(p.cpc[:3])[:24]])
+        if r:
+            _ppt_add_table(s, Inches(0.3), Inches(1.4), Inches(12.5), Inches(5.0), hd, r)
+        if report.patent_insight:
+            tb = s.shapes.add_textbox(Inches(0.5), Inches(6.2), Inches(12.3), Inches(0.9))
+            tb.text_frame.word_wrap = True
+            tb.text_frame.paragraphs[0].text = '申请人布局: ' + str(report.patent_insight)[:200]
+            tb.text_frame.paragraphs[0].font.name = FONT_NAME
+            tb.text_frame.paragraphs[0].font.size = Pt(10)
+            tb.text_frame.paragraphs[0].font.color.rgb = MED_GRAY
         _ppt_footer(s)
 
     s = prs.slides.add_slide(prs.slide_layouts[6])
     _ppt_header(s, '数据来源')
     sources = [
         '文献: PubMed | OpenAlex | Semantic Scholar',
-        '临床试验: ClinicalTrials.gov | ISRCTN | ANZCTR | ChiCTR',
-        '靶点: Open Targets | UniProt | ClinVar | PharmGKB',
+        '临床试验: ClinicalTrials.gov | ISRCTN | ChiCTR',
+        '靶点: Open Targets | UniProt | ClinVar | ClinPGx',
         '蛋白: PDB | AlphaFold | STRING',
         '表达: Human Protein Atlas | GTEx',
-        '药物: Open Targets | ChEMBL | PubChem | DGIdb | KEGG',
-        '专利: Google Patents | USPTO | Lens.org | Espacenet | MCP',
+        '药物: Open Targets | ChEMBL | PubChem | KEGG',
+        '专利: Google Patents | Patent9 | drugfuture | USPTO | Lens.org | Espacenet | MCP',
         'AI: DeepSeek | 小米MiMo | 智谱GLM | 自定义',
     ]
     tb = s.shapes.add_textbox(Inches(0.8), Inches(1.5), Inches(11.5), Inches(5.0))
@@ -2959,6 +3869,13 @@ def generate_docx(report: ReportContent) -> bytes:
         if d.description: add_p('功能描述: ' + d.description)
         if d.subcellular: add_p('亚细胞定位: ' + d.subcellular)
         if d.related_diseases: add_p('相关疾病: ' + ', '.join(d.related_diseases))
+        if d.pubchem: add_p('PubChem活性分子: ' + str(len(d.pubchem)) + '条')
+        if d.kegg_disease: add_p('KEGG疾病: ' + '; '.join(d.kegg_disease[:6]))
+        if d.kegg_drugs: add_p('KEGG药物: ' + '; '.join(d.kegg_drugs[:6]))
+        if d.clinpgx:
+            add_tbl(['药物', '证据级别', '疾病', '类型', '证据'],
+                    [[a.drug_name, a.level, a.disease, a.association_type, a.evidence]
+                     for a in d.clinpgx[:12]])
     if report.target_overview: add_p(report.target_overview)
     doc.add_page_break()
 
@@ -2987,8 +3904,9 @@ def generate_docx(report: ReportContent) -> bytes:
     if report.patents:
         add_h('五、专利调研', 1)
         if report.patent_landscape: add_p(report.patent_landscape)
-        add_tbl(['专利号', '标题', '申请人', '年份'],
-                [[p.number, p.title[:60], p.assignee[:25], p.year] for p in report.patents])
+        add_tbl(['专利号', '申请号', '标题', '申请人', '年份', '全文'],
+                [[p.number, p.application_no, p.title[:60], p.assignee[:25], p.year,
+                  p.cn_fulltext or p.cn_download or ''] for p in report.patents])
         doc.add_page_break()
 
     if report.web_summary:
@@ -2997,13 +3915,77 @@ def generate_docx(report: ReportContent) -> bytes:
             if line.strip(): add_p(line)
         doc.add_page_break()
 
-    add_h('七、数据来源', 1)
+    add_h('七、附录', 1)
+    if report.mutation:
+        add_p('靶点变异: ' + report.mutation)
+    if d and d.sequence:
+        add_h('蛋白序列 (FASTA)', 2)
+        add_p('>' + (d.gene_symbol or str(report.target_name).upper()) + '|' + d.uniprot_id +
+              ' length=' + str(d.sequence_length or len(d.sequence)), size=9)
+        seq = d.sequence
+        for j in range(0, len(seq), 100):
+            add_p(seq[j:j + 100], size=9)
+    if d and d.hpa:
+        add_h('蛋白表达 (HPA)', 2)
+        h = d.hpa
+        for lbl, val in [('蛋白组织表达', h.protein_tissue), ('RNA 肿瘤表达', h.rna_cancer),
+                         ('蛋白肿瘤表达', h.rna_cancer_score), ('亚细胞定位', h.subcell),
+                         ('分子功能', h.molecular_func)]:
+            if val:
+                add_p(lbl + ': ' + val, size=10)
+    if d and d.string_interactions:
+        add_h('蛋白互作 (STRING)', 2)
+        add_tbl(['蛋白', '名称', '评分'],
+                [[s.protein_id, s.preferred_name, str(s.score)] for s in d.string_interactions[:15]])
+    if d and d.kegg_pathways:
+        add_h('KEGG 通路', 2)
+        add_tbl(['ID', '通路'], [[k.kegg_id, k.name] for k in d.kegg_pathways[:15]])
+    if d and d.kegg_disease:
+        add_h('KEGG 疾病', 2)
+        for x in d.kegg_disease[:10]:
+            add_p('\u25b8 ' + x, size=10)
+    if d and d.kegg_drugs:
+        add_h('KEGG 药物', 2)
+        for x in d.kegg_drugs[:10]:
+            add_p('\u25b8 ' + x, size=10)
+    if d and d.pubchem:
+        add_h('PubChem 活性分子', 2)
+        add_tbl(['CID', '名称', '分子式', 'MW', 'LogP'],
+                [[str(c.cid), c.name, c.formula, str(c.molecular_weight), str(c.logp)] for c in d.pubchem[:12]])
+    if d and d.clinvar:
+        add_h('ClinVar 临床变异', 2)
+        add_tbl(['变异/RCV', '临床意义', '疾病'],
+                [[c.rcv_id or c.gene_symbol, c.clinical_significance, c.condition] for c in d.clinvar[:12]])
+    if d and d.pdb:
+        add_h('PDB 结构', 2)
+        add_tbl(['PDB', '方法', '分辨率', '年份'],
+                [[s.pdb_id, s.method, s.resolution, s.year] for s in d.pdb[:12]])
+    if d and d.alphafold:
+        add_h('AlphaFold 结构', 2)
+        add_tbl(['UniProt', '置信度', 'URL'],
+                [[s.uniprot_acc, str(s.confidence), s.pdb_url] for s in d.alphafold[:5]])
+    if report.patent_insight:
+        add_h('专利申请人布局', 2)
+        add_p(str(report.patent_insight), size=10)
+    doc.add_page_break()
+
+    add_h('八、参考文献引用', 1)
+    if report.citations:
+        for field, refs in report.citations.items():
+            if refs:
+                add_p(field + ': ' + ', '.join(str(x) for x in refs), size=10)
+    else:
+        add_p('无', size=10)
+    doc.add_page_break()
+
+    add_h('九、数据来源', 1)
     for src in ['PubMed', 'OpenAlex', 'Semantic Scholar', 'ClinicalTrials.gov',
-                'ISRCTN', 'ANZCTR', 'ChiCTR', 'Open Targets', 'UniProt',
+                'ISRCTN', 'ChiCTR',
+                'Open Targets', 'UniProt',
                 'PDB', 'AlphaFold', 'Human Protein Atlas', 'GTEx',
-                'ChEMBL', 'PubChem', 'STRING', 'KEGG', 'DGIdb',
-                'PharmGKB', 'ClinVar', 'Google Patents', 'USPTO',
-                'Lens.org', 'Espacenet', 'MCP']:
+                'ChEMBL', 'PubChem', 'STRING', 'KEGG',
+                'ClinPGx', 'ClinVar', 'Google Patents', 'Patent9', 'drugfuture',
+                'USPTO', 'Lens.org', 'Espacenet', 'MCP']:
         add_p('\u25b8 ' + src)
     buf = io.BytesIO(); doc.save(buf); buf.seek(0)
     return buf.getvalue()
@@ -3039,10 +4021,27 @@ class PipelineWorker(QThread):
         self.pat_deep = pat_deep; self.year_range = year_range
         self.ncbi_key = ncbi_key; self.intl_trials = intl_trials
         self.ai_cites = ai_cites; self.save_hist = save_hist
+        self._stop = False
+
+    def request_stop(self):
+        self._stop = True
+
+    def _check_stop(self):
+        if self._stop:
+            raise RuntimeError('已取消')
+
+    def is_cancelled(self) -> bool:
+        return self._stop
 
     def run(self):
         try:
             asyncio.run(self._async_run())
+        except RuntimeError as e:
+            if str(e) == '已取消':
+                self.finished.emit(None)
+                return
+            import traceback
+            self.error.emit(str(e) + NL + NL + traceback.format_exc())
         except Exception as e:
             import traceback
             self.error.emit(str(e) + NL + NL + traceback.format_exc())
@@ -3050,6 +4049,8 @@ class PipelineWorker(QThread):
     async def _async_run(self):
         p = self.progress
         gene_sym = self.gene or self.target_name
+        errs = []
+        cached_flags = []
 
         # Set NCBI key globally
         if self.ncbi_key:
@@ -3057,40 +4058,67 @@ class PipelineWorker(QThread):
             NCBI_API_KEY = self.ncbi_key
 
         papers = []; trials = []; detail = TargetDetail(); drugs = []
-        molecules = []; patents = []
+        molecules = []; patents = []; patent_insight = None; patent_note = ''
+        self._check_stop()
 
         if self.src_papers:
             p.emit(5, '正在搜索文献 (PubMed)...')
             try:
-                papers = await _limiter.run(search_papers(gene_sym, 40, int(self.year_range)))
+                res, cached = await _limiter.run(_cached_search(
+                    f'papers:{self.target_name}:{self.year_range}', 'papers',
+                    lambda: search_papers(gene_sym, 40, _year_backs(self.year_range))))
+                papers = res
+                if cached: cached_flags.append('文献(缓存)')
                 p.emit(12, '文献: PubMed ' + str(len(papers)) + '篇')
+                self._check_stop()
+                if self.mutation:
+                    res2, _ = await _limiter.run(_cached_search(
+                        f'papers:{self.target_name}:mut', 'papers',
+                        lambda: search_papers(self.target_name, 20, _year_backs(self.year_range))))
+                    seen = {_paper_key(p) for p in papers}
+                    papers.extend(p for p in res2 if _paper_key(p) not in seen)
                 oa = await _limiter.run(search_openalex(self.target_name, 10))
                 ss = await _limiter.run(search_semantic_scholar(self.target_name, 10))
                 papers.extend(oa); papers.extend(ss)
-            except Exception:
-                pass
+            except Exception as e:
+                if not self.is_cancelled():
+                    errs.append('文献: ' + str(e)[:150])
 
+        self._check_stop()
         if self.src_trials:
             p.emit(18, '正在查询临床试验...')
             try:
-                trials = await _limiter.run(search_trials(gene_sym, 20))
+                res, cached = await _limiter.run(_cached_search(
+                    f'trials:{gene_sym}', 'trials',
+                    lambda: search_trials(gene_sym, 20)))
+                trials = res
+                if cached: cached_flags.append('临床(缓存)')
+                if self.mutation:
+                    res2, _ = await _cached_search(f'trials:{self.target_name}:mut', 'trials',
+                                                   lambda: search_trials(self.target_name, 10))
+                    seen = {_trial_key(t) for t in trials}
+                    trials.extend(t for t in res2 if _trial_key(t) not in seen)
                 p.emit(25, '临床: ' + str(len(trials)) + '项')
                 if self.intl_trials:
-                    for fn in [search_isrctn, search_anzctr, search_chictr]:
+                    for fn in [search_isrctn, search_chictr]:
                         try:
                             extra = await _limiter.run(fn(self.target_name, 5))
-                            trials.extend(extra)
+                            seen = {_trial_key(t) for t in trials}
+                            trials.extend(t for t in extra if _trial_key(t) not in seen)
                         except Exception:
                             pass
-            except Exception:
-                pass
+            except Exception as e:
+                if not self.is_cancelled():
+                    errs.append('临床: ' + str(e)[:150])
 
+        self._check_stop()
         if self.src_target:
-            p.emit(30, '正在获取靶点信息 (Open Targets, UniProt, HPA, PDB, AlphaFold, STRING, KEGG, ClinVar, DGIdb)...')
+            p.emit(30, '正在获取靶点信息 (Open Targets, UniProt, HPA, PDB, AlphaFold, STRING, KEGG, PubChem, ClinVar, ClinPGx)...')
             try:
                 detail = await _limiter.run(get_target_detail(self.target_name))
-            except Exception:
-                pass
+            except Exception as e:
+                if not self.is_cancelled():
+                    errs.append('靶点信息: ' + str(e)[:150])
             try:
                 uni = await _limiter.run(get_uniprot(
                     detail.gene_symbol or gene_sym, detail.synonyms))
@@ -3114,51 +4142,140 @@ class PipelineWorker(QThread):
                     get_string_interactions(detail.gene_symbol or gene_sym))
                 detail.kegg_pathways = await _limiter.run(
                     get_kegg_pathways(detail.gene_symbol or gene_sym))
+                detail.pubchem = await _limiter.run(
+                    get_pubchem(detail.gene_symbol or gene_sym))
+                detail.kegg_disease = await _limiter.run(
+                    get_kegg_disease(detail.gene_symbol or gene_sym))
+                detail.kegg_drugs = await _limiter.run(
+                    get_kegg_drugs(detail.gene_symbol or gene_sym))
                 detail.clinvar = await _limiter.run(
                     get_clinvar(detail.gene_symbol or gene_sym))
-                detail.pharmgkb = await _limiter.run(
-                    get_pharmgkb(detail.gene_symbol or gene_sym))
+                detail.clinpgx = await _limiter.run(
+                    get_clinpgx(detail.gene_symbol or gene_sym))
                 detail.dgidb = await _limiter.run(
                     get_dgidb(detail.gene_symbol or gene_sym))
                 detail.mutation = self.mutation
-            except Exception:
-                pass
+            except Exception as e:
+                if not self.is_cancelled():
+                    errs.append('靶点详情: ' + str(e)[:150])
 
+        self._check_stop()
         if self.src_drugs:
             p.emit(50, '正在获取药物信息 (Open Targets, ChEMBL)...')
             try:
-                drugs = await _limiter.run(get_drugs(self.target_name))
-                await _enrich_drugs_with_company(drugs)
-                molecules = await _limiter.run(get_chembl(gene_sym))
-            except Exception:
-                pass
+                res, cached = await _limiter.run(_cached_search(
+                    f'drugs:{gene_sym}', 'drugs', lambda: get_drugs(self.target_name)))
+                drugs = res
+                if cached: cached_flags.append('药物(缓存)')
+                if not cached:
+                    await _enrich_drugs_with_company(drugs)
+                res_m, cached_m = await _limiter.run(_cached_search(
+                    f'chembl:{gene_sym}', 'molecules', lambda: get_chembl(gene_sym)))
+                molecules = res_m
+                if cached_m: cached_flags.append('分子(缓存)')
+            except Exception as e:
+                if not self.is_cancelled():
+                    errs.append('药物: ' + str(e)[:150])
 
+        self._check_stop()
         if self.src_patents:
             p.emit(60, '正在检索专利...')
             try:
-                patent_result = await _limiter.run(
-                    search_patents(gene_sym, self.patent_src, self.patent_key))
-                patents = patent_result.get('patents', [])
-            except Exception:
-                pass
+                async def _patents_fetch():
+                    return await search_patents(
+                        gene_sym, self.patent_src, self.patent_key,
+                        deep=self.pat_deep, mcp_url=self.mcp_url, mcp_tool=self.mcp_tool,
+                        progress_cb=lambda t: p.emit(66, t))
+                res, cached = await _limiter.run(_cached_search(
+                    f'patents:{gene_sym}:{self.patent_src}', 'patents', _patents_fetch))
+                if res and isinstance(res, dict):
+                    patents = res.get('patents') or []
+                    patent_insight = res.get('insight')
+                    patent_note = res.get('note') or ''
+                else:
+                    patents = res or []
+                if cached and patents: cached_flags.append('专利(缓存)')
+            except Exception as e:
+                if not self.is_cancelled():
+                    errs.append('专利: ' + str(e)[:150])
 
+        self._check_stop()
         p.emit(68, '正在构建报告...')
         report = build_report(self.target_name, self.gene, self.mutation,
                               detail, papers, trials, drugs, patents, molecules)
+        report.patent_insight = patent_insight
+        report.patent_note = patent_note
+        report.cached_flags = cached_flags
+
+        # Increment note vs previous report (mirrors target.html)
+        try:
+            key = f'{(gene_sym or self.target_name).strip().lower()}'
+            prev = None
+            for r in report_list():
+                if str(r.get('target', '')).strip().lower() == key and r.get('id'):
+                    prev = r
+                    break
+            if prev:
+                try:
+                    prevc = json.loads(prev.get('counts') or '{}')
+                except Exception:
+                    prevc = {}
+                d_p = len(papers) - int(prevc.get('papers', 0))
+                d_t = len(trials) - int(prevc.get('trials', 0))
+                d_pa = len(patents) - int(prevc.get('patents', 0))
+                parts = []
+                if d_p: parts.append(f'文献 {d_p:+.0f}')
+                if d_t: parts.append(f'临床 {d_t:+.0f}')
+                if d_pa: parts.append(f'专利 {d_pa:+.0f}')
+                report.increment_note = '与上次生成相比: ' + '、'.join(parts) + '。' if parts else ''
+        except Exception:
+            pass
 
         if self.use_llm and self.api_key and self.model:
             p.emit(72, 'AI 增强报告中...')
             report = await enhance_report(
                 report, self.provider, self.api_key, self.model,
-                progress_callback=p.emit, use_cites=self.ai_cites)
+                progress_callback=p.emit, use_cites=self.ai_cites, base_url=self.base_url)
 
+        self._check_stop()
         p.emit(95, '正在生成文件...')
         p.emit(100, '完成!')
+        report.errors = errs
         self.finished.emit(report)
+
+
+class FollowUpWorker(QThread):
+    result = pyqtSignal(str, list)
+
+    def __init__(self, report, query, provider, api_key, model, base_url, parent=None):
+        super().__init__(parent)
+        self._report = report
+        self._query = query
+        self._provider = provider
+        self._api_key = api_key
+        self._model = model
+        self._base_url = base_url
+
+    def run(self):
+        docs = _search_docs(self._report, self._query, top_k=8)
+        if not docs:
+            self.result.emit('', [])
+            return
+        try:
+            ctx = '\n\n'.join('[%d] (%s %s) %s' % (i + 1, d['kind'], d['id'], (d['text'] or '')[:400])
+                              for i, d in enumerate(docs))
+            prompt = ('基于以下检索片段回答用户问题。请只用片段中的信息，并标注引用编号 [1][2]…。\n\n'
+                      + ctx + '\n\n问题：' + self._query)
+            text = asyncio.run(llm_chat(prompt, self._provider, self._api_key, self._model,
+                                        base_url=self._base_url))
+        except Exception:
+            text = ''
+        self.result.emit(text, docs)
 
 
 class HistoryWidget(QWidget):
     selected = pyqtSignal(str)
+    compare = pyqtSignal(str, str)
 
     def __init__(self):
         super().__init__()
@@ -3174,12 +4291,15 @@ class HistoryWidget(QWidget):
         refresh_btn.clicked.connect(self.refresh)
         clear_btn = QPushButton('清空')
         clear_btn.clicked.connect(self.clear_all)
+        compare_btn = QPushButton('对比所选')
+        compare_btn.setToolTip('先分别点击两行记录（第一行作基准），再点击"对比所选"')
+        compare_btn.clicked.connect(self._on_compare)
         hdr.addWidget(title); hdr.addStretch()
-        hdr.addWidget(refresh_btn); hdr.addWidget(clear_btn)
+        hdr.addWidget(compare_btn); hdr.addWidget(refresh_btn); hdr.addWidget(clear_btn)
         layout.addLayout(hdr)
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(['靶点', '时间', '文献', '临床', '药物'])
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels(['靶点', '时间', '文献', '临床', '专利', 'AI', '操作'])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -3188,26 +4308,78 @@ class HistoryWidget(QWidget):
 
     def refresh(self):
         items = report_list()
-        self.table.setRowCount(len(items))
-        for i, item in enumerate(items):
+        revised = []
+        for item in items:
+            try:
+                rd = report_load(item['id'])
+                if rd:
+                    item['_revised'] = rd
+            except Exception:
+                pass
+            revised.append(item)
+        self.table.setRowCount(len(revised))
+        for i, item in enumerate(revised):
             counts = json.loads(item.get('counts', '{}'))
             created = datetime.fromtimestamp(item.get('created_at', 0))
-            self.table.setItem(i, 0, QTableWidgetItem(str(item.get('target', ''))))
+            target_text = str(item.get('target', ''))
+            ai_ext = 'AI' if item.get('ai_enhanced') else ''
+            rd = item.get('_revised')
+            pat = str(rd.patents.__len__()) if rd else str(counts.get('patents', 0))
+            cell = QTableWidgetItem(target_text)
+            cell.setData(Qt.UserRole, item['id'])
+            self.table.setItem(i, 0, cell)
             self.table.setItem(i, 1, QTableWidgetItem(created.strftime('%Y-%m-%d %H:%M')))
             self.table.setItem(i, 2, QTableWidgetItem(str(counts.get('papers', 0))))
             self.table.setItem(i, 3, QTableWidgetItem(str(counts.get('trials', 0))))
-            self.table.setItem(i, 4, QTableWidgetItem(str(counts.get('drugs', 0))))
+            self.table.setItem(i, 4, QTableWidgetItem(pat))
+            self.table.setItem(i, 5, QTableWidgetItem(ai_ext))
+            w = QWidget(); wl = QHBoxLayout(w); wl.setContentsMargins(2, 2, 2, 2)
+            exp = QPushButton('导出'); exp.setEnabled(rd is not None)
+            exp.clicked.connect(lambda checked, rid=item['id']: self._export(rid))
+            dl = QPushButton('删除'); dl.setStyleSheet('color:#C0392B')
+            dl.clicked.connect(lambda checked, rid=item['id']: self._delete(rid))
+            wl.addWidget(exp); wl.addWidget(dl); wl.addStretch()
+            self.table.setCellWidget(i, 6, w)
 
     def _on_click(self, row, col):
-        item = self.table.item(row, 1)
-        if item:
-            for r in report_list():
-                created = datetime.fromtimestamp(r.get('created_at', 0))
-                if created.strftime('%Y-%m-%d %H:%M') == item.text():
-                    self.selected.emit(r['id']); return
+        cell = self.table.item(row, 0)
+        if cell and col != 6:
+            rid = cell.data(Qt.UserRole) or cell.text()
+            self.selected.emit(str(rid))
+
+    def _on_compare(self):
+        sel = self.table.selectedItems()
+        rows = sorted({it.row() for it in sel})
+        if len(rows) < 2:
+            QMessageBox.warning(self, '提示', '请先点击选择两行记录（第一行作基准）')
+            return
+        cells = [self.table.item(r, 0) for r in rows]
+        rids = [str(c.data(Qt.UserRole) or c.text()) for c in cells]
+        self.compare.emit(rids[0], rids[1])
+
+    def _export(self, rid):
+        rd = report_load(rid)
+        if not rd:
+            QMessageBox.warning(self, '提示', '无法加载该历史记录')
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, '导出历史', slug(rd.target_name) + '_报告.md', 'Markdown (*.md)')
+        if not path:
+            return
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(to_markdown(rd))
+            QMessageBox.information(self, '导出成功', 'Markdown 已导出: ' + path)
+        except Exception as e:
+            QMessageBox.critical(self, '导出失败', str(e))
+
+    def _delete(self, rid):
+        if QMessageBox.question(self, '确认', '确定删除该历史记录?') == QMessageBox.Yes:
+            report_delete(rid); self.refresh()
 
     def clear_all(self):
-        report_clear(); self.refresh()
+        if QMessageBox.question(self, '确认', '确定清空全部历史?') == QMessageBox.Yes:
+            report_clear(); self.refresh()
 
 
 class MainWindow(QMainWindow):
@@ -3218,6 +4390,74 @@ class MainWindow(QMainWindow):
         self.resize(1150, 880)
         self._report = None
         self.setup_ui()
+        self._restore_settings()
+
+    def _settings_sources(self):
+        return [(self.chk_papers, 'srcPapers'), (self.chk_trials, 'srcTrials'),
+                (self.chk_target, 'srcTarget'), (self.chk_drugs, 'srcDrugs'),
+                (self.chk_patents, 'srcPatents')]
+
+    def _restore_settings(self):
+        s = QSettings('TargetInfo', 'TargetInfo')
+        prov = s.value('providerSel', 'deepseek')
+        if prov in ['deepseek', 'mimo', 'zhipu', 'custom']:
+            self.provider_combo.setCurrentText(prov)
+        self.model_combo.setCurrentText(s.value('model-' + self.provider_combo.currentText(), ''))
+        self.api_key_input.setText(s.value('apiKey', ''))
+        self.base_url_input.setText(s.value('customBase', ''))
+        self.pat_src_combo.setCurrentText(s.value('patSrc', 'google'))
+        self.pat_key_input.setText(s.value('patKey', ''))
+        self.mcp_url_input.setText(s.value('patMcpUrl', ''))
+        self.mcp_tool_input.setText(s.value('patMcpTool', ''))
+        self.chk_pat_deep.setChecked(str(s.value('patDeep', 'true')).lower() in ('true', '1'))
+        self.chk_intl.setChecked(str(s.value('intlTrials', 'false')).lower() in ('true', '1'))
+        self.chk_ai_cites.setChecked(str(s.value('aiCites', 'true')).lower() in ('true', '1'))
+        self.chk_save_hist.setChecked(str(s.value('saveHist', 'true')).lower() in ('true', '1'))
+        self.chk_use_llm.setChecked(str(s.value('useLLM', 'true')).lower() in ('true', '1'))
+        self.year_combo.setCurrentText(s.value('yearRange', '20'))
+        self.ncbi_key_input.setText(s.value('ncbiKey', ''))
+        for cb, key in self._settings_sources():
+            v = s.value(key, None)
+            if v is not None:
+                cb.setChecked(str(v).lower() in ('true', '1'))
+        self.provider_combo.currentIndexChanged.connect(self._settings_changed)
+        self.model_combo.currentTextChanged.connect(self._settings_changed)
+        self.api_key_input.textChanged.connect(self._settings_changed)
+        self.base_url_input.textChanged.connect(self._settings_changed)
+        self.pat_src_combo.currentIndexChanged.connect(self._settings_changed)
+        self.pat_key_input.textChanged.connect(self._settings_changed)
+        self.mcp_url_input.textChanged.connect(self._settings_changed)
+        self.mcp_tool_input.textChanged.connect(self._settings_changed)
+        self.chk_pat_deep.toggled.connect(self._settings_changed)
+        self.chk_intl.toggled.connect(self._settings_changed)
+        self.chk_ai_cites.toggled.connect(self._settings_changed)
+        self.chk_save_hist.toggled.connect(self._settings_changed)
+        self.chk_use_llm.toggled.connect(self._settings_changed)
+        self.year_combo.currentIndexChanged.connect(self._settings_changed)
+        self.ncbi_key_input.textChanged.connect(self._settings_changed)
+        for cb, _ in self._settings_sources():
+            cb.toggled.connect(self._settings_changed)
+
+    def _settings_changed(self, *args):
+        s = QSettings('TargetInfo', 'TargetInfo')
+        s.setValue('providerSel', self.provider_combo.currentText())
+        s.setValue('model-' + self.provider_combo.currentText(), self.model_combo.currentText())
+        s.setValue('apiKey', self.api_key_input.text())
+        s.setValue('customBase', self.base_url_input.text())
+        s.setValue('patSrc', self.pat_src_combo.currentText())
+        s.setValue('patKey', self.pat_key_input.text())
+        s.setValue('patMcpUrl', self.mcp_url_input.text())
+        s.setValue('patMcpTool', self.mcp_tool_input.text())
+        s.setValue('patDeep', self.chk_pat_deep.isChecked())
+        s.setValue('yearRange', self.year_combo.currentText())
+        s.setValue('ncbiKey', self.ncbi_key_input.text())
+        s.setValue('intlTrials', self.chk_intl.isChecked())
+        s.setValue('aiCites', self.chk_ai_cites.isChecked())
+        s.setValue('saveHist', self.chk_save_hist.isChecked())
+        s.setValue('useLLM', self.chk_use_llm.isChecked())
+        for cb, key in self._settings_sources():
+            s.setValue(key, cb.isChecked())
+        s.sync()
 
     def setup_ui(self):
         central = QWidget()
@@ -3228,7 +4468,7 @@ class MainWindow(QMainWindow):
         title = QLabel('TargetInfo - 靶点调研报告生成器')
         title.setStyleSheet('font-size:20px;font-weight:700;color:#1B4F72;padding:6px 0;border-bottom:3px solid #2E86C1')
         outer.addWidget(title)
-        sub = QLabel('PubMed | OpenAlex | Semantic Scholar | ClinicalTrials.gov | Open Targets | UniProt | PDB | AlphaFold | HPA | GTEx | STRING | ChEMBL | PubChem | KEGG | DGIdb | PharmGKB | ClinVar | Google Patents | USPTO | Lens.org | Espacenet')
+        sub = QLabel('PubMed | OpenAlex | Semantic Scholar | ClinicalTrials.gov | ISRCTN | ChiCTR | Open Targets | UniProt | PDB | AlphaFold | HPA | GTEx | STRING | ChEMBL | PubChem | KEGG | ClinPGx | ClinVar | Google Patents | Patent9 | drugfuture | USPTO | Lens.org | Espacenet')
         sub.setStyleSheet('color:#7F8C8D;font-size:11px;margin-bottom:6px')
         sub.setWordWrap(True)
         outer.addWidget(sub)
@@ -3244,6 +4484,7 @@ class MainWindow(QMainWindow):
         bss = 'QPushButton{padding:8px 24px;font-size:14px;font-weight:600;background:#2E86C1;color:white;border:none;border-radius:6px} QPushButton:hover{background:#2874A6} QPushButton:disabled{background:#BDC3C7}'
         self.start_btn.setStyleSheet(bss)
         self.start_btn.clicked.connect(self.start_pipeline)
+        self.input_field.returnPressed.connect(self.start_pipeline)
         inp.addWidget(lbl); inp.addWidget(self.input_field, 1); inp.addWidget(self.start_btn)
         outer.addLayout(inp)
 
@@ -3277,9 +4518,10 @@ class MainWindow(QMainWindow):
         self.provider_combo.currentIndexChanged.connect(self._on_provider_change)
         row2.addWidget(self.provider_combo)
         row2.addWidget(QLabel('模型:'))
-        self.model_input = QLineEdit()
-        self.model_input.setPlaceholderText('留空自动选择默认模型')
-        row2.addWidget(self.model_input)
+        self.model_combo = QComboBox()
+        self.model_combo.setEditable(True)
+        self.model_combo.setInsertPolicy(QComboBox.NoInsert)
+        row2.addWidget(self.model_combo, 1)
         row2.addWidget(QLabel('API Key:'))
         self.api_key_input = QLineEdit()
         self.api_key_input.setPlaceholderText('对应供应商 API Key')
@@ -3295,10 +4537,6 @@ class MainWindow(QMainWindow):
         self.base_url_input = QLineEdit()
         self.base_url_input.setPlaceholderText('https://.../v1')
         cr_layout.addWidget(self.base_url_input, 1)
-        cr_layout.addWidget(QLabel('自定义模型:'))
-        self.custom_model_input = QLineEdit()
-        self.custom_model_input.setPlaceholderText('gpt-4o-mini / deepseek-chat')
-        cr_layout.addWidget(self.custom_model_input, 1)
         self.custom_row.setVisible(False)
         settings_layout.addWidget(self.custom_row)
 
@@ -3353,7 +4591,7 @@ class MainWindow(QMainWindow):
         self.ncbi_key_input.setPlaceholderText('可选，提升PubMed配额')
         self.ncbi_key_input.setEchoMode(QLineEdit.Password)
         row5.addWidget(self.ncbi_key_input, 1)
-        self.chk_intl = QCheckBox('国际临床覆盖(EU/WHO)')
+        self.chk_intl = QCheckBox('国际临床覆盖(ISRCTN/ChiCTR)')
         row5.addWidget(self.chk_intl)
         settings_layout.addLayout(row5)
 
@@ -3370,6 +4608,12 @@ class MainWindow(QMainWindow):
         pw = QVBoxLayout(self.progress_widget)
         pw.setContentsMargins(0, 0, 0, 0)
         pw.addWidget(self.progress_bar); pw.addWidget(self.progress_label)
+        self.stop_btn = QPushButton('停止生成')
+        stopss = 'QPushButton{padding:6px 18px;font-size:12px;font-weight:600;background:#C0392B;color:white;border:none;border-radius:5px} QPushButton:hover{background:#A93226}'
+        self.stop_btn.setStyleSheet(stopss)
+        self.stop_btn.setVisible(False)
+        self.stop_btn.clicked.connect(self._stop_pipeline)
+        pw.addWidget(self.stop_btn, alignment=Qt.AlignRight)
         self.progress_widget.setVisible(False)
         outer.addWidget(self.progress_widget)
 
@@ -3385,12 +4629,23 @@ class MainWindow(QMainWindow):
         # History
         self.history = HistoryWidget()
         self.history.selected.connect(self._load_history)
+        self.history.compare.connect(self._load_history_compare)
         outer.addWidget(self.history)
 
     def _on_provider_change(self, idx):
-        self.custom_row.setVisible(self.provider_combo.currentText() == 'custom')
-        model_map = {'deepseek': 'deepseek-chat', 'mimo': 'mimo-v2.5', 'zhipu': 'GLM-4.7-Flash', 'custom': ''}
-        self.model_input.setPlaceholderText('默认: ' + model_map.get(self.provider_combo.currentText(), ''))
+        prov = self.provider_combo.currentText()
+        self.custom_row.setVisible(prov == 'custom')
+        p = LLM_PROVIDERS.get(prov, {})
+        self.model_combo.blockSignals(True)
+        self.model_combo.clear()
+        self.model_combo.addItems(p.get('models') or [])
+        self.model_combo.blockSignals(False)
+        base = p.get('base', '')
+        if base:
+            self.base_url_input.setPlaceholderText(base + ' (可覆盖)')
+        else:
+            self.base_url_input.setPlaceholderText('https://.../v1')
+        self.model_combo.setCurrentIndex(-1)
 
     def _on_pat_src_change(self, idx):
         self.mcp_row.setVisible(self.pat_src_combo.currentText() == 'mcp')
@@ -3403,23 +4658,23 @@ class MainWindow(QMainWindow):
 
         provider = self.provider_combo.currentText()
         api_key = self.api_key_input.text().strip()
-        model = self.model_input.text().strip()
+        model = self.model_combo.currentText().strip()
         base_url = self.base_url_input.text().strip()
-        custom_model = self.custom_model_input.text().strip()
 
         if provider == 'custom':
             if not base_url:
                 QMessageBox.warning(self, '提示', '自定义模式请填写 Base URL'); return
-            if not model and not custom_model:
-                model = 'gpt-4o-mini'
-            elif custom_model:
-                model = custom_model
+        else:
+            if not base_url:
+                base_url = LLM_PROVIDERS.get(provider, {}).get('base', '')
         if not model:
-            model_map = {'deepseek': 'deepseek-chat', 'mimo': 'mimo-v2.5', 'zhipu': 'GLM-4.7-Flash'}
-            model = model_map.get(provider, 'deepseek-chat')
+            p = LLM_PROVIDERS.get(provider, {})
+            models = p.get('models') or []
+            model = models[0] if models else 'deepseek-chat'
 
         self.start_btn.setEnabled(False)
         self.input_field.setEnabled(False)
+        self.stop_btn.setVisible(True)
         self.progress_widget.setVisible(True)
         self.scroll.setVisible(False)
         self.progress_bar.setValue(0)
@@ -3449,6 +4704,14 @@ class MainWindow(QMainWindow):
         self.worker.error.connect(self._on_error)
         self.worker.start()
 
+    def _stop_pipeline(self):
+        if self.worker:
+            self.worker.request_stop()
+            self.stop_btn.setEnabled(False)
+            self.progress_label.setText('正在停止...')
+            self.start_btn.setEnabled(True)
+            self.input_field.setEnabled(True)
+
     def _on_progress(self, value, text):
         self.progress_bar.setValue(value)
         self.progress_label.setText(text)
@@ -3458,7 +4721,12 @@ class MainWindow(QMainWindow):
         self.progress_label.setText('完成!')
         self.start_btn.setEnabled(True)
         self.input_field.setEnabled(True)
+        self.stop_btn.setVisible(False)
         self._report = report
+        if report is None:
+            self.progress_widget.setVisible(False)
+            QMessageBox.information(self, '已停止', '本次生成已取消。')
+            return
         self._render_report(report)
         if self.chk_save_hist.isChecked():
             report_save(report)
@@ -3467,6 +4735,7 @@ class MainWindow(QMainWindow):
     def _on_error(self, err_msg):
         self.start_btn.setEnabled(True)
         self.input_field.setEnabled(True)
+        self.stop_btn.setVisible(False)
         self.progress_widget.setVisible(False)
         QMessageBox.critical(self, '错误', '生成过程中出现错误:' + NL + NL + err_msg)
 
@@ -3481,14 +4750,33 @@ class MainWindow(QMainWindow):
         success.setAlignment(Qt.AlignCenter)
         self.result_layout.addWidget(success)
 
+        cards = [('文献', len(report.papers)), ('临床', len(report.trials)),
+                 ('药物', len(report.drugs)), ('分子', len(report.molecules)),
+                 ('专利', len(report.patents))]
         metrics_row = QHBoxLayout()
-        for label, count in [('文献', len(report.papers)), ('临床', len(report.trials)),
-                              ('药物', len(report.drugs)), ('专利', len(report.patents))]:
+        for label, count in cards:
             m = QLabel('<b>' + str(count) + '</b><br><span style="color:#7F8C8D">' + label + '</span>')
             m.setAlignment(Qt.AlignCenter)
             m.setStyleSheet('background:white;border:1px solid #e0e0e0;border-radius:8px;padding:12px;min-width:80px')
             metrics_row.addWidget(m)
         self.result_layout.addLayout(metrics_row)
+
+        hints = []
+        if report.increment_note:
+            hints.append(report.increment_note)
+        for f in report.cached_flags:
+            hints.append(f + ' TTL 24h')
+        if hints:
+            hint = QLabel(' · '.join(hints))
+            hint.setWordWrap(True)
+            hint.setStyleSheet('background:#FFF9E6;color:#7D6608;padding:8px 12px;border-radius:6px;font-size:12px')
+            self.result_layout.addWidget(hint)
+
+        if report.errors:
+            errb = QLabel('部分数据源失败:' + NL + NL.join('- ' + e for e in report.errors[:10]))
+            errb.setWordWrap(True)
+            errb.setStyleSheet('background:#FDEDEC;color:#922B21;padding:10px;border-radius:6px;font-size:12px')
+            self.result_layout.addWidget(errb)
 
         dl_row = QHBoxLayout()
         for fmt, lbl, clr in [('md', '下载 MD', '#27AE60'), ('json', '下载 JSON', '#7F8C8D'),
@@ -3498,12 +4786,23 @@ class MainWindow(QMainWindow):
             btn.setStyleSheet('QPushButton{padding:8px 14px;font-size:12px;font-weight:600;background:' + clr + ';color:white;border:none;border-radius:4px}')
             btn.clicked.connect(lambda checked, f=fmt: self._save(f))
             dl_row.addWidget(btn)
+        copybtn = QPushButton('复制 MD')
+        copybtn.setStyleSheet('QPushButton{padding:8px 14px;font-size:12px;font-weight:600;background:#6C3483;color:white;border:none;border-radius:4px}')
+        copybtn.clicked.connect(self._copy_markdown)
+        dl_row.addWidget(copybtn)
+        printbtn = QPushButton('打印/PDF')
+        printbtn.setStyleSheet('QPushButton{padding:8px 14px;font-size:12px;font-weight:600;background:#17202A;color:white;border:none;border-radius:4px}')
+        printbtn.clicked.connect(self._print_html)
+        dl_row.addWidget(printbtn)
+        savebtn = QPushButton('保存历史')
+        savebtn.setStyleSheet('QPushButton{padding:8px 14px;font-size:12px;font-weight:600;background:#1ABC9C;color:white;border:none;border-radius:4px}')
+        savebtn.clicked.connect(self._save_history)
+        dl_row.addWidget(savebtn)
         self.result_layout.addLayout(dl_row)
 
-        sections_data = []
         d = report.target_detail
+        info = []
         if d:
-            info = []
             if d.gene_symbol: info.append('基因符号: ' + d.gene_symbol)
             if d.protein_class: info.append('蛋白类别: ' + d.protein_class)
             if d.tractability: info.append('成药性: ' + ', '.join(d.tractability[:3]))
@@ -3512,26 +4811,287 @@ class MainWindow(QMainWindow):
             if d.alphafold: info.append('AlphaFold: ' + str(len(d.alphafold)) + '个结构')
             if d.string_interactions: info.append('STRING互作: ' + str(len(d.string_interactions)) + '个')
             if d.kegg_pathways: info.append('KEGG通路: ' + str(len(d.kegg_pathways)) + '条')
+            if d.pubchem: info.append('PubChem: ' + str(len(d.pubchem)) + '条')
+            if d.kegg_disease: info.append('KEGG疾病: ' + ', '.join(d.kegg_disease[:3]))
+            if d.kegg_drugs: info.append('KEGG药物: ' + ', '.join(d.kegg_drugs[:3]))
             if d.clinvar: info.append('ClinVar变异: ' + str(len(d.clinvar)) + '条')
+            if d.clinpgx:
+                info.append('ClinPGx药物基因组关联: ' + str(len(d.clinpgx)) + '条')
+                for a in d.clinpgx[:12]:
+                    bits = []
+                    if a.drug_name: bits.append('药物: ' + a.drug_name)
+                    if a.level: bits.append('Level: ' + a.level)
+                    if a.disease: bits.append('疾病: ' + a.disease)
+                    if a.association_type: bits.append('类型: ' + a.association_type)
+                    if a.evidence: bits.append('证据: ' + a.evidence)
+                    if bits: info.append('  - ' + ' | '.join(bits))
             if d.hpa: info.append('HPA表达: ' + (d.hpa.protein_tissue or d.hpa.rna_cancer or '有数据'))
             if d.gtex: info.append('GTEx组织: ' + str(len(d.gtex)) + '项')
-            if info: sections_data.append(('靶点详情', NL.join(info)))
-        for title, content in [('靶点概述', report.target_overview), ('AI综合研判', report.web_summary),
-                                ('专利调研', report.patent_landscape), ('研究进展', report.research_progress),
-                                ('临床概况', report.clinical_landscape), ('药物展望', report.future_outlook)]:
-            if content: sections_data.append((title, content[:800]))
+            if d.sequence: info.append('蛋白序列: ' + str(d.sequence_length or len(d.sequence)) + ' aa')
+        if info:
+            self._render_section('靶点详情', html_text='<br>'.join(escape(x) for x in info))
+        if d and d.sequence:
+            fasta = ('&gt;%s|%s' % (escape(d.gene_symbol or self.input_field.text()), escape(d.uniprot_id or ''))) \
+                + NL + escape(d.sequence)
+            self._render_section('序列 FASTA', html_text='<pre style="white-space:pre-wrap;word-break:break-all">' + fasta + '</pre>')
 
-        for title, content in sections_data:
-            sec = QGroupBox(title)
-            sec.setCheckable(True); sec.setChecked(False)
-            sec.setStyleSheet('QGroupBox{font-weight:600;font-size:13px;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:4px}')
-            tb = QTextBrowser()
-            tb.setHtml('<div style="font-size:12px;line-height:1.6">' + content.replace(NL, '<br>') + '</div>')
-            tb.setMinimumHeight(60); tb.setMaximumHeight(250)
-            ql = QVBoxLayout(sec); ql.addWidget(tb)
-            self.result_layout.addWidget(sec)
+        # 研究进展: AI 文本 + 年份分布条 + 文献列表
+        yc = self._year_counts(report.papers)
+        years = sorted(yc)[-10:] if yc else []
+        bars = [(y, yc[y]) for y in years]
+        rp = ''
+        if report.research_progress:
+            rp = escape(report.research_progress).replace(NL, '<br>')
+        if report.key_findings:
+            rp += '<br><br><b>核心发现</b><br>' + escape(report.key_findings).replace(NL, '<br>')
+        if report.papers:
+            rp += '<br><br><b>文献列表（%d 篇）</b><br>' % len(report.papers) \
+                + '<br>'.join(self._paper_html(p, i) for i, p in enumerate(report.papers))
+        if rp or bars:
+            self._render_section('研究进展', bars=bars, html_text=rp)
+
+        # 临床概况: AI 文本 + 阶段/状态分布条 + 试验列表
+        ph = self._count_key(report.trials, 'phase', '未明确')
+        st = self._count_key(report.trials, 'status', '未知')
+        cbars = [('阶段: ' + k, v) for k, v in ph.items()] + [('状态: ' + k, v) for k, v in st.items()]
+        cl = ''
+        if report.clinical_landscape:
+            cl = escape(report.clinical_landscape).replace(NL, '<br>')
+        if report.trials:
+            cl += '<br><br><b>试验列表（%d 项）</b><br>' % len(report.trials) \
+                + '<br>'.join(self._trial_html(t, i) for i, t in enumerate(report.trials))
+        if cl or cbars:
+            self._render_section('临床概况', bars=cbars, html_text=cl)
+
+        # 药物展望: AI 文本 + 药物管线 + ChEMBL 分子
+        fo = ''
+        if report.future_outlook:
+            fo = escape(report.future_outlook).replace(NL, '<br>')
+        if report.drugs:
+            fo += '<br><br><b>药物管线（%d 个）</b><br>' % len(report.drugs) \
+                + '<br>'.join(self._drug_html(x, i) for i, x in enumerate(report.drugs))
+        if report.molecules:
+            fo += '<br><br><b>靶向活性分子（ChEMBL，%d 个）</b><br>' % len(report.molecules) \
+                + '<br>'.join(self._molecule_html(x, i) for i, x in enumerate(report.molecules))
+        if fo:
+            self._render_section('药物展望', html_text=fo)
+
+        # 专利调研: AI 文本 + 专利列表 + 申请人布局
+        pt = ''
+        if report.patent_landscape:
+            pt = escape(report.patent_landscape).replace(NL, '<br>')
+        if report.patents:
+            pt += '<br><br><b>专利列表（%d 件）</b><br>' % len(report.patents) \
+                + '<br>'.join(self._patent_html(x, i) for i, x in enumerate(report.patents))
+        if report.patent_insight and report.patent_insight.get('assignees'):
+            entries = [(a, ps) for a, ps in report.patent_insight['assignees'].items() if ps]
+            if entries:
+                pt += '<br><br><b>🧭 主要申请人布局</b><br>' + '<br>'.join(
+                    '<b>%s</b>（%d 件）：%s' % (escape(str(a)), len(ps), '；'.join(
+                        '%s %s' % (escape(str(x.get('number', ''))), escape(str(x.get('title', '')))[:60])
+                        for x in ps[:6])) for a, ps in entries)
+        if pt:
+            self._render_section('专利调研', html_text=pt)
+
+        if report.web_summary:
+            self._render_section('AI综合研判', html_text=escape(report.web_summary).replace(NL, '<br>'))
 
         self.result_layout.addStretch()
+
+        fq = QGroupBox('追问')
+        fq.setCheckable(True); fq.setChecked(True)
+        fq.setStyleSheet('QGroupBox{font-weight:600;font-size:13px;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:4px}')
+        fql = QVBoxLayout(fq)
+        fr = QHBoxLayout()
+        self.fq_input = QLineEdit()
+        self.fq_input.setPlaceholderText('针对本报告提问，例如: 该靶点最近有哪些临床试验阶段进展?')
+        fr.addWidget(self.fq_input, 1)
+        fq_btn = QPushButton('提问')
+        fq_btn.clicked.connect(lambda: self._ask_followup())
+        self.fq_input.returnPressed.connect(self._ask_followup)
+        fr.addWidget(fq_btn)
+        fql.addLayout(fr)
+        self.fq_output = QTextBrowser()
+        self.fq_output.setOpenExternalLinks(True)
+        fql.addWidget(self.fq_output)
+        self.result_layout.addWidget(fq)
+
+    def _render_section(self, title, bars=None, html_text=''):
+        sec = QGroupBox(title)
+        sec.setCheckable(True); sec.setChecked(False)
+        sec.setStyleSheet('QGroupBox{font-weight:600;font-size:13px;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:4px}')
+        ql = QVBoxLayout(sec)
+        if bars:
+            maxv = max(v for _, v in bars) or 1
+            for label, v in bars:
+                row = QHBoxLayout()
+                lb = QLabel(label)
+                lb.setFixedWidth(100)
+                row.addWidget(lb)
+                bar = QProgressBar()
+                bar.setRange(0, maxv); bar.setValue(v)
+                bar.setTextVisible(False); bar.setFixedHeight(14)
+                bar.setStyleSheet('QProgressBar{border:1px solid #bdc3c7;border-radius:4px;background:#ECF0F1} QProgressBar::chunk{background:#2E86C1;border-radius:4px}')
+                row.addWidget(bar, 1)
+                cnt = QLabel(str(v))
+                cnt.setFixedWidth(28)
+                row.addWidget(cnt)
+                ql.addLayout(row)
+        if html_text:
+            tb = QTextBrowser()
+            tb.setOpenExternalLinks(True)
+            tb.setHtml('<div style="font-size:12px;line-height:1.6">' + html_text + '</div>')
+            tb.setMinimumHeight(60); tb.setMaximumHeight(300)
+            ql.addWidget(tb)
+        self.result_layout.addWidget(sec)
+
+    @staticmethod
+    def _year_counts(papers):
+        m = {}
+        for p in papers:
+            y = str(getattr(p, 'year', '') or '')
+            if re.fullmatch(r'\d{4}', y):
+                m[y] = m.get(y, 0) + 1
+        return m
+
+    @staticmethod
+    def _count_key(items, attr, default):
+        m = {}
+        for x in items:
+            k = str(getattr(x, attr, '') or '').strip() or default
+            m[k] = m.get(k, 0) + 1
+        return m
+
+    @staticmethod
+    def _paper_html(p, i):
+        bits = '<b>%d.</b> %s' % (i + 1, escape(p.title or ''))
+        if p.journal:
+            bits += ' — <i>%s</i>' % escape(p.journal)
+        if p.year:
+            bits += ' (%s)' % escape(p.year)
+        if p.pmid:
+            bits += ' <a href="https://pubmed.ncbi.nlm.nih.gov/%s/">[PubMed]</a>' % escape(p.pmid)
+        elif p.doi:
+            bits += ' <a href="https://doi.org/%s">[DOI]</a>' % escape(p.doi)
+        return bits
+
+    @staticmethod
+    def _trial_html(t, i):
+        href = _link_for_ref(t.nct_id)
+        bits = '<b>%d.</b> %s %s' % (i + 1,
+                                     ('<a href="%s">%s</a>' % (href, escape(t.nct_id))) if href != '#' else escape(t.nct_id),
+                                     escape(t.title or ''))
+        meta = ' / '.join(x for x in [t.phase, t.status,
+                                      ('、'.join(t.conditions[:4]) if t.conditions else ''),
+                                      t.source] if x)
+        if meta:
+            bits += '<br>&nbsp;&nbsp;<span style="color:#7F8C8D">%s</span>' % escape(meta)
+        return bits
+
+    @staticmethod
+    def _drug_html(d, i):
+        bits = '<b>%d.</b> %s' % (i + 1, escape(d.name or ''))
+        meta = ' / '.join(x for x in [d.company, d.phase, d.mechanism_of_action, d.disease] if x)
+        if meta:
+            bits += ' — <span style="color:#7F8C8D">%s</span>' % escape(meta)
+        return bits
+
+    @staticmethod
+    def _molecule_html(m, i):
+        bits = '<b>%d.</b> %s' % (i + 1, escape(m.name or '—'))
+        if m.chembl:
+            bits += ' <a href="https://www.ebi.ac.uk/chembl/compound_report_card/%s/">%s</a>' % (escape(m.chembl), escape(m.chembl))
+        if m.pchembl:
+            bits += ' (pChEMBL %s)' % escape(m.pchembl)
+        return bits
+
+    @staticmethod
+    def _patent_html(p, i):
+        num = p.number or ''
+        href = p.link or ('https://patents.google.com/patent/' + num + '/en' if num else '#')
+        bits = '<b>%d.</b> <a href="%s">%s</a> — %s' % (i + 1, escape(href), escape(num or '—'), escape(p.title or ''))
+        extra = []
+        if p.assignee: extra.append(p.assignee)
+        if p.year: extra.append(p.year)
+        if p.cited_by: extra.append('被引%d' % p.cited_by)
+        if p.claims: extra.append('约%d项权利要求' % p.claims)
+        if p.application_no: extra.append('申请号 ' + p.application_no)
+        if p.cn_fulltext:
+            extra.append('<a href="%s">全文PDF</a>' % escape(p.cn_fulltext))
+        elif p.cn_download:
+            extra.append('<a href="%s">全文下载页</a>' % escape(p.cn_download))
+        if extra:
+            bits += '<br>&nbsp;&nbsp;<span style="color:#7F8C8D">%s</span>' % escape(' · '.join(extra))
+        return bits
+
+    def _ask_followup(self):
+        q = self.fq_input.text().strip()
+        if not q or not self._report:
+            return
+        provider = self.provider_combo.currentText()
+        api_key = self.api_key_input.text().strip()
+        model = self.model_combo.currentText().strip()
+        base_url = self.base_url_input.text().strip()
+        if provider != 'custom' and not base_url:
+            base_url = LLM_PROVIDERS.get(provider, {}).get('base', '')
+        if not model:
+            p = LLM_PROVIDERS.get(provider, {})
+            models = p.get('models') or []
+            model = models[0] if models else 'deepseek-chat'
+        self.fq_output.setHtml('<div style="color:#7F8C8D;font-size:12px">🔍 检索并生成中…</div>')
+        self.fq_worker = FollowUpWorker(self._report, q, provider, api_key, model, base_url)
+        self.fq_worker.result.connect(self._on_followup_result)
+        self.fq_worker.start()
+
+    def _on_followup_result(self, text, docs):
+        if not text:
+            if not docs:
+                self.fq_output.setHtml('<div style="color:#7F8C8D;font-size:12px">未从当前报告检索到相关内容，请换种问法。</div>')
+                return
+            lines = ['<div style="font-size:12px;line-height:1.7">']
+            for doc in docs:
+                link = _link_for_ref(doc['id'])
+                ref = ('<a href="' + link + '">' + doc['id'] + '</a>') if link and link != '#' else doc['id']
+                title = (doc['text'] or '')[:120]
+                lines.append('<b>[' + doc['kind'] + ']</b> ' + ref + ' — ' + title)
+            lines.append('</div>')
+            self.fq_output.setHtml(NL.join(lines))
+            return
+        body = escape(text).replace(NL, '<br>')
+        refs_line = ' · '.join(
+            '<a href="%s">[%d] %s %s</a>' % (_link_for_ref(doc['id']), i + 1, doc['kind'], escape(doc['id']))
+            for i, doc in enumerate(docs))
+        self.fq_output.setHtml('<div style="font-size:12px;line-height:1.7">' + body + '</div>'
+                               + '<div style="color:#7F8C8D;font-size:11px;margin-top:6px">' + refs_line + '</div>')
+
+    def _save_history(self):
+        if not self._report:
+            return
+        rid = report_save(self._report, self._report.errors)
+        self.history.refresh()
+        QMessageBox.information(self, '已保存', '已保存到历史' + ('' if rid else '（保存失败）'))
+
+    def _copy_markdown(self):
+        if not self._report: return
+        md = to_markdown(self._report)
+        QApplication.clipboard().setText(md)
+        QMessageBox.information(self, '已复制', 'Markdown 已复制到剪贴板。')
+
+    def _print_html(self):
+        if not self._report: return
+        html = to_html(self._report)
+        path = os.path.join(tempfile.gettempdir(), slug(self._report.target_name) + '_report.html')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(html)
+        try:
+            if sys.platform.startswith('win'):
+                os.startfile(path)
+            elif sys.platform.startswith('darwin'):
+                subprocess.Popen(['open', path])
+            else:
+                subprocess.Popen(['xdg-open', path])
+        except Exception:
+            QMessageBox.information(self, '已生成', 'HTML 已生成: ' + path)
 
     def _save(self, fmt):
         if not self._report: return
@@ -3543,6 +5103,7 @@ class MainWindow(QMainWindow):
         ext, filt = ext_map[fmt]
         path, _ = QFileDialog.getSaveFileName(self, '保存文件', name + '_报告' + ext, filt)
         if not path: return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             writers = {'md': lambda: to_markdown(r).encode('utf-8'),
                        'json': lambda: to_json(r).encode('utf-8'),
@@ -3554,6 +5115,8 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, '保存成功', '文件已保存至:' + NL + path)
         except Exception as e:
             QMessageBox.critical(self, '保存失败', str(e))
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def _load_history(self, rid):
         report = report_load(rid)
@@ -3561,6 +5124,41 @@ class MainWindow(QMainWindow):
             self._report = report; self._render_report(report)
         else:
             QMessageBox.warning(self, '提示', '无法加载该历史记录')
+
+    def _load_history_compare(self, rid_a, rid_b):
+        ra = report_load(rid_a); rb = report_load(rid_b)
+        if not ra or not rb:
+            QMessageBox.warning(self, '提示', '无法加载对比记录')
+            return
+        def sig(r):
+            return (len(r.papers), len(r.trials), len(r.drugs), len(r.molecules), len(r.patents))
+        a, b = sig(ra), sig(rb)
+        def dl(r):
+            return {k: v for k, v in [('papers', len(r.papers)), ('trials', len(r.trials)),
+                                      ('drugs', len(r.drugs)), ('molecules', len(r.molecules)),
+                                      ('patents', len(r.patents))]}
+        da, db = dl(ra), dl(rb)
+        lines = ['<div style="font-size:12px;line-height:1.7">',
+                 '<b>对比:</b> ' + escape(ra.target_name) + ' <i>(基准)</i>  vs  ' + escape(rb.target_name) + '<br><br>']
+        for k, zh in [('papers', '文献'), ('trials', '临床'), ('drugs', '药物'),
+                      ('molecules', '分子'), ('patents', '专利')]:
+            d = db.get(k, 0) - da.get(k, 0)
+            arrow = '▲' if d > 0 else ('▼' if d < 0 else '—')
+            color = '#27AE60' if d > 0 else ('#C0392B' if d < 0 else '#7F8C8D')
+            lines.append('%s: <span style="color:#7F8C8D">%s</span> → <span style="color:#2E86C1">%s</span> '
+                         '<span style="color:%s">%s %+d</span><br>' % (zh, da.get(k, 0), db.get(k, 0), color, arrow, d))
+        if ra.increment_note:
+            lines.append('<br><i>基准增量:</i> ' + escape(ra.increment_note))
+        if ra.errors or rb.errors:
+            lines.append('<br><i>基准失败数据源:</i> ' + (escape('; '.join(ra.errors)) or '无') +
+                         '<br><i>对比失败数据源:</i> ' + (escape('; '.join(rb.errors)) or '无'))
+        lines.append('</div>')
+        box = QMessageBox(self)
+        box.setWindowTitle('历史对比')
+        box.setTextFormat(Qt.RichText)
+        box.setText(NL.join(lines))
+        box.setStandardButtons(QMessageBox.Ok)
+        box.exec_()
 
 
 # ─── Main ──────────────────────────────────────────────────────────────────
