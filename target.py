@@ -5204,6 +5204,30 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, '已停止', '本次生成已取消。')
             return
         self._render_report(report)
+        # 自动保存所有格式到 py 文件同目录
+        try:
+            save_dir = os.path.dirname(os.path.abspath(__file__))
+            name = slug(report.target_name)
+            saved = []
+            for ext, writer in [
+                ('.md', lambda: to_markdown(report).encode('utf-8')),
+                ('.json', lambda: to_json(report).encode('utf-8')),
+                ('.html', lambda: to_html(report).encode('utf-8')),
+                ('.pptx', lambda: generate_ppt(report)),
+                ('.docx', lambda: generate_docx(report)),
+            ]:
+                try:
+                    path = os.path.join(save_dir, name + '_报告' + ext)
+                    with open(path, 'wb') as f:
+                        f.write(writer())
+                    saved.append(os.path.basename(path))
+                except Exception:
+                    pass
+            if saved:
+                QMessageBox.information(self, '自动保存完成',
+                    '已保存 ' + str(len(saved)) + ' 个文件至:\n' + save_dir + '\n\n' + '\n'.join(saved))
+        except Exception:
+            pass
         if self.chk_save_hist.isChecked():
             report_save(report)
             self.history.refresh()
