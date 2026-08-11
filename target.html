@@ -76,7 +76,7 @@
 <div class="wrap">
     <header class="top">
         <h1>🎯 靶点调研报告生成器</h1>
-        <p class="sub">PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · Human Protein Atlas · 专利调研 · AI 综合研判</p>
+        <p class="sub">PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · Human Protein Atlas · ClinPGx · 专利调研 · AI 综合研判</p>
     </header>
 
     <div class="card">
@@ -243,6 +243,7 @@
         <a href="https://clinicaltrials.gov/" target="_blank">ClinicalTrials.gov</a> ·
         <a href="https://platform.opentargets.org/" target="_blank">Open Targets</a> ·
         <a href="https://www.proteinatlas.org/" target="_blank">Human Protein Atlas</a> ·
+        <a href="https://www.clinpgx.org/" target="_blank">ClinPGx</a> ·
         <a href="https://data.uspto.gov/" target="_blank">USPTO(API Key)</a> · <a href="https://www.lens.org/" target="_blank">Lens.org</a> · <a href="https://patents.google.com/" target="_blank">Google Patents(免Key)</a> · <a href="https://www.epo.org/" target="_blank">Espacenet(EPO)</a> &nbsp;|&nbsp;
         AI: DeepSeek / 小米MiMo / 智谱 / 自定义兼容接口 &nbsp;|&nbsp;
         <a href="clear.html">🧹 数据清理工具</a>
@@ -853,6 +854,35 @@ async function getChEMBL(name){
         details:dArr.slice(0,8).map(d=>({type:d.stype,val:d.sval!=null?(String(d.sval)+(d.units?" "+d.units:"")):"",pchembl:d.pchembl!=null?d.pchembl.toFixed(2):""}))};
     }).slice(0,8);
   return out;
+}
+
+/* ── ClinPGx（原 PharmGKB，2025-07 更名；免 Key，限速~2 req/s）────────── */
+async function getClinPGx(gene){
+  try{
+    if(!gene) return [];
+    const u="https://api.clinpgx.org/data/summaryAnnotation?"+new URLSearchParams({
+      "location.genes.symbol":gene, "view":"max"}).toString();
+    const j=await reqJson(u);
+    const arr=(j&&Array.isArray(j.data))?j.data:[];
+    const out=[];
+    for(const it of arr.slice(0,10)){
+      if(!it||typeof it!=="object") continue;
+      const chem=it.relatedChemicals||[];
+      let drug="";
+      if(Array.isArray(chem)&&chem[0]) drug=String(chem[0].name||chem[0]||"");
+      let level=String((it.levelOfEvidence&&it.levelOfEvidence.description)||"");
+      const name=String(it.name||"");
+      const lm=name.match(/level\s+\d+/i);
+      if(lm) level=lm[0].charAt(0).toUpperCase()+lm[0].slice(1);
+      else if(level) level=level.slice(0,120);
+      const types=Array.isArray(it.types)?it.types:[it.types].filter(Boolean);
+      const dis=it.relatedDiseases||[];
+      let disease="";
+      if(Array.isArray(dis)&&dis[0]) disease=String((dis[0]&&dis[0].name)||dis[0]||"");
+      out.push({drug, level, disease, type:types.filter(Boolean).map(String).join(", "), evidence:name});
+    }
+    return out;
+  }catch(e){ console.error("getClinPGx error:", e); return []; }
 }
 
 /* ── 专利调研 ───────────────────────────────────────────────── */
@@ -1471,6 +1501,7 @@ function buildReport(o){
     if(d.proteinFamilies) parts.push("蛋白家族: "+d.proteinFamilies);
     if(d.tractability&&d.tractability.length) parts.push("成药性评估(Tractability): "+d.tractability.join(","));
     if(d.pdb&&d.pdb.length) parts.push("PDB结构: "+d.pdb.map(p=>p.pdbId+" ("+p.method+(p.resolution?", "+p.resolution+"Å":"")+")").join("; "));
+    if(d.clinpgx&&d.clinpgx.length) parts.push("ClinPGx药物基因组关联: "+d.clinpgx.length+"条");
     if(d.hpa&&hpaLines(d.hpa).length) parts.push("\nHPA表达谱: "+hpaLines(d.hpa).join("；"));
     if(d.relatedDiseases&&d.relatedDiseases.length) parts.push("相关疾病: "+d.relatedDiseases.join(", "));
     r.target_overview=parts.join("\n");
@@ -1507,6 +1538,7 @@ function contextFor(field,r){
     if(d.subcellular) parts.push("亚细胞定位: "+d.subcellular);
     if(d.tractability&&d.tractability.length) parts.push("成药性评估: "+d.tractability.join(","));
     if(d.pdb&&d.pdb.length) parts.push("PDB结构: "+d.pdb.map(p=>p.pdbId+" ("+p.method+")").join("; "));
+    if(d.clinpgx&&d.clinpgx.length) parts.push("ClinPGx药物基因组关联("+d.clinpgx.length+"条): "+d.clinpgx.slice(0,8).map(a=>a.drug+" | "+(a.level||"—")+" | "+(a.disease||"—")).join("; "));
     if(d.sequence) parts.push("氨基酸序列长度: "+(d.sequenceLength||d.sequence.length)+" aa");
     if(d.synonyms&&d.synonyms.length) parts.push("别名: "+d.synonyms.slice(0,10).join("; "));
     if(d.hpa&&hpaLines(d.hpa).length) parts.push("HPA表达谱: "+hpaLines(d.hpa).join("；"));
@@ -1541,6 +1573,7 @@ function sysCtx(r){
     if(d.subcellular) parts.push("亚细胞定位: "+d.subcellular);
     if(d.tractability&&d.tractability.length) parts.push("成药性: "+d.tractability.join(","));
     if(d.pdb&&d.pdb.length) parts.push("PDB结构: "+d.pdb.map(p=>p.pdbId).join(", "));
+    if(d.clinpgx&&d.clinpgx.length) parts.push("ClinPGx药物基因组关联("+d.clinpgx.length+"条): "+d.clinpgx.slice(0,8).map(a=>a.drug+" | "+(a.level||"—")+" | "+(a.disease||"—")).join("; "));
     if(d.sequence) parts.push("氨基酸序列长度: "+(d.sequenceLength||d.sequence.length)+" aa");
     if(d.hpa&&d.hpa.link) parts.push("HPA链接: "+d.hpa.link);
     if(d.relatedDiseases&&d.relatedDiseases.length) parts.push("相关疾病: "+d.relatedDiseases.join(", "));
@@ -1679,10 +1712,13 @@ async function run(){
         const uni=await Promise.race([getUniProt(detail&&detail.geneSymbol||gene,aliases),withTimeout(40000)]).catch(()=>null);
         const hpa=await Promise.race([getHPA(detail&&detail.geneSymbol||gene),withTimeout(40000)]).catch(()=>null);
         const pdb=await Promise.race([getPDB(detail&&detail.geneSymbol||gene,uni&&uni.accession),withTimeout(40000)]).catch(()=>null);
-        if(!detail&&(uni||hpa||(pdb&&pdb.length))) detail={};
+        const cpgx=await Promise.race([cachedSearch("clinpgx:"+gene,()=>getClinPGx(detail&&detail.geneSymbol||gene)),withTimeout(40000)]).catch(()=>({data:[],cached:false}));
+        if(!detail&&(uni||hpa||(pdb&&pdb.length)||cpgx.data.length)) detail={};
         if(uni&&detail) Object.assign(detail,uni);
         if(hpa&&detail) detail.hpa=hpa;
         if(pdb&&pdb.length&&detail) detail.pdb=pdb;
+        if(cpgx.data.length&&detail) detail.clinpgx=cpgx.data;
+        if(cpgx.cached&&cpgx.data.length) cachedFlags.push("ClinPGx(缓存)");
         if(detail&&mutation) detail.mutation=mutation;
         setProg(50,"");
       }catch(e){ if(!STOP) errs.push("靶点信息: "+e.message); } }
@@ -1801,6 +1837,15 @@ function render(r,errs){
     const pdbRows=pdb.map(p=>`<tr><td><a href="${p.link}" target="_blank">${esc(p.pdbId)}</a></td><td>${esc(p.title).slice(0,60)}</td><td>${esc(p.method)}</td><td>${esc(p.resolution||"—")}Å</td><td>${esc(p.year||"—")}</td></tr>`).join("");
     pdbP.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>PDB ID</th><th>标题</th><th>方法</th><th>分辨率</th><th>年份</th></tr></thead><tbody>${pdbRows}</tbody></table>`);
     pdbP.open();
+  }
+
+  const cpgx=d&&d.clinpgx;
+  if(cpgx&&cpgx.length){
+    const cpgxP=addPanel("🧬 ClinPGx 药物基因组关联",cpgx.length+"条");
+    const cpgxRows=cpgx.slice(0,12).map(a=>`<tr><td>${esc(a.drug)}</td><td>${esc(a.level||"—")}</td><td>${esc(a.disease||"—")}</td><td>${esc(a.type||"—")}</td><td>${esc((a.evidence||"").slice(0,80))}</td></tr>`).join("");
+    cpgxP.body.insertAdjacentHTML("beforeend",`<table><thead><tr><th>药物</th><th>证据级别</th><th>疾病</th><th>类型</th><th>证据</th></tr></thead><tbody>${cpgxRows}</tbody></table>`);
+    cpgxP.body.insertAdjacentHTML("beforeend",`<div class="hint" style="margin-top:.4rem">数据来源：<a href="https://www.clinpgx.org/" target="_blank" style="color:var(--mid)">ClinPGx</a>（原 PharmGKB，2025年更名）；仅显示前${Math.min(cpgx.length,12)}条</div>`);
+    cpgxP.open();
   }
 
   const b=addPanel("📈 研究进展"," "+r.papers.length+"篇");
@@ -1933,9 +1978,16 @@ function render(r,errs){
 /* ── 导出 ─────────────────────────────────────────────────────────── */
 function markdown(r){
   let m=`# 靶点 ${String(r.targetName).toUpperCase()} 研究进展与临床分析报告\n\n`;
-  m+=`> 生成：${new Date().toLocaleString()}　数据源：PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · HPA · Google Patents · USPTO · Lens.org · Espacenet · MCP\n\n`;
+  m+=`> 生成：${new Date().toLocaleString()}　数据源：PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · HPA · ClinPGx · Google Patents · USPTO · Lens.org · Espacenet · MCP\n\n`;
   m+=`## 一、靶点概述\n${r.target_overview}\n\n`;
   if(r.detail&&r.detail.sequence) m+=`### 氨基酸序列（${r.detail.sequenceLength||r.detail.sequence.length} aa）\n\`\`\`\n${r.detail.sequence}\n\`\`\`\n\n`;
+  if(r.detail&&r.detail.clinpgx&&r.detail.clinpgx.length){
+    m+=`### ClinPGx 药物基因组关联（${r.detail.clinpgx.length}条）\n`;
+    r.detail.clinpgx.slice(0,12).forEach(a=>{
+      m+=`- 药物: ${a.drug||"—"} | 证据级别: ${a.level||"—"} | 疾病: ${a.disease||"—"} | 类型: ${a.type||"—"} | 证据: ${(a.evidence||"").slice(0,100)}\n`;
+    });
+    m+="\n";
+  }
   m+=`## 二、研究进展\n${r.research_progress}\n\n## 三、核心文献\n${r.key_findings}\n\n## 四、临床概况\n${r.clinical_landscape}\n\n`;
   m+=`## 五、药物展望\n${r.future_outlook}\n\n`;
   if(r.papers.length){ m+=`## 文献（${r.papers.length}篇）\n`; r.papers.forEach((p,i)=>m+=`${i+1}. ${p.title} — ${p.journal} (${p.year})\n`); m+="\n"; }
@@ -2087,7 +2139,7 @@ function generatePPT(r){
   s1.addText(String(r.targetName).toUpperCase(),{x:1,y:2.8,w:8,h:0.9,fontSize:36,color:"#5DADE2",fontFace:FONT,bold:true,align:"center"});
   s1.addShape(pptx.ShapeType.rect,{x:3.5,y:4.0,w:3,h:0.04,fill:{color:COL.mid}});
   s1.addText("生成日期："+new Date().toLocaleString(),{x:1,y:4.3,w:8,h:0.5,fontSize:14,color:COL.gray,fontFace:FONT,align:"center"});
-  s1.addText("数据来源：PubMed · ClinicalTrials.gov · Open Targets · USPTO · ChEMBL · HPA · Google Patents · Espacenet",{x:1,y:4.8,w:8,h:0.5,fontSize:11,color:COL.gray,fontFace:FONT,align:"center"});
+  s1.addText("数据来源：PubMed · ClinicalTrials.gov · Open Targets · USPTO · ChEMBL · HPA · ClinPGx · Google Patents · Espacenet",{x:1,y:4.8,w:8,h:0.5,fontSize:11,color:COL.gray,fontFace:FONT,align:"center"});
 
   // ===== Slide 2: 靶点概述 =====
   const s2=pptx.addSlide();
@@ -2137,6 +2189,15 @@ function generatePPT(r){
     const pdbRows=[["PDB ID","标题","方法","分辨率","年份"]].concat(d.pdb.slice(0,5).map(p=>[p.pdbId||"—",(p.title||"").slice(0,50),p.method||"—",p.resolution?(p.resolution+"Å"):"—",p.year||"—"]));
     s3b.addTable(pdbRows.map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:10,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0}}))),{x:0.5,y:1.3,w:9,h:Math.min(pdbRows.length*0.45,4),border:{type:"solid",pt:0.5,color:COL.gray}});
     addFooter(s3b);
+  }
+
+  // ===== Slide 3c: ClinPGx 药物基因组关联 =====
+  if(d&&d.clinpgx&&d.clinpgx.length){
+    const s3c=pptx.addSlide();
+    addHeader(s3c,"ClinPGx 药物基因组关联","🧬");
+    const cpgxRows=[["药物","证据级别","疾病","类型"]].concat(d.clinpgx.slice(0,10).map(a=>[a.drug||"—",a.level||"—",a.disease||"—",a.type||"—"]));
+    s3c.addTable(cpgxRows.map((row,i)=>row.map(cell=>({text:cell,options:{fontSize:10,fontFace:FONT,fill:{color:i===0?COL.mid:(i%2===0?COL.light:COL.white)},color:i===0?COL.white:COL.txt,bold:i===0}}))),{x:0.5,y:1.3,w:9,h:Math.min(cpgxRows.length*0.42,4.5),border:{type:"solid",pt:0.5,color:COL.gray}});
+    addFooter(s3c);
   }
 
   // ===== Slide 4: 研究进展 =====
@@ -2237,7 +2298,7 @@ function generatePPT(r){
   s11.addText([
     {text:"文献检索：",options:{bold:true}},{text:"PubMed (NCBI)\n",options:{}},
     {text:"临床试验：",options:{bold:true}},{text:"ClinicalTrials.gov (v2 API)\n",options:{}},
-    {text:"靶点信息：",options:{bold:true}},{text:"Open Targets Platform (GraphQL) + UniProt + Human Protein Atlas\n",options:{}},
+    {text:"靶点信息：",options:{bold:true}},{text:"Open Targets Platform (GraphQL) + UniProt + Human Protein Atlas + ClinPGx\n",options:{}},
     {text:"蛋白质结构：",options:{bold:true}},{text:"PDB (RCSB)\n",options:{}},
     {text:"药物管线：",options:{bold:true}},{text:"Open Targets Drug & Clinical Candidates\n",options:{}},
     {text:"活性分子：",options:{bold:true}},{text:"ChEMBL (EBI)\n",options:{}},
@@ -2285,7 +2346,7 @@ function generateWord(r){
 
   html+=`<h1>靶点调研报告</h1>
   <h2 style="text-align:center;border:none;color:#2E86C1">${esc(String(r.targetName).toUpperCase())}</h2>
-  <p style="text-align:center;color:#7F8C8D">生成日期：${new Date().toLocaleString()}<br>数据来源：PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · HPA · Google Patents · USPTO · Lens.org · Espacenet · MCP</p>
+  <p style="text-align:center;color:#7F8C8D">生成日期：${new Date().toLocaleString()}<br>数据来源：PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · HPA · ClinPGx · Google Patents · USPTO · Lens.org · Espacenet · MCP</p>
   <hr>`;
 
   const d=r.detail;
@@ -2319,6 +2380,15 @@ function generateWord(r){
     hpaLines(hpa).forEach(l=>html+=`<li>${esc(l)}</li>`);
     html+=`</ul>`;
     if(hpa.link) html+=`<p class="source">来源：<a href="${hpa.link}">Human Protein Atlas</a></p>`;
+  }
+
+  if(d&&d.clinpgx&&d.clinpgx.length){
+    html+=`<h3>ClinPGx 药物基因组关联（${d.clinpgx.length}条）</h3>
+    <table><tr><th>药物</th><th>证据级别</th><th>疾病</th><th>类型</th><th>证据</th></tr>`;
+    d.clinpgx.slice(0,12).forEach(a=>{
+      html+=`<tr><td>${esc(a.drug)}</td><td>${esc(a.level||"—")}</td><td>${esc(a.disease||"—")}</td><td>${esc(a.type||"—")}</td><td>${esc((a.evidence||"").slice(0,100))}</td></tr>`;
+    });
+    html+=`</table><p class="source">来源：<a href="https://www.clinpgx.org/">ClinPGx</a>（原 PharmGKB，2025年更名）</p>`;
   }
 
   html+=`<h2>二、研究进展</h2><p>${esc(r.research_progress).replace(/\n/g,"<br>")}</p>`;
