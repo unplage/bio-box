@@ -56,9 +56,11 @@ from pptx.enum.shapes import MSO_SHAPE
 
 # Word
 from docx import Document
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 
 # Charts
 import matplotlib
@@ -117,11 +119,23 @@ async def _request_with_retry(
     for attempt in range(max_retries):
         try:
             if method == 'GET':
-                return await client.get(url, **kwargs)
+                resp = await client.get(url, **kwargs)
             elif method == 'POST':
-                return await client.post(url, **kwargs)
+                resp = await client.post(url, **kwargs)
             else:
                 raise ValueError(f'Unsupported method: {method}')
+            # 重试 429 (Too Many Requests) 和 5xx 服务器错误
+            if resp.status_code == 429 or resp.status_code >= 500:
+                retry_after = resp.headers.get('Retry-After')
+                if retry_after:
+                    try:
+                        await asyncio.sleep(float(retry_after))
+                    except (ValueError, TypeError):
+                        await asyncio.sleep(base_delay * (2 ** attempt))
+                elif attempt < max_retries - 1:
+                    await asyncio.sleep(base_delay * (2 ** attempt))
+                continue
+            return resp
         except (
             httpx.RemoteProtocolError,
             httpx.ConnectError,
@@ -171,6 +185,45 @@ class Limiter:
 
 
 _limiter = Limiter(8)
+
+
+# ─── Rate limiter (per-API) ────────────────────────────────────────────────
+
+
+class RateLimiter:
+    """基于 asyncio.Lock 的令牌桶限流器，确保 API 调用不超过指定频率。"""
+
+    def __init__(self, requests_per_second: float):
+        self._interval = 1.0 / requests_per_second
+        self._last = 0.0
+        self._lock = asyncio.Lock()
+
+    async def acquire(self):
+        async with self._lock:
+            now = asyncio.get_event_loop().time()
+            wait = self._interval - (now - self._last)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last = asyncio.get_event_loop().time()
+
+
+# 默认 User-Agent（部分 API 要求）
+DEFAULT_UA = 'TargetInfo/1.0 (bio-box; github.com/unplage/bio-box)'
+
+# Per-API 速率限制器
+_ncbi_limiter = RateLimiter(3)      # PubMed + ClinVar + PubChem (NCBI 无 key: 3 req/s)
+_kegg_limiter = RateLimiter(1)      # KEGG ~1 req/s
+_uniprot_limiter = RateLimiter(5)   # UniProt 5 req/s
+_chembl_limiter = RateLimiter(3)    # ChEMBL 3 req/s
+_pubchem_limiter = RateLimiter(5)   # PubChem 5 req/s
+_clinpgx_limiter = RateLimiter(2)   # ClinPGx ~2 req/s
+_s2_limiter = RateLimiter(0.33)     # Semantic Scholar ~100 req/5min
+_openalex_limiter = RateLimiter(10) # OpenAlex polite pool 10 req/s
+_ctgov_limiter = RateLimiter(10)    # ClinicalTrials.gov ~10 req/s
+_pdb_limiter = RateLimiter(5)       # PDB 5 req/s
+_hpa_limiter = RateLimiter(1)       # HPA ~1 req/s
+_ot_limiter = RateLimiter(5)        # Open Targets ~5 req/s
+_llm_limiter = RateLimiter(2)       # LLM APIs ~2 req/s
 
 # ─── Utility functions ─────────────────────────────────────────────────────
 
@@ -499,6 +552,7 @@ class ReportContent(BaseModel):
 
 
 async def search_papers(target: str, max_results: int = 40, years_back: int = 20) -> List[Paper]:
+    await _ncbi_limiter.acquire()
     now_year = datetime.now().year
     terms = _expand_query_terms(target)
     query_parts = [f'({t}[Title/Abstract])' for t in terms]
@@ -517,7 +571,7 @@ async def search_papers(target: str, max_results: int = 40, years_back: int = 20
     if NCBI_API_KEY:
         params['api_key'] = NCBI_API_KEY
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', PUBMED_SEARCH_URL, params=params)
             resp.raise_for_status()
@@ -548,7 +602,7 @@ async def _fetch_papers(pmids: List[str]) -> List[Paper]:
     }
     if NCBI_API_KEY:
         params['api_key'] = NCBI_API_KEY
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', PUBMED_FETCH_URL, params=params, max_retries=4)
             resp.raise_for_status()
@@ -659,6 +713,7 @@ def _parse_single_article(article_elem) -> Optional[Paper]:
 
 
 async def search_openalex(target: str, max_results: int = 10) -> List[Paper]:
+    await _openalex_limiter.acquire()
     if not OPENALEX_KEY:
         return []
     terms = _expand_query_terms(target)
@@ -672,7 +727,7 @@ async def search_openalex(target: str, max_results: int = 10) -> List[Paper]:
     headers = {}
     if OPENALEX_KEY:
         headers['api-key'] = OPENALEX_KEY
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', f'{OPENALEX_URL}/works',
                                              params=params, headers=headers, max_retries=2)
@@ -712,6 +767,7 @@ async def search_openalex(target: str, max_results: int = 10) -> List[Paper]:
 
 
 async def search_semantic_scholar(target: str, max_results: int = 10) -> List[Paper]:
+    await _s2_limiter.acquire()
     terms = _expand_query_terms(target)
     query = ' '.join(terms[:3])
     params = {
@@ -720,7 +776,7 @@ async def search_semantic_scholar(target: str, max_results: int = 10) -> List[Pa
         'fields': 'title,authors,year,journal,externalIds,abstract,citationCount',
         'sort': 'citationCount:desc',
     }
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET',
                                              f'{SEMANTIC_SCHOLAR_URL}/paper/search',
@@ -757,6 +813,7 @@ async def search_semantic_scholar(target: str, max_results: int = 10) -> List[Pa
 
 
 async def search_trials(target: str, max_results: int = 20) -> List[ClinicalTrial]:
+    await _ctgov_limiter.acquire()
     terms = _expand_query_terms(target)
     query = ' OR '.join(terms)
     params = {
@@ -767,7 +824,7 @@ async def search_trials(target: str, max_results: int = 20) -> List[ClinicalTria
                   'BriefSummary|EnrollmentCount|LocationCountry',
         'filter.overallStatus': 'ACTIVE_NOT_RECRUITING|COMPLETED|RECRUITING|NOT_YET_RECRUITING|ENROLLING_BY_INVITATION|AVAILABLE',
     }
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', f'{CT_API_BASE}/studies', params=params)
             if resp.status_code != 200:
@@ -976,7 +1033,7 @@ async def search_chictr(target: str, max_results: int = 5) -> List[ClinicalTrial
 
 async def _get_ensembl_id(target_name: str) -> Optional[str]:
     q = 'query($q:String!){search(queryString:$q,entityNames:["target"]){hits{id}}}'
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'POST', OPEN_TARGETS_URL,
                                              json={'query': q, 'variables': {'q': target_name}})
@@ -987,6 +1044,7 @@ async def _get_ensembl_id(target_name: str) -> Optional[str]:
 
 
 async def get_target_detail(target_name: str) -> TargetDetail:
+    await _ot_limiter.acquire()
     detail = TargetDetail(target_name=target_name)
     eid = await _get_ensembl_id(target_name)
     if not eid:
@@ -1001,7 +1059,7 @@ async def get_target_detail(target_name: str) -> TargetDetail:
         associatedDiseases{rows{score disease{name}}}
       }
     }"""
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'POST', OPEN_TARGETS_URL,
                                              json={'query': q, 'variables': {'id': eid}})
@@ -1045,7 +1103,7 @@ async def get_drugs(target_name: str) -> List[DrugInfo]:
         }
       }
     }"""
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'POST', OPEN_TARGETS_URL,
                                              json={'query': q, 'variables': {'id': eid}})
@@ -1061,7 +1119,7 @@ async def get_drugs(target_name: str) -> List[DrugInfo]:
                     name=drug_data.get('name', ''),
                     mechanism_of_action=moas[0].get('mechanismOfAction', '') if moas else '',
                     phase=r.get('maxClinicalStage', ''),
-                    disease=d0.get('disease', {}).get('name', '') or d0.get('diseaseFromSource', ''),
+                    disease=(d0.get('disease') or {}).get('name', '') or d0.get('diseaseFromSource', ''),
                 ))
             return drugs
         except Exception:
@@ -1076,7 +1134,7 @@ async def _enrich_drugs_with_company(drugs: List[DrugInfo]) -> None:
     params = {'query.term': query, 'pageSize': min(len(names) * 5, 100),
               'format': 'json',
               'fields': 'NCTId|InterventionType|InterventionName|LeadSponsorName'}
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', f'{CT_API_BASE}/studies', params=params)
             if resp.status_code != 200:
@@ -1114,7 +1172,7 @@ async def _uniprot_search(query_str: str, size: int = 5) -> List[dict]:
         'query': query_str, 'format': 'json', 'size': str(size),
         'fields': 'accession,protein_name,cc_subcellular_location,cc_function,protein_families,sequence',
     }
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', UNIPROT_URL, params=params, max_retries=2)
             resp.raise_for_status()
@@ -1131,6 +1189,7 @@ def _uniprot_pick(results: List[dict], gene: str) -> Optional[dict]:
 
 
 async def get_uniprot(gene: str, aliases: List[str] = None) -> Optional[dict]:
+    await _uniprot_limiter.acquire()
     if not gene:
         return None
     results = await _uniprot_search(f'gene:{gene} AND organism_id:9606', 5)
@@ -1183,6 +1242,7 @@ async def get_uniprot(gene: str, aliases: List[str] = None) -> Optional[dict]:
 
 
 async def get_pdb(gene: str, uniprot_acc: str = '') -> List[PDBEntry]:
+    await _pdb_limiter.acquire()
     if not gene and not uniprot_acc:
         return []
     try:
@@ -1209,7 +1269,7 @@ async def get_pdb(gene: str, uniprot_acc: str = '') -> List[PDBEntry]:
                 'paginate': {'start': 0, 'rows': 10},
             },
         }
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
             search_data = await _request_json(client, 'POST', RCSB_SEARCH_URL, json=body, max_retries=2)
             pdb_ids = [r['identifier'] for r in search_data.get('result_set', []) if r.get('identifier')]
             if not pdb_ids:
@@ -1241,10 +1301,11 @@ async def get_pdb(gene: str, uniprot_acc: str = '') -> List[PDBEntry]:
 
 
 async def get_alphafold(gene: str, uniprot_acc: str = '') -> List[AlphaFoldEntry]:
+    await _pdb_limiter.acquire()
     if not uniprot_acc and not gene:
         return []
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
             url = f'{ALPHAFOLD_URL}/uniprot/{uniprot_acc}' if uniprot_acc else f'{ALPHAFOLD_URL}/search?gene={gene}'
             resp = await _request_with_retry(client, 'GET', url, max_retries=2)
             if resp.status_code != 200:
@@ -1267,11 +1328,12 @@ async def get_alphafold(gene: str, uniprot_acc: str = '') -> List[AlphaFoldEntry
 
 
 async def get_hpa(gene: str) -> Optional[HPAData]:
+    await _hpa_limiter.acquire()
     if not gene:
         return None
     cols = 'g,gs,pc,up_mf,pe,rnacas,rnacss,prts,prtss,ab,relih,scl,scml,scal,secl,blconcms,ecblood'
     params = {'search': gene, 'format': 'json', 'columns': cols, 'compress': 'no'}
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', HPA_URL, params=params, max_retries=2)
             resp.raise_for_status()
@@ -1316,9 +1378,10 @@ async def get_hpa(gene: str) -> Optional[HPAData]:
 
 
 async def get_gtex(gene: str) -> List[GTExExpression]:
+    await _hpa_limiter.acquire()
     if not gene:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET',
                                              f'{GTEX_URL}/expression/geneExpression',
@@ -1351,9 +1414,10 @@ async def get_gtex(gene: str) -> List[GTExExpression]:
 
 
 async def get_chembl(name: str) -> List[MoleculeInfo]:
+    await _chembl_limiter.acquire()
     try:
         params = {'q': name, 'only_documented': 'true', 'limit': '5'}
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
             resp = await _request_with_retry(client, 'GET', CHEMBL_SEARCH_URL, params=params,
                                              headers={'Accept': 'application/json'}, max_retries=2)
             resp.raise_for_status()
@@ -1420,9 +1484,10 @@ async def get_chembl(name: str) -> List[MoleculeInfo]:
 
 
 async def get_string_interactions(gene: str) -> List[StringInteraction]:
+    await _hpa_limiter.acquire()
     if not gene:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             params = {
                 'identifiers': gene,
@@ -1451,9 +1516,10 @@ async def get_string_interactions(gene: str) -> List[StringInteraction]:
 
 
 async def get_pubchem(gene: str) -> List[PubChemCompound]:
+    await _pubchem_limiter.acquire()
     if not gene:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             url = f'{PUBCHEM_URL}/assay/type/JSON'
             params = {'list_return': 'True', 'gene': gene, 'maxRecords': 10}
@@ -1480,7 +1546,7 @@ async def get_pubchem(gene: str) -> List[PubChemCompound]:
 async def get_pubchem_compound_by_name(name: str) -> Optional[PubChemCompound]:
     if not name:
         return None
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             url = f'{PUBCHEM_URL}/compound/name/{quote(name)}/JSON'
             resp = await _request_with_retry(client, 'GET', url, max_retries=2)
@@ -1522,9 +1588,10 @@ async def get_pubchem_compound_by_name(name: str) -> Optional[PubChemCompound]:
 
 
 async def get_kegg_pathways(gene: str) -> List[KEGGPathway]:
+    await _kegg_limiter.acquire()
     if not gene:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             kegg_id = gene
             if not gene.startswith('hsa:'):
@@ -1571,9 +1638,10 @@ async def _kegg_gene_id(client: httpx.AsyncClient, gene: str) -> str:
 
 
 async def get_kegg_disease(gene: str) -> List[str]:
+    await _kegg_limiter.acquire()
     if not gene:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             kegg_id = await _kegg_gene_id(client, gene)
             if not kegg_id:
@@ -1594,9 +1662,10 @@ async def get_kegg_disease(gene: str) -> List[str]:
 
 
 async def get_kegg_drugs(gene: str) -> List[str]:
+    await _kegg_limiter.acquire()
     if not gene:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             kegg_id = await _kegg_gene_id(client, gene)
             if not kegg_id:
@@ -1620,9 +1689,10 @@ async def get_kegg_drugs(gene: str) -> List[str]:
 
 
 async def get_dgidb(gene: str) -> List[DGIdbInteraction]:
+    await _hpa_limiter.acquire()
     if not gene:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET',
                                              f'{DGIDB_URL}/interactions',
@@ -1648,6 +1718,7 @@ async def get_dgidb(gene: str) -> List[DGIdbInteraction]:
 
 
 async def get_clinpgx(gene: str) -> List[ClinPGxAssociation]:
+    await _clinpgx_limiter.acquire()
     """
     ClinPGx REST API v1 (api.clinpgx.org, 免 Key, 限速 ~2 req/s):
     GET /data/summaryAnnotation?location.genes.symbol=<gene>&view=max
@@ -1655,7 +1726,7 @@ async def get_clinpgx(gene: str) -> List[ClinPGxAssociation]:
     """
     if not gene:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(
                 client, 'GET', f'{CLINPGX_URL}/data/summaryAnnotation',
@@ -1711,6 +1782,7 @@ async def get_clinpgx(gene: str) -> List[ClinPGxAssociation]:
 
 
 async def get_clinvar(gene: str) -> List[ClinVarRecord]:
+    await _ncbi_limiter.acquire()
     if not gene:
         return []
     params = {
@@ -1721,7 +1793,7 @@ async def get_clinvar(gene: str) -> List[ClinVarRecord]:
     }
     if NCBI_API_KEY:
         params['api_key'] = NCBI_API_KEY
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET', CLINVAR_URL, params=params, max_retries=2)
             resp.raise_for_status()
@@ -1802,7 +1874,7 @@ async def uspto_search(target: str, key: str) -> List[dict]:
     safe = lambda t: t.replace('"', ' ').replace('\\', ' ')
     q_parts = [f'inventionTitle:({safe(t)})' for t in terms] + [f'({safe(t)})' for t in terms]
     q = ' OR '.join(q_parts) if q_parts else f'({safe(target)})'
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'GET',
                 'https://api.uspto.gov/api/v1/patent/applications/search',
@@ -1845,7 +1917,7 @@ async def lens_search(name: str, key: str) -> List[dict]:
         'query_value_1': name, 'size': 30,
         'include': ['title', 'publication_number', 'publication_date', 'assignee'],
     }
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'POST',
                 'https://api.lens.org/scholarly/search',
@@ -1995,7 +2067,7 @@ async def mcp_patent_details(patents: List[dict], tools, endpoint: str, key: str
             break
     if not detail_tool:
         return
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, headers={'User-Agent': DEFAULT_UA}) as client:
         for p in patents[:max_n]:
             num = _google_num(p.get('number', ''))
             if not num:
@@ -2169,7 +2241,7 @@ async def espacenet_search(target: str, key: str) -> List[dict]:
     parts = (key or '').split()
     if len(parts) < 2:
         return []
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             tr = await _request_with_retry(client, 'POST',
                 'https://auth.epo.org/oauth2/token',
@@ -2435,7 +2507,7 @@ async def drugfuture_cn_fulltext(application_no: str, progress_cb=None) -> str:
 async def mcp_patent_search(target: str, endpoint: str, key: str, tool_pref: str = '') -> dict:
     if not endpoint:
         raise ValueError('MCP endpoint required')
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, headers={'User-Agent': DEFAULT_UA}) as client:
         init = await _mcp_request(client, endpoint, key, {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
             'params': {'protocolVersion': '2025-06-18', 'capabilities': {}, 'clientInfo': {'name': 'TargetInfo', 'version': '1.0'}}})
         session = (init or {}).get('_sessionId')
@@ -2741,6 +2813,7 @@ LLM_PROMPTS = {
 }
 
 async def llm_chat(user: str, provider: str, api_key: str, model: str, system: str = '', base_url: str = '') -> str:
+    await _llm_limiter.acquire()
     if not api_key or not model:
         return ''
     p = LLM_PROVIDERS.get(provider, LLM_PROVIDERS['deepseek'])
@@ -2749,7 +2822,7 @@ async def llm_chat(user: str, provider: str, api_key: str, model: str, system: s
     body = {'model': model, 'messages': messages, 'temperature': 0.6, 'stream': False}
     if provider == 'zhipu':
         body['max_tokens'] = 4096
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=120, headers={'User-Agent': DEFAULT_UA}) as client:
         try:
             resp = await _request_with_retry(client, 'POST', f'{base}/chat/completions',
                 json=body, headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
@@ -2762,6 +2835,7 @@ async def llm_chat(user: str, provider: str, api_key: str, model: str, system: s
             return ''
 
 async def llm_json(user: str, provider: str, api_key: str, model: str, system: str = '', base_url: str = '') -> dict:
+    await _llm_limiter.acquire()
     if not api_key or not model:
         return {}
     p = LLM_PROVIDERS.get(provider, LLM_PROVIDERS['deepseek'])
@@ -2799,7 +2873,7 @@ async def llm_json(user: str, provider: str, api_key: str, model: str, system: s
         except Exception:
             return None
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=120, headers={'User-Agent': DEFAULT_UA}) as client:
         # Strategy 1: response_format json_object
         try:
             text = await _post({'model': model, 'messages': messages, 'temperature': 0.4,
@@ -2821,12 +2895,13 @@ async def llm_json(user: str, provider: str, api_key: str, model: str, system: s
         return {}
 
 async def llm_chat_with_search(user: str, provider: str, api_key: str, model: str, system: str = '', base_url: str = '') -> str:
+    await _llm_limiter.acquire()
     if not api_key or not model:
         return ''
     p = LLM_PROVIDERS.get(provider, LLM_PROVIDERS['deepseek'])
     base = base_url or p['base']
     messages = [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}] if system else [{'role': 'user', 'content': user}]
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=120, headers={'User-Agent': DEFAULT_UA}) as client:
         # Strategy 1: web_search param
         body = {'model': model, 'messages': messages, 'temperature': 0.5, 'stream': False, 'web_search': True}
         try:
@@ -3582,17 +3657,17 @@ def _ppt_set_bg(slide, color):
     slide.background.fill.fore_color.rgb = color
 
 
-def _ppt_header(slide, title):
+def _ppt_header(slide, title, icon=''):
     bar = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE, 0, 0, SLIDE_W, Inches(1.1))
     bar.fill.solid()
-    bar.fill.fore_color.rgb = DARK_BLUE
+    bar.fill.fore_color.rgb = MID_BLUE
     bar.line.fill.background()
     tb = slide.shapes.add_textbox(
         Inches(0.8), Inches(0.15), Inches(11), Inches(0.8))
     tb.text_frame.word_wrap = True
     p = tb.text_frame.paragraphs[0]
-    p.text = title
+    p.text = (icon + ' ' + title) if icon else title
     p.font.name = FONT_NAME
     p.font.size = Pt(28)
     p.font.bold = True
@@ -3600,11 +3675,14 @@ def _ppt_header(slide, title):
 
 
 def _ppt_footer(slide):
-    bar = slide.shapes.add_shape(
-        MSO_SHAPE.RECTANGLE, 0, Inches(7.0), SLIDE_W, Inches(0.5))
-    bar.fill.solid()
-    bar.fill.fore_color.rgb = DARK_BLUE
-    bar.line.fill.background()
+    tb = slide.shapes.add_textbox(
+        Inches(0.5), Inches(6.9), Inches(12.3), Inches(0.4))
+    p = tb.text_frame.paragraphs[0]
+    p.text = 'TargetInfo 靶点调研报告生成器 · ' + datetime.now().strftime('%Y-%m-%d %H:%M')
+    p.font.name = FONT_NAME
+    p.font.size = Pt(10)
+    p.font.color.rgb = MED_GRAY
+    p.alignment = PP_ALIGN.CENTER
 
 
 def _ppt_add_table(slide, left, top, width, height, headers, rows):
@@ -3634,191 +3712,400 @@ def _ppt_add_table(slide, left, top, width, height, headers, rows):
 
 
 def generate_ppt(report: ReportContent) -> bytes:
+    """按 target.html 的 PPT 导出逻辑重写，对齐结构/样式/内容。"""
     prs = Presentation()
     prs.slide_width = SLIDE_W
     prs.slide_height = SLIDE_H
 
+    def _count_year(papers):
+        m = {}
+        for p in papers:
+            y = getattr(p, 'year', '') or ''
+            if y and len(y) == 4 and y.isdigit(): m[y] = m.get(y, 0) + 1
+        return m
+    def _count_phase(trials):
+        m = {}
+        for t in trials:
+            k = getattr(t, 'phase', '') or '未明确'
+            m[k] = m.get(k, 0) + 1
+        return m
+
+    # ── Slide 1: 封面 ──────────────────────────────────────────
     s = prs.slides.add_slide(prs.slide_layouts[6])
     _ppt_set_bg(s, DARK_BLUE)
-    tb = s.shapes.add_textbox(Inches(1), Inches(1.5), Inches(11), Inches(1.5))
+    # 标题
+    tb = s.shapes.add_textbox(Inches(1), Inches(1.5), Inches(11), Inches(1.0))
     tb.text_frame.word_wrap = True
     p = tb.text_frame.paragraphs[0]
-    p.text = '靶点调研报告' + NL2 + str(report.target_name).upper()
-    p.font.name = FONT_NAME; p.font.size = Pt(40); p.font.bold = True
+    p.text = '靶点调研报告'
+    p.font.name = FONT_NAME; p.font.size = Pt(44); p.font.bold = True
     p.font.color.rgb = WHITE_COLOR; p.alignment = PP_ALIGN.CENTER
-    tb2 = s.shapes.add_textbox(Inches(1), Inches(4.0), Inches(11), Inches(0.5))
-    tb2.text_frame.paragraphs[0].text = '生成日期: ' + datetime.now().strftime('%Y-%m-%d')
-    tb2.text_frame.paragraphs[0].font.name = FONT_NAME
-    tb2.text_frame.paragraphs[0].font.size = Pt(14)
-    tb2.text_frame.paragraphs[0].font.color.rgb = LIGHT_BLUE
-    tb2.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+    # 靶点名
+    tb2 = s.shapes.add_textbox(Inches(1), Inches(2.8), Inches(11), Inches(0.9))
+    p2 = tb2.text_frame.paragraphs[0]
+    p2.text = str(report.target_name).upper()
+    p2.font.name = FONT_NAME; p2.font.size = Pt(36); p2.font.bold = True
+    p2.font.color.rgb = PPT_RGBColor(0x5D, 0xAD, 0xE2); p2.alignment = PP_ALIGN.CENTER
+    # 装饰线
+    line = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(3.5), Inches(4.0), Inches(3), Inches(0.04))
+    line.fill.solid(); line.fill.fore_color.rgb = MID_BLUE; line.line.fill.background()
+    # 日期
+    tb3 = s.shapes.add_textbox(Inches(1), Inches(4.3), Inches(11), Inches(0.5))
+    p3 = tb3.text_frame.paragraphs[0]
+    p3.text = datetime.now().strftime('%Y-%m-%d %H:%M')
+    p3.font.name = FONT_NAME; p3.font.size = Pt(14)
+    p3.font.color.rgb = MED_GRAY; p3.alignment = PP_ALIGN.CENTER
+    # 数据来源
+    tb4 = s.shapes.add_textbox(Inches(1), Inches(4.8), Inches(11), Inches(0.5))
+    p4 = tb4.text_frame.paragraphs[0]
+    p4.text = '数据来源: PubMed · ClinicalTrials.gov · Open Targets · USPTO · ChEMBL · HPA · ClinPGx · Google Patents · Espacenet'
+    p4.font.name = FONT_NAME; p4.font.size = Pt(11)
+    p4.font.color.rgb = MED_GRAY; p4.alignment = PP_ALIGN.CENTER
 
+    # ── Slide 2: 靶点概述 ─────────────────────────────────────
     s = prs.slides.add_slide(prs.slide_layouts[6])
-    _ppt_header(s, '靶点概述'); _ppt_footer(s)
-    if report.target_overview:
-        tb = s.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(11.5), Inches(5.5))
+    _ppt_header(s, '靶点概述与背景', '\U0001f9ec'); _ppt_footer(s)
+    d = report.target_detail
+    if d and d.gene_symbol:
+        info = []
+        info.append('基因符号: ' + d.gene_symbol)
+        if d.uniprot_id: info.append('UniProt: ' + d.uniprot_id)
+        if report.mutation: info.append('突变: ' + report.mutation)
+        if d.protein_class: info.append('蛋白类别: ' + d.protein_class)
+        if d.protein_name: info.append('蛋白全名: ' + d.protein_name)
+        if d.synonyms: info.append('别名: ' + ', '.join(d.synonyms[:8]))
+        if d.description: info.append('功能描述: ' + d.description)
+        if d.subcellular: info.append('亚细胞定位: ' + d.subcellular)
+        if d.protein_families: info.append('蛋白家族: ' + d.protein_families)
+        if d.tractability: info.append('成药性: ' + ', '.join(d.tractability[:5]))
+        if d.related_diseases: info.append('相关疾病: ' + ', '.join(d.related_diseases[:8]))
+        if d.sequence:
+            info.append('氨基酸序列 (' + str(d.sequence_length or len(d.sequence)) + ' aa):')
+        tb = s.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(4.5))
         tb.text_frame.word_wrap = True
-        tb.text_frame.paragraphs[0].text = report.target_overview[:800]
+        for i, line in enumerate(info):
+            para = tb.text_frame.paragraphs[0] if i == 0 else tb.text_frame.add_paragraph()
+            para.text = line
+            para.font.name = FONT_NAME; para.font.size = Pt(12)
+            para.font.color.rgb = DARK_GRAY
+        # 序列（单独 Courier 字体）
+        if d.sequence:
+            seq = d.sequence
+            para = tb.text_frame.add_paragraph()
+            para.text = seq[:120] + ('...' if len(seq) > 120 else '')
+            para.font.name = 'Courier New'; para.font.size = Pt(9)
+            para.font.color.rgb = MED_GRAY
+    elif report.target_overview:
+        tb = s.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(5.5))
+        tb.text_frame.word_wrap = True
+        tb.text_frame.paragraphs[0].text = report.target_overview
         tb.text_frame.paragraphs[0].font.name = FONT_NAME
         tb.text_frame.paragraphs[0].font.size = Pt(13)
         tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
 
-    if report.target_detail and report.target_detail.sequence:
+    # ── Slide 3: HPA 表达谱 ───────────────────────────────────
+    if d and d.hpa:
         s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, '蛋白序列 (FASTA)'); _ppt_footer(s)
-        tb = s.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(11.5), Inches(5.5))
-        tb.text_frame.word_wrap = True
-        seq = report.target_detail.sequence
-        tb.text_frame.paragraphs[0].text = '>' + (report.target_detail.gene_symbol or str(report.target_name).upper()) + '|' + report.target_detail.uniprot_id + ' length=' + str(report.target_detail.sequence_length or len(seq))
-        tb.text_frame.paragraphs[0].font.name = FONT_NAME
-        tb.text_frame.paragraphs[0].font.size = Pt(11)
-        for j in range(0, len(seq), 80):
-            para = tb.text_frame.add_paragraph()
-            para.text = seq[j:j + 80]
-            para.font.name = FONT_NAME; para.font.size = Pt(11)
+        _ppt_header(s, '表达谱与抗体可及性', '\U0001f9ec'); _ppt_footer(s)
+        hpa = d.hpa
+        rows = []
+        if hpa.protein_tissue: rows.append(['蛋白组织特异', hpa.protein_tissue + (' score ' + hpa.protein_tissue_score if hpa.protein_tissue_score else '')])
+        if hpa.rna_cancer: rows.append(['癌中RNA特异', hpa.rna_cancer + (' score ' + hpa.rna_cancer_score if hpa.rna_cancer_score else '')])
+        if hpa.sub_main or hpa.subcell: rows.append(['亚细胞定位', hpa.sub_main or hpa.subcell])
+        if hpa.secretome: rows.append(['分泌(Secretome)', hpa.secretome])
+        if hpa.blood_c or hpa.blood_cl: rows.append(['血浆/血液', hpa.blood_c or hpa.blood_cl])
+        if hpa.antibody_n: rows.append(['可用验证抗体', str(hpa.antibody_n) + '个' + (' · ' + hpa.antibody_reliab if hpa.antibody_reliab else '')])
+        if rows:
+            _ppt_add_table(s, Inches(0.5), Inches(1.4), Inches(12.3), Inches(5.0), ['属性', '数值'], rows)
 
-    td = report.target_detail
-    if td and td.clinpgx:
+    # ── Slide 3b: PDB 结构 ────────────────────────────────────
+    if d and d.pdb:
         s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, 'ClinPGx 药物基因组关联'); _ppt_footer(s)
+        _ppt_header(s, '蛋白质3D结构（PDB）', '\U0001f52c'); _ppt_footer(s)
+        hd = ['PDB ID', '标题', '方法', '分辨率', '年份']
+        r = [[s.pdb_id, (s.title or '')[:50], s.method or '—', s.resolution or '—', s.year or '—'] for s in d.pdb[:5]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.3), Inches(12.3), Inches(4.0), hd, r)
+
+    # ── Slide 3c: ClinPGx ─────────────────────────────────────
+    if d and d.clinpgx:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'ClinPGx 药物基因组关联', '\U0001f9ec'); _ppt_footer(s)
         hd = ['药物', '证据级别', '疾病', '类型']
-        r = [[a.drug_name, a.level, a.disease, a.association_type] for a in td.clinpgx[:10]]
-        _ppt_add_table(s, Inches(0.3), Inches(1.4), Inches(12.5), Inches(5.0), hd, r)
-        if td.clinpgx[0].evidence:
-            tb = s.shapes.add_textbox(Inches(0.5), Inches(6.2), Inches(12.3), Inches(0.9))
-            tb.text_frame.word_wrap = True
-            tb.text_frame.paragraphs[0].text = '示例证据: ' + td.clinpgx[0].evidence[:180]
+        r = [[a.drug_name, a.level, a.disease, a.association_type] for a in d.clinpgx[:10]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.3), Inches(12.3), Inches(5.0), hd, r)
+
+    # ── Slide 3d: ClinVar 临床变异 ────────────────────────────
+    if d and d.clinvar:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'ClinVar 临床变异', '\U0001f9ea'); _ppt_footer(s)
+        hd = ['RCV', '临床意义', '疾病', '审核状态']
+        r = [[c.rcv_id or '', c.clinical_significance or '', (c.condition or '')[:40], c.review_status or ''] for c in d.clinvar[:12]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.3), Inches(12.3), Inches(5.0), hd, r)
+
+    # ── Slide 3e: GTEx 组织表达 ───────────────────────────────
+    if d and d.gtex:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'GTEx 组织表达', '\U0001f9ec'); _ppt_footer(s)
+        hd = ['组织', '中位TPM']
+        r = [[g.tissue or '', str(g.median_tpm)] for g in d.gtex[:15]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.3), Inches(12.3), Inches(5.0), hd, r)
+
+    # ── Slide 3f: STRING 蛋白互作 ─────────────────────────────
+    if d and d.string_interactions:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'STRING 蛋白互作', '\U0001f9ec'); _ppt_footer(s)
+        hd = ['蛋白ID', '名称', '评分']
+        r = [[s.protein_id or '', s.preferred_name or '', str(s.score)] for s in d.string_interactions[:15]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.3), Inches(12.3), Inches(5.0), hd, r)
+
+    # ── Slide 3g: AlphaFold 结构 ──────────────────────────────
+    if d and d.alphafold:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'AlphaFold 预测结构', '\U0001f52c'); _ppt_footer(s)
+        hd = ['UniProt', '置信度', 'PDB链接']
+        r = [[a.uniprot_acc or '', str(a.confidence), a.pdb_url or ''] for a in d.alphafold[:5]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.3), Inches(12.3), Inches(4.0), hd, r)
+
+    # ── Slide 3h: PubChem 活性分子 ────────────────────────────
+    if d and d.pubchem:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'PubChem 活性分子', '\U0001f9ec'); _ppt_footer(s)
+        hd = ['CID', '名称', '分子式', 'MW', 'LogP']
+        r = [[str(c.cid), (c.name or '')[:30], c.formula or '', str(c.molecular_weight), str(c.logp)] for c in d.pubchem[:12]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.3), Inches(12.3), Inches(5.0), hd, r)
+
+    # ── Slide 3i: KEGG 通路/疾病/药物 ─────────────────────────
+    if d and (d.kegg_pathways or d.kegg_disease or d.kegg_drugs):
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'KEGG 通路与关联', '\U0001f9ec'); _ppt_footer(s)
+        y_off = Inches(1.3)
+        if d.kegg_pathways:
+            tb = s.shapes.add_textbox(Inches(0.5), y_off, Inches(12), Inches(0.3))
+            tb.text_frame.paragraphs[0].text = 'KEGG 通路'
+            tb.text_frame.paragraphs[0].font.name = FONT_NAME
+            tb.text_frame.paragraphs[0].font.size = Pt(11)
+            tb.text_frame.paragraphs[0].font.bold = True
+            y_off += Inches(0.35)
+            hd = ['ID', '通路名称']
+            r = [[k.kegg_id, (k.name or '')[:60]] for k in d.kegg_pathways[:10]]
+            _ppt_add_table(s, Inches(0.5), y_off, Inches(12.3), Inches(2.0), hd, r)
+            y_off += Inches(2.2)
+        if d.kegg_disease:
+            tb = s.shapes.add_textbox(Inches(0.5), y_off, Inches(12), Inches(0.3))
+            tb.text_frame.paragraphs[0].text = 'KEGG 疾病: ' + ', '.join(d.kegg_disease[:8])
             tb.text_frame.paragraphs[0].font.name = FONT_NAME
             tb.text_frame.paragraphs[0].font.size = Pt(10)
-            tb.text_frame.paragraphs[0].font.color.rgb = MED_GRAY
+            y_off += Inches(0.35)
+        if d.kegg_drugs:
+            tb = s.shapes.add_textbox(Inches(0.5), y_off, Inches(12), Inches(0.3))
+            tb.text_frame.paragraphs[0].text = 'KEGG 药物: ' + ', '.join(d.kegg_drugs[:8])
+            tb.text_frame.paragraphs[0].font.name = FONT_NAME
+            tb.text_frame.paragraphs[0].font.size = Pt(10)
 
+    # ── Slide 4: 研究进展 ─────────────────────────────────────
     if report.research_progress or report.papers:
         s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, '研究进展')
+        _ppt_header(s, '研究进展', '\U0001f4c8'); _ppt_footer(s)
         if report.research_progress:
-            tb = s.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(11.5), Inches(1.5))
-            tb.text_frame.paragraphs[0].text = report.research_progress[:300]
+            tb = s.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(1.5))
+            tb.text_frame.word_wrap = True
+            tb.text_frame.paragraphs[0].text = report.research_progress
             tb.text_frame.paragraphs[0].font.name = FONT_NAME
             tb.text_frame.paragraphs[0].font.size = Pt(13)
-        if report.papers:
-            hd = ['#', '标题', '期刊', '年份']
-            r = [[str(i+1), (p.title or '')[:60], (p.journal or '')[:25], p.year or '']
-                 for i, p in enumerate(report.papers[:10])]
-            _ppt_add_table(s, Inches(0.5), Inches(3.0), Inches(12.3), Inches(3.5), hd, r)
-        _ppt_footer(s)
+            tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
+        # 年份分布
+        yc = _count_year(report.papers) if report.papers else {}
+        if yc:
+            yrs = sorted(yc.keys())
+            tb2 = s.shapes.add_textbox(Inches(0.5), Inches(2.8), Inches(4), Inches(0.4))
+            tb2.text_frame.paragraphs[0].text = '文献年份分布（共 ' + str(len(report.papers)) + ' 篇）'
+            tb2.text_frame.paragraphs[0].font.name = FONT_NAME
+            tb2.text_frame.paragraphs[0].font.size = Pt(12)
+            tb2.text_frame.paragraphs[0].font.bold = True
+            bar_rows = [['年份', '数量']] + [[y, str(yc[y])] for y in yrs[-10:]]
+            _ppt_add_table(s, Inches(0.5), Inches(3.3), Inches(4), Inches(2.5), bar_rows[0], bar_rows[1:])
 
-    if report.key_findings:
+    # ── Slide 5: 核心文献 ─────────────────────────────────────
+    if report.papers:
         s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, '核心文献发现'); _ppt_footer(s)
-        tb = s.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(11.5), Inches(5.5))
-        tb.text_frame.word_wrap = True
-        tb.text_frame.paragraphs[0].text = report.key_findings[:900]
-        tb.text_frame.paragraphs[0].font.name = FONT_NAME
-        tb.text_frame.paragraphs[0].font.size = Pt(13)
-        tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
+        _ppt_header(s, '核心文献', '\U0001f4da'); _ppt_footer(s)
+        if report.key_findings:
+            tb = s.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(2.0))
+            tb.text_frame.word_wrap = True
+            tb.text_frame.paragraphs[0].text = report.key_findings
+            tb.text_frame.paragraphs[0].font.name = FONT_NAME
+            tb.text_frame.paragraphs[0].font.size = Pt(11)
+            tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
+        top = sorted(report.papers, key=lambda x: x.year or '0', reverse=True)[:8]
+        hd = ['序号', '标题', '期刊', '年份']
+        r = [[str(i + 1), (p.title or '')[:60], (p.journal or '')[:25], p.year or ''] for i, p in enumerate(top)]
+        _ppt_add_table(s, Inches(0.3), Inches(3.3), Inches(9.4), Inches(3.2), hd, r)
 
+    # ── Slide 6: 临床试验 ─────────────────────────────────────
     if report.trials:
         s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, '临床试验')
-        y_off = Inches(1.4)
+        _ppt_header(s, '临床试验概况', '\U0001f9ea'); _ppt_footer(s)
         if report.clinical_landscape:
-            tb = s.shapes.add_textbox(Inches(0.7), Inches(1.2), Inches(11.9), Inches(1.3))
+            tb = s.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(1.5))
             tb.text_frame.word_wrap = True
-            tb.text_frame.paragraphs[0].text = report.clinical_landscape[:260]
+            tb.text_frame.paragraphs[0].text = report.clinical_landscape
             tb.text_frame.paragraphs[0].font.name = FONT_NAME
-            tb.text_frame.paragraphs[0].font.size = Pt(11)
-            y_off = Inches(2.7)
+            tb.text_frame.paragraphs[0].font.size = Pt(12)
+            tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
+        # 阶段分布
+        ph = _count_phase(report.trials)
+        if ph:
+            ph_rows = [['阶段', '数量']] + [[k, str(ph[k])] for k in ph]
+            _ppt_add_table(s, Inches(0.5), Inches(2.8), Inches(4), Inches(2.0), ph_rows[0], ph_rows[1:])
+        # 试验表
         hd = ['NCT', '标题', '阶段', '状态']
-        r = [[t.nct_id or '', (t.title or '')[:50], t.phase or '', t.status or '']
-             for t in report.trials[:12]]
-        _ppt_add_table(s, Inches(0.5), y_off, Inches(12.3), Inches(5.0), hd, r)
-        _ppt_footer(s)
+        r = [[t.nct_id or '', (t.title or '')[:50], t.phase or '', t.status or ''] for t in report.trials[:10]]
+        _ppt_add_table(s, Inches(5), Inches(2.8), Inches(4.8), Inches(3.5), hd, r)
 
+    # ── Slide 7: 药物管线 ─────────────────────────────────────
     if report.drugs:
         s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, '药物管线')
-        hd = ['药物', '公司', '阶段', '机制']
+        _ppt_header(s, '药物研发管线', '\U0001f48a'); _ppt_footer(s)
+        if report.future_outlook:
+            tb = s.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(1.2))
+            tb.text_frame.word_wrap = True
+            tb.text_frame.paragraphs[0].text = report.future_outlook
+            tb.text_frame.paragraphs[0].font.name = FONT_NAME
+            tb.text_frame.paragraphs[0].font.size = Pt(12)
+            tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
+        hd = ['药物', '公司', '阶段', '机制', '适应症']
         r = [[d.name or '', (d.company or '')[:20], d.phase or '',
-              (d.mechanism_of_action or '')[:35]] for d in report.drugs[:12]]
-        _ppt_add_table(s, Inches(0.5), Inches(1.4), Inches(12.3), Inches(5.0), hd, r)
-        _ppt_footer(s)
+              (d.mechanism_of_action or '')[:40], d.disease or ''] for d in report.drugs[:12]]
+        _ppt_add_table(s, Inches(0.3), Inches(2.6), Inches(9.4), Inches(3.8), hd, r)
 
-    if report.molecules:
+    # ── Slide 7b: DGIdb 药物-基因互作 ─────────────────────────
+    if d and d.dgidb:
         s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, '靶向活性分子')
-        hd = ['分子', 'ChEMBL ID', 'pChEMBL', '活性']
-        r = [[m.name or '', m.chembl or '', m.pchembl or '',
-              (m.best_type or '') + ' ' + (m.best_val or '')] for m in report.molecules[:12]]
-        _ppt_add_table(s, Inches(0.5), Inches(1.4), Inches(12.3), Inches(5.0), hd, r)
-        _ppt_footer(s)
+        _ppt_header(s, 'DGIdb 药物-基因互作', '\U0001f48a'); _ppt_footer(s)
+        hd = ['药物', '互作类型', '来源']
+        r = [[(g.drug_name or '')[:30], g.interaction_type or '', ', '.join(g.sources[:3])] for g in d.dgidb[:12]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.3), Inches(12.3), Inches(5.0), hd, r)
 
-    if report.web_summary:
-        s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, 'AI 综合情报研判')
-        tb = s.shapes.add_textbox(Inches(0.8), Inches(1.4), Inches(11.5), Inches(5.5))
-        tb.text_frame.paragraphs[0].text = report.web_summary[:1200]
-        tb.text_frame.paragraphs[0].font.name = FONT_NAME
-        tb.text_frame.paragraphs[0].font.size = Pt(13)
-        tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
-        _ppt_footer(s)
-
+    # ── Slide 8: 专利调研 ─────────────────────────────────────
     if report.patents:
         s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, '专利调研')
+        _ppt_header(s, '专利调研', '\U0001f4dc'); _ppt_footer(s)
         if report.patent_landscape:
-            tb = s.shapes.add_textbox(Inches(0.7), Inches(1.3), Inches(11.9), Inches(2.0))
-            tb.text_frame.paragraphs[0].text = report.patent_landscape[:400]
+            # 黄色 AI 框
+            shape = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(1.2), Inches(9), Inches(2.5))
+            shape.fill.solid(); shape.fill.fore_color.rgb = PPT_RGBColor(0xFF, 0xFB, 0xE6)
+            shape.line.color.rgb = PPT_RGBColor(0xF1, 0xC4, 0x0F); shape.line.width = Pt(2)
+            tb = s.shapes.add_textbox(Inches(0.7), Inches(1.3), Inches(8.6), Inches(2.3))
+            tb.text_frame.word_wrap = True
+            tb.text_frame.paragraphs[0].text = report.patent_landscape
             tb.text_frame.paragraphs[0].font.name = FONT_NAME
             tb.text_frame.paragraphs[0].font.size = Pt(11)
-            y_off = Inches(3.5)
+            tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
+            y_off = Inches(3.9)
         else:
             y_off = Inches(1.4)
         hd = ['专利号', '标题', '申请人', '年份']
-        r = [[(p.number or '') + (' (引' + str(p.cited_by) + ')' if p.cited_by else ''),
-              (p.title or '')[:45], (p.assignee or '')[:20], p.year or '']
-             for p in report.patents[:10]]
-        _ppt_add_table(s, Inches(0.5), y_off, Inches(12.3), Inches(3.5), hd, r)
-        _ppt_footer(s)
-
-    if report.patents:
-        s = prs.slides.add_slide(prs.slide_layouts[6])
-        _ppt_header(s, '专利详情')
-        hd = ['专利号', '申请号', '法律状态', '被引', '权利要求', 'CPC']
         r = []
-        for p in report.patents[:8]:
-            r.append([p.number or '', (p.application_no or '')[:20], (p.detail_legal or '')[:15],
-                      str(p.cited_by or ''), str(p.claims or ''),
-                      ', '.join(p.cpc[:3])[:24]])
-        if r:
-            _ppt_add_table(s, Inches(0.3), Inches(1.4), Inches(12.5), Inches(5.0), hd, r)
-        if report.patent_insight:
-            tb = s.shapes.add_textbox(Inches(0.5), Inches(6.2), Inches(12.3), Inches(0.9))
-            tb.text_frame.word_wrap = True
-            tb.text_frame.paragraphs[0].text = '申请人布局: ' + str(report.patent_insight)[:200]
-            tb.text_frame.paragraphs[0].font.name = FONT_NAME
-            tb.text_frame.paragraphs[0].font.size = Pt(10)
-            tb.text_frame.paragraphs[0].font.color.rgb = MED_GRAY
-        _ppt_footer(s)
+        for p in report.patents[:12]:
+            bits = []
+            if p.detail_legal: bits.append(p.detail_legal)
+            if p.cited_by: bits.append('被引' + str(p.cited_by))
+            if p.claims: bits.append('约' + str(p.claims) + '权利要求')
+            title_txt = (p.title or '')[:40]
+            if bits: title_txt += '\n' + ', '.join(bits)
+            r.append([p.number or '', title_txt, (p.assignee or '')[:25], p.year or ''])
+        _ppt_add_table(s, Inches(0.3), y_off, Inches(9.4), Inches(3.4), hd, r)
+        # patentInsight 申请人布局
+        if report.patent_insight and hasattr(report.patent_insight, 'assignees') and report.patent_insight.assignees:
+            entries = [(a, ps) for a, ps in report.patent_insight.assignees.items() if ps]
+            if entries:
+                tb = s.shapes.add_textbox(Inches(0.5), Inches(6.2), Inches(9.4), Inches(0.8))
+                tb.text_frame.word_wrap = True
+                lines = []
+                for assignee, plist in entries[:4]:
+                    lines.append(assignee + ': ' + str(len(plist)) + '件')
+                tb.text_frame.paragraphs[0].text = '申请人布局: ' + ' | '.join(lines)
+                tb.text_frame.paragraphs[0].font.name = FONT_NAME
+                tb.text_frame.paragraphs[0].font.size = Pt(10)
+                tb.text_frame.paragraphs[0].font.color.rgb = MED_GRAY
 
+    # ── Slide 9: AI 综合情报研判 ──────────────────────────────
+    if report.web_summary:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, 'AI 综合情报研判', '\U0001f9e0'); _ppt_footer(s)
+        shape = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(1.2), Inches(9), Inches(5.0))
+        shape.fill.solid(); shape.fill.fore_color.rgb = PPT_RGBColor(0xFF, 0xFB, 0xE6)
+        shape.line.color.rgb = PPT_RGBColor(0xF1, 0xC4, 0x0F); shape.line.width = Pt(2)
+        tb = s.shapes.add_textbox(Inches(0.7), Inches(1.3), Inches(8.6), Inches(4.8))
+        tb.text_frame.word_wrap = True
+        tb.text_frame.paragraphs[0].text = report.web_summary
+        tb.text_frame.paragraphs[0].font.name = FONT_NAME
+        tb.text_frame.paragraphs[0].font.size = Pt(12)
+        tb.text_frame.paragraphs[0].font.color.rgb = DARK_GRAY
+
+    # ── Slide 10: 靶向活性分子 ───────────────────────────────
+    if report.molecules:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, '靶向活性分子（ChEMBL）', '\U0001f52c'); _ppt_footer(s)
+        tb = s.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(0.4))
+        tb.text_frame.paragraphs[0].text = '来自 ChEMBL 的高活性化合物线索（pChEMBL 为活性指数，越大活性越强）'
+        tb.text_frame.paragraphs[0].font.name = FONT_NAME
+        tb.text_frame.paragraphs[0].font.size = Pt(10)
+        tb.text_frame.paragraphs[0].font.color.rgb = MED_GRAY
+        hd = ['分子/化合物', 'ChEMBL ID', 'pChEMBL']
+        r = [[m.name or '', m.chembl or '', m.pchembl or ''] for m in report.molecules[:15]]
+        _ppt_add_table(s, Inches(0.5), Inches(1.8), Inches(9), Inches(4.5), hd, r)
+
+    # ── Slide 11: 数据来源与致谢 ──────────────────────────────
     s = prs.slides.add_slide(prs.slide_layouts[6])
-    _ppt_header(s, '数据来源')
-    sources = [
-        '文献: PubMed | OpenAlex | Semantic Scholar',
-        '临床试验: ClinicalTrials.gov | ISRCTN | ChiCTR',
-        '靶点: Open Targets | UniProt | ClinVar | ClinPGx',
-        '蛋白: PDB | AlphaFold | STRING',
-        '表达: Human Protein Atlas | GTEx',
-        '药物: Open Targets | ChEMBL | PubChem | KEGG',
-        '专利: Google Patents | Patent9 | drugfuture | USPTO | Lens.org | Espacenet | MCP',
-        'AI: DeepSeek | 小米MiMo | 智谱GLM | 自定义',
+    _ppt_header(s, '数据来源与致谢', '\U0001f4cb'); _ppt_footer(s)
+    sources_data = [
+        ('文献检索：', 'PubMed (NCBI)'),
+        ('临床试验：', 'ClinicalTrials.gov (v2 API)'),
+        ('靶点信息：', 'Open Targets Platform (GraphQL) + UniProt + Human Protein Atlas + ClinPGx'),
+        ('蛋白质结构：', 'PDB (RCSB)'),
+        ('药物管线：', 'Open Targets Drug & Clinical Candidates'),
+        ('活性分子：', 'ChEMBL (EBI)'),
+        ('专利数据：', 'Google Patents(免Key) / USPTO / Lens.org / Espacenet(EPO) / MCP'),
+        ('AI 分析：', 'DeepSeek / 小米MiMo / 智谱GLM / 自定义兼容接口'),
     ]
-    tb = s.shapes.add_textbox(Inches(0.8), Inches(1.5), Inches(11.5), Inches(5.0))
-    for i, src in enumerate(sources):
+    tb = s.shapes.add_textbox(Inches(0.5), Inches(1.3), Inches(9), Inches(4.5))
+    for i, (label, value) in enumerate(sources_data):
         para = tb.text_frame.paragraphs[0] if i == 0 else tb.text_frame.add_paragraph()
-        para.text = '\u25b8 ' + src
-        para.font.name = FONT_NAME; para.font.size = Pt(14)
-        para.font.color.rgb = DARK_BLUE; para.space_after = Pt(8)
-    _ppt_footer(s)
+        run1 = para.add_run()
+        run1.text = label; run1.font.name = FONT_NAME; run1.font.size = Pt(12)
+        run1.font.bold = True; run1.font.color.rgb = DARK_GRAY
+        run2 = para.add_run()
+        run2.text = value + '\n'; run2.font.name = FONT_NAME; run2.font.size = Pt(12)
+        run2.font.color.rgb = DARK_GRAY
+    # 致谢
+    para = tb.text_frame.add_paragraph()
+    para.text = '\n报告由 TargetInfo 靶点调研报告生成器 自动生成'
+    para.font.name = FONT_NAME; para.font.size = Pt(12)
+    para.font.bold = True; para.font.color.rgb = MID_BLUE
+
+    # ── Slide 11b: 引用来源 ──────────────────────────────────
+    if report.citations:
+        s = prs.slides.add_slide(prs.slide_layouts[6])
+        _ppt_header(s, '引用来源', '\U0001f4da'); _ppt_footer(s)
+        field_map = {'target_overview': '靶点概述', 'research_progress': '研究进展',
+                     'clinical_landscape': '临床概况', 'key_findings': '核心文献',
+                     'future_outlook': '药物展望', 'web_summary': 'AI 综合研判',
+                     'patent_landscape': '专利调研'}
+        tb = s.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(5.2))
+        first = True
+        for field, refs in report.citations.items():
+            if not refs: continue
+            label = field_map.get(field, field)
+            para = tb.text_frame.paragraphs[0] if first else tb.text_frame.add_paragraph()
+            first = False
+            run1 = para.add_run()
+            run1.text = label + '：'; run1.font.name = FONT_NAME; run1.font.size = Pt(11)
+            run1.font.bold = True; run1.font.color.rgb = DARK_GRAY
+            run2 = para.add_run()
+            run2.text = '；'.join(str(x) for x in refs[:12]) + '\n'
+            run2.font.name = FONT_NAME; run2.font.size = Pt(9)
+            run2.font.color.rgb = DARK_GRAY
 
     buf = io.BytesIO()
     prs.save(buf)
@@ -3830,164 +4117,353 @@ def generate_ppt(report: ReportContent) -> bytes:
 
 
 def generate_docx(report: ReportContent) -> bytes:
+    """按 target.html 的 Word 导出逻辑重写，对齐结构/样式/内容。"""
     doc = Document()
     style = doc.styles['Normal']
     style.font.name = 'Microsoft YaHei'
-    style.font.size = Pt(10.5)
+    style.font.size = Pt(11)
     style.paragraph_format.space_after = Pt(4)
+    style.paragraph_format.line_spacing = 1.6
+    # 页边距
+    for section in doc.sections:
+        section.top_margin = Cm(2); section.bottom_margin = Cm(2)
+        section.left_margin = Cm(2); section.right_margin = Cm(2)
 
+    # ── 辅助函数 ──────────────────────────────────────────────────
     def add_h(text, level=1):
         h = doc.add_heading(text, level=level)
-        for run in h.runs: run.font.name = 'Microsoft YaHei'
+        for run in h.runs:
+            run.font.name = 'Microsoft YaHei'
+            run.font.color.rgb = RGBColor(0x1B, 0x4F, 0x72) if level == 1 else RGBColor(0x2E, 0x86, 0xC1)
 
-    def add_p(text, bold=False, size=None):
+    def add_p(text, bold=False, size=None, color=None, italic=False):
         p = doc.add_paragraph()
-        r = p.add_run(text); r.bold = bold
-        r.font.name = 'Microsoft YaHei'
+        r = p.add_run(str(text))
+        r.bold = bold; r.font.name = 'Microsoft YaHei'
         if size: r.font.size = Pt(size)
+        if color: r.font.color.rgb = color
+        if italic: r.italic = True
+        return p
 
-    def add_tbl(headers, rows):
+    def add_hyperlink(paragraph, text, url):
+        """在段落中插入超链接。"""
+        part = paragraph.part
+        r_id = part.relate_to(url, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink', is_external=True)
+        hyperlink = OxmlElement('w:hyperlink')
+        hyperlink.set(qn('r:id'), r_id)
+        new_run = OxmlElement('w:r')
+        rPr = OxmlElement('w:rPr')
+        c = OxmlElement('w:color')
+        c.set(qn('w:val'), '2E86C1')
+        rPr.append(c)
+        u = OxmlElement('w:u')
+        u.set(qn('w:val'), 'single')
+        rPr.append(u)
+        sz = OxmlElement('w:sz')
+        sz.set(qn('w:val'), '20')
+        rPr.append(sz)
+        new_run.append(rPr)
+        new_run.text = text
+        hyperlink.append(new_run)
+        paragraph._p.append(hyperlink)
+        return paragraph
+
+    def shade_cell(cell, color_hex):
+        """设置单元格背景色。"""
+        shading = OxmlElement('w:shd')
+        shading.set(qn('w:fill'), color_hex)
+        shading.set(qn('w:val'), 'clear')
+        cell._tc.get_or_add_tcPr().append(shading)
+
+    def add_tbl(headers, rows, col_widths=None):
+        """带样式的表格：表头蓝底白字，交替行色。单元格可传 (text, url) 元组插入超链接。"""
+        if not rows: return None
         t = doc.add_table(rows=1 + len(rows), cols=len(headers))
-        t.style = 'Table Grid'; t.alignment = WD_TABLE_ALIGNMENT.CENTER
-        for j, h in enumerate(headers): t.rows[0].cells[j].text = h
+        t.style = 'Table Grid'
+        t.alignment = WD_TABLE_ALIGNMENT.CENTER
+        # 表头
+        for j, h in enumerate(headers):
+            cell = t.rows[0].cells[j]
+            cell.text = str(h)
+            shade_cell(cell, '2E86C1')
+            for p in cell.paragraphs:
+                for run in p.runs:
+                    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                    run.bold = True
+                    run.font.size = Pt(10)
+                    run.font.name = 'Microsoft YaHei'
+        # 数据行
         for i, row in enumerate(rows):
-            for j, val in enumerate(row): t.rows[i+1].cells[j].text = str(val)
+            for j, val in enumerate(row):
+                cell = t.rows[i + 1].cells[j]
+                if i % 2 == 1:
+                    shade_cell(cell, 'F2F3F4')
+                # 支持 (text, url) 元组插入超链接
+                if isinstance(val, tuple) and len(val) == 2 and val[1]:
+                    text, url = val
+                    p = cell.paragraphs[0]
+                    p.clear()
+                    add_hyperlink(p, str(text), url)
+                else:
+                    cell.text = str(val) if val else ''
+                for p in cell.paragraphs:
+                    for run in p.runs:
+                        run.font.size = Pt(10)
+                        run.font.name = 'Microsoft YaHei'
+        return t
 
-    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run('靶点 ' + str(report.target_name).upper() + ' 研究进展与临床分析报告')
+    def add_ai_box(text):
+        """AI 生成内容框：左边框 + 浅黄背景。"""
+        for line in str(text).split('\n'):
+            if not line.strip(): continue
+            p = doc.add_paragraph()
+            p.paragraph_format.left_indent = Cm(0.5)
+            # 左边框
+            pPr = p._p.get_or_add_pPr()
+            pBdr = OxmlElement('w:pBdr')
+            left = OxmlElement('w:left')
+            left.set(qn('w:val'), 'single')
+            left.set(qn('w:sz'), '12')
+            left.set(qn('w:color'), 'F1C40F')
+            left.set(qn('w:space'), '4')
+            pBdr.append(left)
+            pPr.append(pBdr)
+            # 浅黄底纹
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:fill'), 'FFFBE6')
+            shd.set(qn('w:val'), 'clear')
+            pPr.append(shd)
+            r = p.add_run(line)
+            r.font.name = 'Microsoft YaHei'
+            r.font.size = Pt(10.5)
+
+    # ── 标题 ──────────────────────────────────────────────────────
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run('靶点调研报告')
     r.bold = True; r.font.size = Pt(22); r.font.name = 'Microsoft YaHei'
-    add_p('生成日期: ' + datetime.now().strftime('%Y-%m-%d %H:%M'), size=11)
-    doc.add_page_break()
+    r.font.color.rgb = RGBColor(0x1B, 0x4F, 0x72)
+    p2 = doc.add_paragraph()
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r2 = p2.add_run(str(report.target_name).upper())
+    r2.bold = True; r2.font.size = Pt(18); r2.font.name = 'Microsoft YaHei'
+    r2.font.color.rgb = RGBColor(0x2E, 0x86, 0xC1)
+    add_p('生成日期: ' + datetime.now().strftime('%Y-%m-%d %H:%M') +
+          '　数据源: PubMed · ClinicalTrials.gov · Open Targets · UniProt · PDB · ChEMBL · HPA · ClinPGx · Google Patents · USPTO',
+          size=9, color=RGBColor(0x7F, 0x8C, 0x8D))
 
-    add_h('一、靶点概述', 1); d = report.target_detail
+    # ── 一、靶点概述 ─────────────────────────────────────────────
+    add_h('一、靶点概述', 1)
+    d = report.target_detail
     if d:
-        add_p('靶点名称: ' + report.target_name)
+        add_p('靶点名称: ' + report.target_name, bold=True)
         if d.gene_symbol: add_p('基因符号: ' + d.gene_symbol)
+        if d.uniprot_id: add_p('UniProt: ' + d.uniprot_id)
+        if report.mutation: add_p('突变: ' + report.mutation)
         if d.protein_class: add_p('蛋白类别: ' + d.protein_class)
         if d.protein_name: add_p('蛋白全名: ' + d.protein_name)
         if d.synonyms: add_p('别名: ' + '; '.join(d.synonyms[:8]))
         if d.description: add_p('功能描述: ' + d.description)
         if d.subcellular: add_p('亚细胞定位: ' + d.subcellular)
+        if d.protein_families: add_p('蛋白家族: ' + d.protein_families)
+        if d.tractability: add_p('成药性评估: ' + ', '.join(d.tractability[:5]))
         if d.related_diseases: add_p('相关疾病: ' + ', '.join(d.related_diseases))
-        if d.pubchem: add_p('PubChem活性分子: ' + str(len(d.pubchem)) + '条')
-        if d.kegg_disease: add_p('KEGG疾病: ' + '; '.join(d.kegg_disease[:6]))
-        if d.kegg_drugs: add_p('KEGG药物: ' + '; '.join(d.kegg_drugs[:6]))
+        # PDB 结构
+        if d.pdb:
+            add_p('PDB结构:', bold=True, size=10)
+            add_tbl(['PDB ID', '方法', '分辨率', '年份'],
+                    [[(s.pdb_id, 'https://www.rcsb.org/structure/' + s.pdb_id) if s.pdb_id else '',
+                      s.method, s.resolution or '—', s.year or '—'] for s in d.pdb[:5]])
+        # HPA 表达
+        if d.hpa:
+            hpa = d.hpa
+            add_p('HPA表达谱:', bold=True, size=10)
+            for lbl, val in [('蛋白组织特异', hpa.protein_tissue), ('癌中RNA特异', hpa.rna_cancer),
+                             ('亚细胞定位', hpa.sub_main or hpa.subcell), ('分泌(Secretome)', hpa.secretome),
+                             ('血浆/血液', hpa.blood_c or hpa.blood_cl),
+                             ('可用抗体', str(hpa.antibody_n) + '个' + (' · ' + hpa.antibody_reliab if hpa.antibody_reliab else ''))]:
+                if val: add_p('  ' + lbl + ': ' + val, size=10)
+            if hpa.link: add_hyperlink(doc.add_paragraph(), 'HPA 详情', hpa.link)
+        # ClinPGx
         if d.clinpgx:
+            add_p('ClinPGx药物基因组关联 (' + str(len(d.clinpgx)) + '条):', bold=True, size=10)
             add_tbl(['药物', '证据级别', '疾病', '类型', '证据'],
-                    [[a.drug_name, a.level, a.disease, a.association_type, a.evidence]
+                    [[a.drug_name, a.level, a.disease, a.association_type, (a.evidence or '')[:80]]
                      for a in d.clinpgx[:12]])
-    if report.target_overview: add_p(report.target_overview)
-    doc.add_page_break()
+        # ClinVar 临床变异
+        if d.clinvar:
+            add_p('ClinVar 临床变异 (' + str(len(d.clinvar)) + '条):', bold=True, size=10)
+            add_tbl(['RCV', '临床意义', '疾病', '审核状态'],
+                    [[c.rcv_id or '', c.clinical_significance or '', (c.condition or '')[:40], c.review_status or '']
+                     for c in d.clinvar[:12]])
+        # GTEx 组织表达
+        if d.gtex:
+            add_p('GTEx 组织表达 (' + str(len(d.gtex)) + '组织):', bold=True, size=10)
+            add_tbl(['组织', '中位TPM'],
+                    [[g.tissue or '', str(g.median_tpm)] for g in d.gtex[:15]])
+        # STRING 蛋白互作
+        if d.string_interactions:
+            add_p('STRING 蛋白互作 (' + str(len(d.string_interactions)) + '个):', bold=True, size=10)
+            add_tbl(['蛋白ID', '名称', '评分'],
+                    [[s.protein_id or '', s.preferred_name or '', str(s.score)] for s in d.string_interactions[:15]])
+        # AlphaFold 结构
+        if d.alphafold:
+            add_p('AlphaFold 预测结构:', bold=True, size=10)
+            add_tbl(['UniProt', '置信度', 'PDB链接'],
+                    [[(a.uniprot_acc, a.pdb_url) if a.uniprot_acc and a.pdb_url else (a.uniprot_acc or '', ''),
+                      str(a.confidence), a.pdb_url or ''] for a in d.alphafold[:5]])
+        # PubChem 活性分子
+        if d.pubchem:
+            add_p('PubChem 活性分子 (' + str(len(d.pubchem)) + '个):', bold=True, size=10)
+            add_tbl(['CID', '名称', '分子式', 'MW', 'LogP'],
+                    [[str(c.cid), (c.name or '')[:30], c.formula or '', str(c.molecular_weight), str(c.logp)]
+                     for c in d.pubchem[:12]])
+        # KEGG 通路/疾病/药物
+        if d.kegg_pathways:
+            add_p('KEGG 通路 (' + str(len(d.kegg_pathways)) + '条):', bold=True, size=10)
+            add_tbl(['ID', '通路名称'],
+                    [[k.kegg_id, (k.name or '')[:60]] for k in d.kegg_pathways[:10]])
+        if d.kegg_disease:
+            add_p('KEGG 疾病: ' + ', '.join(d.kegg_disease[:10]), size=10)
+        if d.kegg_drugs:
+            add_p('KEGG 药物: ' + ', '.join(d.kegg_drugs[:10]), size=10)
+        # 蛋白序列
+        if d.sequence:
+            add_p('蛋白序列 (' + str(d.sequence_length or len(d.sequence)) + ' aa):', bold=True, size=10)
+            seq = d.sequence
+            for j in range(0, len(seq), 100):
+                add_p(seq[j:j + 100], size=9)
+    # 靶点概述文本
+    if report.target_overview:
+        add_p('靶点概述:', bold=True)
+        add_ai_box(report.target_overview)
 
+    # ── 二、研究进展 ─────────────────────────────────────────────
     add_h('二、研究进展', 1)
     add_p(report.research_progress or ('共 ' + str(len(report.papers)) + ' 篇文献'))
     if report.papers:
         add_h('文献列表', 2)
-        add_tbl(['#', '标题', '期刊', '年份', 'PMID'],
-                [[str(i+1), p.title, p.journal, p.year, p.pmid] for i, p in enumerate(report.papers)])
-    doc.add_page_break()
+        rows = []
+        for i, p in enumerate(report.papers):
+            pmid_link = ('PMID:' + p.pmid, 'https://pubmed.ncbi.nlm.nih.gov/' + p.pmid) if p.pmid else ''
+            doi_link = ('DOI:' + p.doi, 'https://doi.org/' + p.doi) if p.doi else ''
+            rows.append([str(i + 1), (p.title or '')[:70], p.journal or '', p.year or '', pmid_link, doi_link])
+        add_tbl(['#', '标题', '期刊', '年份', 'PMID', 'DOI'], rows)
 
-    add_h('三、临床试验', 1)
+    # ── 三、核心文献 ─────────────────────────────────────────────
+    if report.key_findings:
+        add_h('三、核心文献', 1)
+        add_ai_box(report.key_findings)
+
+    # ── 四、临床试验 ─────────────────────────────────────────────
+    add_h('四、临床试验', 1)
     add_p(report.clinical_landscape or ('共 ' + str(len(report.trials)) + ' 项试验'))
     if report.trials:
-        add_tbl(['NCT ID', '标题', '阶段', '状态'],
-                [[t.nct_id, t.title, t.phase, t.status] for t in report.trials])
-    doc.add_page_break()
+        rows = []
+        for t in report.trials:
+            conds = ', '.join((t.conditions or [])[:3])
+            nct_link = (t.nct_id, 'https://clinicaltrials.gov/study/' + t.nct_id) if t.nct_id else ''
+            src = t.source if t.source and t.source != 'ClinicalTrials.gov' else ''
+            rows.append([nct_link, t.title or '', t.phase or '', t.status or '', conds[:40], src or ''])
+        add_tbl(['NCT ID', '标题', '阶段', '状态', '适应症', '来源'], rows)
 
-    add_h('四、药物研发管线', 1)
+    # ── 五、药物研发管线 ─────────────────────────────────────────
+    add_h('五、药物研发管线', 1)
     add_p(report.future_outlook or ('共 ' + str(len(report.drugs)) + ' 个药物'))
     if report.drugs:
-        add_tbl(['药物', '公司', '机制', '阶段'],
-                [[d.name, d.company, d.mechanism_of_action, d.phase] for d in report.drugs])
-    doc.add_page_break()
+        add_tbl(['药物', '公司', '阶段', '机制', '适应症'],
+                [[d.name, d.company or '', d.phase or '', (d.mechanism_of_action or '')[:50], d.disease or '']
+                 for d in report.drugs])
+    # ChEMBL 分子
+    if report.molecules:
+        add_h('靶向活性分子 (ChEMBL)', 2)
+        add_tbl(['分子', 'ChEMBL ID', 'pChEMBL', '活性类型'],
+                [[m.name or '',
+                  (m.chembl, 'https://www.ebi.ac.uk/chembl/compound_report_card/' + m.chembl + '/') if m.chembl else '',
+                  m.pchembl or '', m.best_type or '']
+                 for m in report.molecules[:12]])
+    # DGIdb 药物-基因互作
+    if d and d.dgidb:
+        add_h('DGIdb 药物-基因互作', 2)
+        add_tbl(['药物', '互作类型', '来源'],
+                [[(g.drug_name or '')[:30], g.interaction_type or '', ', '.join(g.sources[:3])]
+                 for g in d.dgidb[:12]])
 
+    # ── 六、专利调研 ─────────────────────────────────────────────
     if report.patents:
-        add_h('五、专利调研', 1)
-        if report.patent_landscape: add_p(report.patent_landscape)
-        add_tbl(['专利号', '申请号', '标题', '申请人', '年份', '全文'],
-                [[p.number, p.application_no, p.title[:60], p.assignee[:25], p.year,
-                  p.cn_fulltext or p.cn_download or ''] for p in report.patents])
-        doc.add_page_break()
+        add_h('六、专利调研', 1)
+        if report.patent_landscape:
+            add_ai_box(report.patent_landscape)
+        rows = []
+        for p in report.patents:
+            bits = []
+            if p.detail_legal: bits.append(p.detail_legal)
+            if p.cited_by: bits.append('被引' + str(p.cited_by))
+            if p.claims: bits.append('约' + str(p.claims) + '项')
+            meta = ' [' + ', '.join(bits) + ']' if bits else ''
+            num_link = (p.number, 'https://patents.google.com/patent/' + p.number + '/en') if p.number else ''
+            rows.append([num_link, (p.title or '') + meta,
+                         (p.assignee or '')[:25], p.year or ''])
+        add_tbl(['专利号', '标题', '申请人', '年份'], rows)
+        # patentInsight 申请人布局
+        if report.patent_insight and hasattr(report.patent_insight, 'assignees') and report.patent_insight.assignees:
+            add_h('主要申请人布局', 2)
+            for assignee, plist in report.patent_insight.assignees.items():
+                if plist:
+                    add_p(assignee + ' (' + str(len(plist)) + '件):', bold=True, size=10)
+                    for pt in plist[:5]:
+                        add_p('  - ' + (pt.number or '') + ' | ' + (pt.title or ''), size=9)
 
+    # ── 七、AI 综合情报研判 ──────────────────────────────────────
     if report.web_summary:
-        add_h('六、AI 综合情报研判', 1)
-        for line in report.web_summary.split(NL2):
-            if line.strip(): add_p(line)
-        doc.add_page_break()
+        add_h('七、AI 综合情报研判', 1)
+        add_ai_box(report.web_summary)
 
-    add_h('七、附录', 1)
-    if report.mutation:
-        add_p('靶点变异: ' + report.mutation)
-    if d and d.sequence:
-        add_h('蛋白序列 (FASTA)', 2)
-        add_p('>' + (d.gene_symbol or str(report.target_name).upper()) + '|' + d.uniprot_id +
-              ' length=' + str(d.sequence_length or len(d.sequence)), size=9)
-        seq = d.sequence
-        for j in range(0, len(seq), 100):
-            add_p(seq[j:j + 100], size=9)
-    if d and d.hpa:
-        add_h('蛋白表达 (HPA)', 2)
-        h = d.hpa
-        for lbl, val in [('蛋白组织表达', h.protein_tissue), ('RNA 肿瘤表达', h.rna_cancer),
-                         ('蛋白肿瘤表达', h.rna_cancer_score), ('亚细胞定位', h.subcell),
-                         ('分子功能', h.molecular_func)]:
-            if val:
-                add_p(lbl + ': ' + val, size=10)
-    if d and d.string_interactions:
-        add_h('蛋白互作 (STRING)', 2)
-        add_tbl(['蛋白', '名称', '评分'],
-                [[s.protein_id, s.preferred_name, str(s.score)] for s in d.string_interactions[:15]])
-    if d and d.kegg_pathways:
-        add_h('KEGG 通路', 2)
-        add_tbl(['ID', '通路'], [[k.kegg_id, k.name] for k in d.kegg_pathways[:15]])
-    if d and d.kegg_disease:
-        add_h('KEGG 疾病', 2)
-        for x in d.kegg_disease[:10]:
-            add_p('\u25b8 ' + x, size=10)
-    if d and d.kegg_drugs:
-        add_h('KEGG 药物', 2)
-        for x in d.kegg_drugs[:10]:
-            add_p('\u25b8 ' + x, size=10)
-    if d and d.pubchem:
-        add_h('PubChem 活性分子', 2)
-        add_tbl(['CID', '名称', '分子式', 'MW', 'LogP'],
-                [[str(c.cid), c.name, c.formula, str(c.molecular_weight), str(c.logp)] for c in d.pubchem[:12]])
-    if d and d.clinvar:
-        add_h('ClinVar 临床变异', 2)
-        add_tbl(['变异/RCV', '临床意义', '疾病'],
-                [[c.rcv_id or c.gene_symbol, c.clinical_significance, c.condition] for c in d.clinvar[:12]])
-    if d and d.pdb:
-        add_h('PDB 结构', 2)
-        add_tbl(['PDB', '方法', '分辨率', '年份'],
-                [[s.pdb_id, s.method, s.resolution, s.year] for s in d.pdb[:12]])
-    if d and d.alphafold:
-        add_h('AlphaFold 结构', 2)
-        add_tbl(['UniProt', '置信度', 'URL'],
-                [[s.uniprot_acc, str(s.confidence), s.pdb_url] for s in d.alphafold[:5]])
-    if report.patent_insight:
-        add_h('专利申请人布局', 2)
-        add_p(str(report.patent_insight), size=10)
-    doc.add_page_break()
-
-    add_h('八、参考文献引用', 1)
+    # ── 八、引用来源 ─────────────────────────────────────────────
     if report.citations:
+        add_h('八、引用来源', 1)
+        field_map = {'target_overview': '靶点概述', 'research_progress': '研究进展',
+                     'clinical_landscape': '临床概况', 'key_findings': '核心文献',
+                     'future_outlook': '药物展望', 'web_summary': 'AI 综合研判',
+                     'patent_landscape': '专利调研'}
         for field, refs in report.citations.items():
             if refs:
-                add_p(field + ': ' + ', '.join(str(x) for x in refs), size=10)
-    else:
-        add_p('无', size=10)
-    doc.add_page_break()
+                label = field_map.get(field, field)
+                add_p(label + ': ' + ', '.join(str(x) for x in refs[:10]), size=9)
 
+    # ── 九、数据来源 ─────────────────────────────────────────────
     add_h('九、数据来源', 1)
-    for src in ['PubMed', 'OpenAlex', 'Semantic Scholar', 'ClinicalTrials.gov',
-                'ISRCTN', 'ChiCTR',
-                'Open Targets', 'UniProt',
-                'PDB', 'AlphaFold', 'Human Protein Atlas', 'GTEx',
-                'ChEMBL', 'PubChem', 'STRING', 'KEGG',
-                'ClinPGx', 'ClinVar', 'Google Patents', 'Patent9', 'drugfuture',
-                'USPTO', 'Lens.org', 'Espacenet', 'MCP']:
-        add_p('\u25b8 ' + src)
-    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
+    sources = [
+        ('PubMed', 'https://pubmed.ncbi.nlm.nih.gov/'),
+        ('ClinicalTrials.gov', 'https://clinicaltrials.gov/'),
+        ('ISRCTN', 'https://www.isrctn.com/'),
+        ('ChiCTR', 'https://www.chictr.org.cn/'),
+        ('Open Targets', 'https://platform.opentargets.org/'),
+        ('UniProt', 'https://www.uniprot.org/'),
+        ('PDB (RCSB)', 'https://www.rcsb.org/'),
+        ('AlphaFold', 'https://alphafold.ebi.ac.uk/'),
+        ('Human Protein Atlas', 'https://www.proteinatlas.org/'),
+        ('GTEx', 'https://gtexportal.org/'),
+        ('ChEMBL', 'https://www.ebi.ac.uk/chembl/'),
+        ('PubChem', 'https://pubchem.ncbi.nlm.nih.gov/'),
+        ('STRING', 'https://string-db.org/'),
+        ('KEGG', 'https://www.genome.jp/kegg/'),
+        ('ClinPGx', 'https://www.clinpgx.org/'),
+        ('ClinVar', 'https://www.ncbi.nlm.nih.gov/clinvar/'),
+        ('Google Patents', 'https://patents.google.com/'),
+        ('Patent9', 'https://www.patent9.com/'),
+        ('drugfuture', 'https://www.drugfuture.com/'),
+        ('USPTO', 'https://data.uspto.gov/'),
+        ('Lens.org', 'https://www.lens.org/'),
+        ('Espacenet (EPO)', 'https://worldwide.espacenet.com/'),
+    ]
+    for name, url in sources:
+        p = doc.add_paragraph(style='List Bullet')
+        add_hyperlink(p, name, url)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
     return buf.getvalue()
 
 
