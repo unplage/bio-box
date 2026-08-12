@@ -1,0 +1,40 @@
+{
+  "name": "target-patent-research",
+  "version": "1.0.0",
+  "description": "生物药靶点专利调研skill，用于系统性地调研特定靶点的全球专利布局、竞争格局和技术发展趋势",
+  "author": "opencode",
+  "triggers": [
+    "专利调研",
+    "靶点调研",
+    "patent research",
+    "专利分析",
+    "竞争对手分析"
+  ],
+  "parameters": {
+    "target_name": {
+      "type": "string",
+      "required": true,
+      "description": "靶点名称，如CD19、PD-1、HER2、VEGF、EGFR等"
+    },
+    "time_range": {
+      "type": "string",
+      "default": "近5年（2021-2026）",
+      "description": "专利检索的时间范围"
+    },
+    "region": {
+      "type": "string",
+      "default": "全球专利",
+      "description": "专利检索的地域范围"
+    },
+    "focus": {
+      "type": "string",
+      "default": "竞争对手分析",
+      "description": "报告侧重点"
+    }
+  },
+  "output": {
+    "format": "docx",
+    "naming": "{target_name}靶点专利调研报告_{time_range}_带引用.docx",
+    "location": "当前工作目录"
+  }
+}
