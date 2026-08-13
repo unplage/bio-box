@@ -1,68 +1,87 @@
-# Example: 8UCD (Cx3CL1/fractalkine TM construct, chains A/B/C trimer).
-# UCD positional numbering = 1..N per chain, where N = harmonized chain length.
+# Example: STEAP1 soluble redesign using 8UCD template (chains A/B/C trimer).
+# Reference numbering == UniProt Q9UHE8 numbering (1..339).
+# A fully annotated STEAP1 config lives in `config.steap1.yaml`.
+# Run: python -m tmkit.pipeline --config config.example.yaml \
+#        --pdb pdb/8UCD.pdb --steps mask,design,native,predict,stability,report
 
-name: 8UCD
+name: steap1_8ucd
 chains: [A, B, C]
 
-# Full-length reference sequences, one per chain (shared for homotrimer).
-# Positional numbers are 1-based indexes into these sequences.
+# Full-length STEAP1 sequence (UniProt Q9UHE8); positions are UniProt numbers.
 reference_sequences:
-  A: "LFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFL"
-  B: "LFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFL"
-  C: "LFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFL"
+  A: "MESRKDITNQEELWKMKPRRNLEEDDYLHKDTGETSMLKRPVLLHLHQTAHADEFDCPSELQHTQELFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLHNGTKYKKFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFLPCLRKKILKIRHGWEDVTKINKTEICSQL"
+  B: "MESRKDITNQEELWKMKPRRNLEEDDYLHKDTGETSMLKRPVLLHLHQTAHADEFDCPSELQHTQELFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLHNGTKYKKFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFLPCLRKKILKIRHGWEDVTKINKTEICSQL"
+  C: "MESRKDITNQEELWKMKPRRNLEEDDYLHKDTGETSMLKRPVLLHLHQTAHADEFDCPSELQHTQELFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLHNGTKYKKFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFLPCLRKKILKIRHGWEDVTKINKTEICSQL"
 
-# TM region boundaries (reference positions). ECD = soluble/extracellular part.
+# Six TM helices (UniProt numbering): h1..h6.
 tm_segments:
-  - [43, 77]
-ecd_segments:
-  - [78, 236]
+  - [71, 91]
+  - [119, 139]
+  - [164, 184]
+  - [218, 238]
+  - [258, 278]
+  - [291, 311]
 
-# Which regions may be mutated. designable = TMD only (keep ECD/TM surfaces):
+# ECD = EC1(92-118) + EC2(185-217) + EC3(279-290) -- kept 100% fixed.
+ecd_segments:
+  - [92, 118]
+  - [185, 217]
+  - [279, 290]
+
+# Intracellular loops kept native.
+icd_segments:
+  - [140, 163]
+  - [239, 257]
+
+# Only TMD surface is redesigned.
 include: designable
 
-# Residues +-3 around these are never mutated (e.g. functional/interface).
-# fixed_residues: []
-# protect_pad: 3
-# Keep the 2 junction residues on each TM end untouched:
+# Heme pocket coordination: H175/H268 and +/-2 neighbors never redesigned.
+fixed_residues: [175, 268]
+protect_pad: 2
+
+# ECD-TM junction protection (most fragile region).
 tm_junction_keep: 2
 
-# SASA filter: only solvent-exposed TM positions (SASA > 40 A^2) are redesigned.
+# SASA filter: only TM positions exposed (SASA > 40 A^2) are redesigned.
 surface_sasa_threshold: 40.0
 design_tm_surface_only: true
 
-# Hard-fix residues that contact another chain (oligomer interface): protects
-# the trimer assembly / interaction surfaces from destabilizing mutations.
+# Protect the C3 trimer interface; symmetric designable mask (homotrimer).
 fix_interface_contacts: true
 interface_contact_dist: 6.0
-# For homooligomers: force the designable mask identical across chains so the
-# assembled chains stay sequence-identical.
 symmetric_mask: true
 
 # Evaluation gates. A design passes only if every gate holds.
 filters:
-  tm_score: ['>=', 0.800]
-  plddt:    ['>=', 80.0]
-  ecd_rmsd: ['<=', 1.0]
-  surf_hydro: ['<=', 0.30]
-  mutations: ['<=', 30]
-  # stability-derived gates (step: stability)
-  soluble_score: ['>=', 0.60]     # clamped solubility propensity over redesigned TMD
-  residual_hydro: ['<=', 0.35]    # fraction of redesigned positions left hydrophobic
-  interface_mut: ['==', 0]        # no mutation at inter-chain contact residues
+  tm_score:      ['>=', 0.800]
+  plddt:         ['>=', 80.0]
+  plddt_ecd:     ['>=', 75.0]
+  ecd_rmsd:      ['<=', 1.0]
+  surf_hydro_des: ['<=', 0.30]   # hydrophobicity on the redesigned surface
+  pocket_rmsd:   ['<=', 2.0]
+  exposed_arom:  ['<=', 3]
+  cys_des:       ['==', 0]
+  mutations:     ['<=', 120]
+  soluble_score: ['>=', 0.60]
+  residual_hydro: ['<=', 0.35]
+  interface_mut: ['==', 0]
 
-# --- ProteinMPNN (set dir containing protein_mpnn_run.py) ---
+# Pocket residues for the pocket_rmsd gate (UniProt numbering).
+pocket_residues: [175, 268]
+
+# --- ProteinMPNN (dir containing protein_mpnn_run.py) ---
 proteinmpnn_dir: /opt/proteinmpnn
-soluble_model: true            # use soluble model weights (optimal for soluble redesign)
-num_seqs: 8
+soluble_model: true            # use soluble model weights (Goverde 2024)
+num_seqs: 32                   # production: >=100 recommended
 temperature: "0.15 0.2"
 
 # --- Structure prediction for validation ---
-# predict_tool: colabfold (alpha2_multimer_v3) | alphafold | none
-predict_tool: colabfold
+predict_tool: colabfold        # colabfold | alphafold | none
 colabfold_model: alpha2_multimer_v3
 num_recycles: 3
-# Path to a folder with *rank_001_*.pdb models already computed externally;
-# empty string means the pipeline runs the prediction command itself.
+colabfold_amber: true
+predict_native: true           # also predict the native seq as gate baseline
 results_dir: ""
 
 output: outputs

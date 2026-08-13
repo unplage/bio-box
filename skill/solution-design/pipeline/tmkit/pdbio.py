@@ -67,24 +67,76 @@ def harmonize_chains(target, chain_ids):
     return target
 
 
+def aa1(resname):
+    return AMINO3.get(resname.strip(), 'X')
+
+
+def chain_sequence_from_pdb(pdb_path, chain_id):
+    """[(pdb_resnum, aa1)] of CA atoms for one chain of a raw PDB file.
+
+    Model files (ColabFold/AlphaFold) renumber residues 1..N per chain and
+    never carry gaps; this function only needs the raw numbers for pairing.
+    """
+    pairs = []
+    with open(pdb_path) as f:
+        for line in f:
+            if line.startswith('ATOM') and line[12:16].strip() == 'CA':
+                if line[21] == chain_id:
+                    pairs.append((int(line[22:26]), aa1(line[17:20])))
+    return pairs
+
+
+def map_model_to_reference(pdb_path, chain_id, ref_seq):
+    """Map model PDB residue numbers -> reference positions (1-based) by
+    global pairwise sequence alignment. Robust to renumbering and gaps.
+
+    Returns {model_resnum: refn}. Order-based identity mapping when the
+    model chain sequence equals the reference sequence.
+    """
+    pairs = chain_sequence_from_pdb(pdb_path, chain_id)
+    if not pairs:
+        return {}
+    seq = ''.join(aa for _, aa in pairs)
+    if len(seq) == len(ref_seq) and seq == ref_seq:
+        return {n: i + 1 for i, (n, _) in enumerate(pairs)}
+    aln = _aligner().align(seq, ref_seq)[0]
+    mapping = {}
+    for pi, ri in zip(*aln.indices):
+        if pi < 0 or ri < 0:
+            continue
+        mapping[pairs[pi][0]] = ri + 1
+    return mapping
+
+
+def _aligner():
+    """Semi-global pairwise aligner: free end gaps so partial chains (e.g.
+    cryo-EM fragments) align to the correct reference sub-range instead of
+    being forced to the reference termini."""
+    aligner = PairwiseAligner()
+    aligner.mode = 'global'
+    aligner.match_score = 2
+    aligner.mismatch_score = -1
+    aligner.open_gap_score = -2
+    aligner.extend_gap_score = -0.5
+    if hasattr(aligner, 'open_end_gap_score'):
+        aligner.open_end_gap_score = 0
+        aligner.extend_end_gap_score = 0
+    else:
+        aligner.end_open_gap_score = 0
+        aligner.end_extend_gap_score = 0
+    return aligner
+
+
 def reference_numbering(target, chain_id, ref_seq):
     chain = target.chains[chain_id]
     if len(chain.raw_seq) != len(ref_seq):
-        aligner = PairwiseAligner()
-        aligner.mode = 'global'
-        aligner.match_score = 2
-        aligner.mismatch_score = -1
-        aligner.open_gap_score = -2
-        aligner.extend_gap_score = -0.5
-        aln = aligner.align(chain.raw_seq, ref_seq)[0]
+        aln = _aligner().align(chain.raw_seq, ref_seq)[0]
         pdb_marks, ref_marks = aln.indices
         mapping = {}
-        ref_pos = 0
         for pi, ri in zip(pdb_marks, ref_marks):
             if pi < 0 or ri < 0:
                 continue
-            mapping[chain.residues[pi].id[1]] = ref_pos + 1
-            ref_pos += 1
+            mapping[chain.residues[pi].id[1]] = ri + 1
     else:
         # order-based mapping: i-th residue (sorted by number) -> reference pos i
         ordered = sorted(chain.residues, key=lambda r: r.id[1])

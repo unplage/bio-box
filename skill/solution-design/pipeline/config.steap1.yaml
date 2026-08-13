@@ -1,0 +1,97 @@
+name: steap1_8ucd
+chains:
+- A
+- B
+- C
+reference_sequences:
+  A: MESRKDITNQEELWKMKPRRNLEEDDYLHKDTGETSMLKRPVLLHLHQTAHADEFDCPSELQHTQELFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLHNGTKYKKFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFLPCLRKKILKIRHGWEDVTKINKTEICSQL
+  B: MESRKDITNQEELWKMKPRRNLEEDDYLHKDTGETSMLKRPVLLHLHQTAHADEFDCPSELQHTQELFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLHNGTKYKKFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFLPCLRKKILKIRHGWEDVTKINKTEICSQL
+  C: MESRKDITNQEELWKMKPRRNLEEDDYLHKDTGETSMLKRPVLLHLHQTAHADEFDCPSELQHTQELFPQWHLPIKIAAIIASLTFLYTLLREVIHPLATSHQQYFYKIPILVINKVLPMVSITLLALVYLPGVIAAIVQLHNGTKYKKFPHWLDKWMLTRKQFGLLSFFFAVLHAIYSLSYPMRRSYRYKLLNWAYQQVQQNKEDAWIEHDVWRMEIYVSLGIVGLAILALLAVTSIPSVSDSLTWREFHYIQSKLGIVSLLLGTIHALIFAWNKWIDIKQFVWYTPPTFMIAVFLPIVVLIFKSILFLPCLRKKILKIRHGWEDVTKINKTEICSQL
+tm_segments:
+- - 71
+  - 91
+- - 119
+  - 139
+- - 164
+  - 184
+- - 218
+  - 238
+- - 258
+  - 278
+- - 291
+  - 311
+ecd_segments:
+- - 92
+  - 118
+- - 185
+  - 217
+- - 279
+  - 290
+icd_segments:
+- - 140
+  - 163
+- - 239
+  - 257
+include: designable
+fixed_residues:
+- 175
+- 268
+protect_pad: 2
+tm_junction_keep: 2
+surface_sasa_threshold: 40.0
+design_tm_surface_only: true
+fix_interface_contacts: true
+interface_contact_dist: 6.0
+symmetric_mask: true
+filters:
+  tm_score:
+  - '>='
+  - 0.8
+  plddt:
+  - '>='
+  - 80.0
+  plddt_ecd:
+  - '>='
+  - 75.0
+  ecd_rmsd:
+  - <=
+  - 1.0
+  surf_hydro_des:
+  - <=
+  - 0.3
+  pocket_rmsd:
+  - <=
+  - 2.0
+  exposed_arom:
+  - <=
+  - 3
+  cys_des:
+  - ==
+  - 0
+  mutations:
+  - <=
+  - 120
+  soluble_score:
+  - '>='
+  - 0.6
+  residual_hydro:
+  - <=
+  - 0.35
+  interface_mut:
+  - ==
+  - 0
+pocket_residues:
+- 175
+- 268
+proteinmpnn_dir: /opt/proteinmpnn
+soluble_model: true
+num_seqs: 32
+temperature: 0.15 0.2
+predict_tool: colabfold
+colabfold_model: alpha2_multimer_v3
+num_recycles: 3
+colabfold_amber: true
+predict_native: true
+results_dir: ''
+output: outputs
+workdir: /tmp/opencode

@@ -28,6 +28,7 @@ def passes_filters(row, filters):
         else:
             checks[key] = True
     row['pass'] = all(checks.values()) if checks else False
+    row['fail_gates'] = [k for k, v in checks.items() if not v]
     return row['pass']
 
 
@@ -64,9 +65,11 @@ def write_tagged_pdb(target, chain_ids, mask, outpath):
 def write_report(rows, config, outdir, top_n=10):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-    core = ['name', 'pass', 'tm_score', 'plddt', 'ecd_rmsd', 'surf_hydro',
-            'seq_recovery', 'score', 'mutations', 'soluble_score',
-            'residual_hydro', 'over_polar', 'interface_mut', 'model']
+    core = ['name', 'pass', 'fail_gates', 'tm_score', 'plddt', 'ecd_rmsd',
+            'surf_hydro', 'surf_hydro_des', 'plddt_ecd', 'pocket_rmsd',
+            'exposed_arom', 'cys_des', 'seq_recovery', 'score', 'mutations',
+            'soluble_score', 'residual_hydro', 'over_polar', 'interface_mut',
+            'model']
     extra = []
     for r in rows:
         for k, v in r.items():
@@ -81,7 +84,8 @@ def write_report(rows, config, outdir, top_n=10):
         writer.writeheader()
         for r in rows:
             writer.writerow(r)
-    passing = [r for r in rows if r.get('pass')]
+    passing = [r for r in rows if r.get('pass') and
+               r.get('name') != 'native']
     passing.sort(key=lambda r: (-(r.get('tm_score') or -1),
                                 r.get('plddt') or -1))
     top = passing[:top_n]
@@ -89,6 +93,23 @@ def write_report(rows, config, outdir, top_n=10):
     mds.append('# Soluble TM redesign report\n')
     mds.append(f'- target: {config.get("name", "")}')
     mds.append(f'- designs: {len(rows)}, passing: {len(passing)}')
+    native_rows = [r for r in rows if r.get('name') == 'native']
+    for r in native_rows:
+        mds.append(
+            f'- native control: ecd_rmsd={r.get("ecd_rmsd"):.2f}A '
+            f'tm={r.get("tm_score"):.3f} '
+            f'surf_hydro_des={r.get("surf_hydro_des"):.3f} '
+            f'plddt={r.get("plddt"):.1f} '
+            f'(baseline to calibrate the gates above)')
+    if not passing and len(rows):
+        from collections import Counter
+        counts = Counter()
+        for r in rows:
+            for g in r.get('fail_gates', []):
+                counts[g] += 1
+        if counts:
+            mds.append('- no passing designs; most frequent failed gates: '
+                       + ', '.join(f'{g} ({n})' for g, n in counts.most_common()))
     if passing:
         mds.append('\n## Passing designs\n')
     for r in passing:

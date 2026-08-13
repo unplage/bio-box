@@ -258,8 +258,10 @@ def main(argv=None):
                     help='print external commands, do not run')
     ap.add_argument('--out', default='.')
     ap.add_argument('--target-name', default=None)
-    ap.add_argument('--num-seqs', type=int, default=8)
-    ap.add_argument('--temperature', default='0.15 0.2')
+    ap.add_argument('--num-seqs', type=int, default=None,
+                    help='designs per target (default: config num_seqs)')
+    ap.add_argument('--temperature', default=None,
+                    help='MPNN sampling temperatures (default: config)')
     ap.add_argument('--check-deps', action='store_true',
                     help='check libraries/tools/config paths and exit')
     args = ap.parse_args(argv)
@@ -283,6 +285,9 @@ def main(argv=None):
     if args.target_name:
         cfg['name'] = args.target_name
     cfg.setdefault('name', Path(args.pdb).stem)
+    num_seqs = args.num_seqs if args.num_seqs is not None \
+        else int(cfg.get('num_seqs', 8))
+    temperature = args.temperature or str(cfg.get('temperature', '0.15 0.2'))
 
     target, ecd_lookup = load_target(args.pdb, cfg.get('ecd_segments') or [])
     chains, ref, tm, ecd, _ec = resolve_config(cfg)
@@ -297,8 +302,8 @@ def main(argv=None):
         elif step == 'mask':
             mask = step_mask(target, cfg, outdir)
         elif step == 'design':
-            rows = step_design(target, cfg, outdir, args.num_seqs,
-                               args.temperature, args.dry_run)
+            rows = step_design(target, cfg, outdir, num_seqs,
+                               temperature, args.dry_run)
         elif step == 'native':
             rows += step_native(target, cfg, outdir)
         elif step == 'predict':
@@ -306,23 +311,41 @@ def main(argv=None):
                 print('no designs to predict; run design/native first',
                       file=sys.stderr)
                 continue
-            fasta = multimer_fasta(rows, chains,
+            predict_rows = rows
+            if not cfg.get('predict_native', False):
+                predict_rows = [r for r in rows if r.get('name') != 'native']
+            if not predict_rows:
+                print('nothing to predict (native excluded by '
+                      'predict_native=false)', file=sys.stderr)
+                continue
+            fasta = multimer_fasta(predict_rows, chains,
                                    outdir / 'outputs' / 'predict_in')
             cmd = predict_command(cfg, fasta, outdir / 'outputs' / 'predict')
             print('Prediction command:')
             print('  ' + ' \\\n  '.join(cmd or []))
-            model_paths = {}
+            names = [r['name'].replace(':', '_') for r in predict_rows]
             if args.dry_run:
-                pass
+                model_paths = {}
             elif cfg.get('results_dir'):
-                model_paths = find_rank1_models(cfg['results_dir'],
-                                                [r['name'].replace(':', '_')
-                                                 for r in rows])
+                model_paths = find_rank1_models(cfg['results_dir'], names)
             elif cmd:
                 subprocess.run(cmd, check=False)
-            rows = evaluate_models(model_paths, rows, chains, target, mask,
-                                   ecd_lookup, ref,
-                                   outdir / 'outputs' / 'predict')
+                model_paths = find_rank1_models(
+                    outdir / 'outputs' / 'predict', names)
+            else:
+                model_paths = {}
+            missing = [n for n in names if n not in model_paths]
+            if missing:
+                print(f'WARNING: no rank-1 model found for '
+                      f'{len(missing)}/{len(names)} designs '
+                      f'(e.g. {missing[0]})', file=sys.stderr)
+            evaluated = evaluate_models(model_paths, predict_rows, chains,
+                                        target, mask, ecd_lookup, ref,
+                                        outdir / 'outputs' / 'predict',
+                                        pocket_residues=cfg.get(
+                                            'pocket_residues'))
+            by_name = {r['name']: r for r in evaluated}
+            rows = [by_name.get(r['name'], r) for r in rows]
         elif step == 'stability':
             rows = step_stability(rows, target, cfg)
         elif step == 'report':

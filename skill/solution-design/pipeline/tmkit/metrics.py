@@ -55,6 +55,40 @@ def surface_hydrophobic_fraction(sasa, residue_aa_map):
     return len(hydrophobic) / len(surface)
 
 
+def surface_hydrophobic_fraction_at(sasa, aa_map, positions):
+    """Fraction of apolar residues among positions with SASA > 40 A^2.
+
+    positions: iterable of (chain, resnum) keys as used in the sasa/aa_map
+    dicts. Restricting to the redesigned positions reports the residual
+    hydrophobicity of the *designed surface* instead of the whole protein.
+    """
+    surface = [aa_map[p] for p in positions
+               if sasa.get(p, 0.0) > 40.0 and aa_map.get(p)]
+    if not surface:
+        return float('nan')
+    hydrophobic = [aa for aa in surface if aa in APOLAR]
+    return len(hydrophobic) / len(surface)
+
+
+def exposed_aromatics_at(sasa, aa_map, positions, sasa_threshold=40.0):
+    """Count surface-exposed aromatic residues (W/F/Y) at given positions."""
+    arom = {'W', 'F', 'Y'}
+    return sum(1 for p in positions
+               if aa_map.get(p) in arom
+               and sasa.get(p, 0.0) > sasa_threshold)
+
+
+def cys_at(aa_map, positions):
+    """Count cysteine residues at given positions (should be 0 with omit-C)."""
+    return sum(1 for p in positions if aa_map.get(p) == 'C')
+
+
+def mean_plddt_at(plddt, positions):
+    """Mean pLDDT over (chain, resnum) positions."""
+    vals = [plddt[p] for p in positions if p in plddt]
+    return float(np.mean(vals)) if vals else float('nan')
+
+
 def seq_identity(ref_seq, mut_seq):
     if not ref_seq:
         return float('nan')

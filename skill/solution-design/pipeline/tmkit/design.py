@@ -108,9 +108,14 @@ def assemble_designs(designs, config, target, chain_ids, outdir, name='target'):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     assembled = []
+    seen = {}
     for d in designs:
+        base = d['name'].split(',')[0].strip() or name
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        uname = f'{base}_{n:04d}'
         rec = {
-            'name': d['name'], 'score': d['score'],
+            'name': uname, 'score': d['score'],
             'seq_recovery': d['seq_recovery'], 'temperature': d['temperature'],
             'chains_full': {},
             'designed_positions': {},
