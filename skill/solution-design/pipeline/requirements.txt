@@ -1,0 +1,4 @@
+biopython>=1.81
+numpy
+freesasa>=2.1.0
+PyYAML
