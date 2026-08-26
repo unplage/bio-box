@@ -1104,7 +1104,9 @@ async function googleFetch(url,{timeout=8000}={}){
   }
   throw new Error("Google Patents 请求失败（CORS 被拦截或超时）。已尝试: "+errors.join("；")+"。\n提示: 设置中填写可用 CORS 代理，或改用「MCP（免Key）」/「Espacenet」来源。");
 }
+// ===== 替换 googleXhr（增加 start 参数） =====
 async function googleXhr(q, num, start) {
+  // 注意：这里必须用 let，因为要拼接 start
   let url = "q=" + q + "&num=" + (num || 30);
   if (start !== undefined) url += "&start=" + start;
   const exp = encodeURIComponent(url);
@@ -1131,26 +1133,51 @@ function googleParseItems(d){
     };
   }).filter(p=>p.title&&p.number);
 }
+// ===== 替换 googlePatentsSearch（循环翻页 + 异常保护） =====
 async function googlePatentsSearch(target, num, country) {
-  const terms = expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ") + " in:title";
-  if (country) terms += ' country:' + country;
+  // 【关键修复】这里必须用 let，不能用 const，否则后续拼接 country 报错
+  let terms = expandTerms(target).slice(0,3)
+                .map(t => '"' + t.replace(/["\\]/g, " ").trim() + '"')
+                .filter(Boolean)
+                .join(" OR ") + " in:title";
   
-  const desired = num || 30;           // 目标总数
-  const pageSize = Math.min(desired, 10); // 每页最大 10（经测试强制上限）
+  if (country) {
+    terms += ' country:' + country;   // 现在可以正常拼接了
+  }
+
+  const desired = num || 30;                // 期望的总条数
+  const pageSize = Math.min(desired, 10);   // 实测每页最多返回 10 条
   let allItems = [];
   let start = 0;
   let totalFetched = 0;
 
   while (totalFetched < desired) {
-    const d = await googleXhr(terms || '"'+target+'"', pageSize, start);
-    const items = googleParseItems(d);
-    if (!items.length) break;          // 无更多数据
-    allItems = allItems.concat(items);
-    totalFetched += items.length;
-    start += pageSize;
-    // 防止无限循环，且 Google 最多返回约 200 条
-    if (start > 200) break;
+    try {
+      // 请求当前页
+      const d = await googleXhr(terms || '"' + target + '"', pageSize, start);
+      const items = googleParseItems(d);
+      
+      // 如果某一页没有数据了，说明已经到底，退出循环
+      if (!items || items.length === 0) break;
+      
+      allItems = allItems.concat(items);
+      totalFetched += items.length;
+      start += pageSize;  // 偏移量累加，实现翻页
+
+      // 安全保护：Google 未登录情况下最多约 200 条，防止死循环
+      if (start > 200) break;
+      
+      // 分页间隔 500ms，避免触发反爬限流（重要！）
+      await new Promise(res => setTimeout(res, 500));
+      
+    } catch (e) {
+      // 如果某一页请求失败（例如被限流），保留已获取的数据并跳出
+      console.warn("Google Patents 分页请求中断，已获取 " + allItems.length + " 条", e);
+      break;
+    }
   }
+  
+  // 返回裁剪后的结果
   return allItems.slice(0, desired);
 }
 async function googleCites(numRaw){
