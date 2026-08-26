@@ -1104,9 +1104,11 @@ async function googleFetch(url,{timeout=8000}={}){
   }
   throw new Error("Google Patents 请求失败（CORS 被拦截或超时）。已尝试: "+errors.join("；")+"。\n提示: 设置中填写可用 CORS 代理，或改用「MCP（免Key）」/「Espacenet」来源。");
 }
-async function googleXhr(q,num){
-  const exp=encodeURIComponent("q="+q+"&num="+(num||30));
-  const {text}=await googleFetch("https://patents.google.com/xhr/query?url="+exp);
+async function googleXhr(q, num, start) {
+  let url = "q=" + q + "&num=" + (num || 30);
+  if (start !== undefined) url += "&start=" + start;
+  const exp = encodeURIComponent(url);
+  const { text } = await googleFetch("https://patents.google.com/xhr/query?url=" + exp);
   return JSON.parse(text);
 }
 function googleParseItems(d){
@@ -1129,11 +1131,27 @@ function googleParseItems(d){
     };
   }).filter(p=>p.title&&p.number);
 }
-async function googlePatentsSearch(target,num,country){
-  let terms=expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ")+" in:title";
-  if(country) terms+=' country:'+country;
-  const d=await googleXhr(terms||'"'+target+'"',num||30);
-  return googleParseItems(d);
+async function googlePatentsSearch(target, num, country) {
+  const terms = expandTerms(target).slice(0,3).map(t=>'"'+t.replace(/["\\]/g," ").trim()+'"').filter(Boolean).join(" OR ") + " in:title";
+  if (country) terms += ' country:' + country;
+  
+  const desired = num || 30;           // 目标总数
+  const pageSize = Math.min(desired, 10); // 每页最大 10（经测试强制上限）
+  let allItems = [];
+  let start = 0;
+  let totalFetched = 0;
+
+  while (totalFetched < desired) {
+    const d = await googleXhr(terms || '"'+target+'"', pageSize, start);
+    const items = googleParseItems(d);
+    if (!items.length) break;          // 无更多数据
+    allItems = allItems.concat(items);
+    totalFetched += items.length;
+    start += pageSize;
+    // 防止无限循环，且 Google 最多返回约 200 条
+    if (start > 200) break;
+  }
+  return allItems.slice(0, desired);
 }
 async function googleCites(numRaw){
   const num=googleNum(numRaw);
