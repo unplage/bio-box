@@ -1,8 +1,10 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
-from .pdbio import write_structure, write_fasta, full_length_sequence
+from .pdbio import write_structure, write_fasta, full_length_sequence, \
+    mpnn_positions
 
 
 def prepare_inputs(target, chain_ids, mask, config, outdir, name='target'):
@@ -14,8 +16,11 @@ def prepare_inputs(target, chain_ids, mask, config, outdir, name='target'):
                     omit_resseq=config.get('omit_resseq', []))
     fix = fixed_positions_dict(target, chain_ids, mask)
     ties = symmetry_ties_dict(target, chain_ids, mask)
-    design_chains = {c: list(range(1, len(target.chains[c].residues) + 1))
-                     for c in chain_ids}
+    design_chains = {}
+    for c in chain_ids:
+        positions = mpnn_positions(target, c)
+        n = max(positions.values()) if positions else 0
+        design_chains[c] = list(range(1, n + 1))
     fix_name = outdir / f'{name}_fixed.jsonl'
     ties_name = outdir / f'{name}_ties.jsonl'
     des_name = outdir / f'{name}_designchains.jsonl'
@@ -42,7 +47,7 @@ def symmetry_ties_dict(target, chain_ids, mask):
 def mpnn_command(inputs, config, outdir, num_seqs=8, temperature='0.15 0.2'):
     prog = Path(config.get('proteinmpnn_dir', 'proteinmpnn'))
     cmd = [
-        'python', str(prog / 'protein_mpnn_run.py'),
+        sys.executable, str(prog / 'protein_mpnn_run.py'),
         '--pdb_path', str(inputs['pdb']),
         '--fixed_positions_jsonl', str(inputs['fixed']),
         '--tied_positions_jsonl', str(inputs['ties']),
@@ -94,6 +99,10 @@ def parse_design_fasta(fa_path, chain_ids):
             pair = token.strip().split('=')
             if len(pair) == 2:
                 attr[pair[0].strip()] = pair[1].strip()
+        # ProteinMPNN writes a leading non-sampled record (input sequence,
+        # no T=/sample= attrs); skip it so it is not treated as a design.
+        if 'T' not in attr and 'sample' not in attr:
+            continue
         designs.append({
             'name': header.split(',')[0].strip(),
             'chains': {c: s for c, s in zip(chain_ids, chains)},
@@ -126,13 +135,18 @@ def assemble_designs(designs, config, target, chain_ids, outdir, name='target'):
             seq_by_ref = {}
             from .pdbio import map_to_reference
             mapping = map_to_reference(target, cid)
-            ordinal = {r.id[1]: i + 1 for i, r in enumerate(target.chains[cid].residues)}
+            positions = mpnn_positions(target, cid)
             chain_seq = d['chains'][cid]
+            if len(chain_seq) == len(target.chains[cid].residues):
+                positions = {r.id[1]: i + 1 for i, r in
+                             enumerate(target.chains[cid].residues)}
             for r in target.chains[cid].residues:
                 pdb_res = r.id[1]
                 refn = mapping.get(pdb_res, pdb_res)
-                ordi = ordinal[pdb_res]
-                seq_by_ref[refn] = chain_seq[ordi - 1]
+                pos = positions.get(pdb_res)
+                if pos is None or pos > len(chain_seq):
+                    continue
+                seq_by_ref[refn] = chain_seq[pos - 1]
             rec['designed_positions'][cid] = sorted(seq_by_ref)
             full = full_length_sequence(ref, sorted(seq_by_ref),
                                         [seq_by_ref[r] for r in sorted(seq_by_ref)])

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FASTA 格式转换工具</title>
+<style>
+:root {
+  --bg: #0f1419;
+  --panel: #1a2332;
+  --panel2: #243044;
+  --border: #2d3f56;
+  --text: #e6edf3;
+  --muted: #8b9cb3;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --err: #ef4444;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px;
+}
+.container { max-width: 960px; margin: 0 auto; }
+h1 { font-size: 22px; margin-bottom: 6px; }
+.sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab {
+  flex: 1; padding: 10px; text-align: center; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--muted); font-size: 14px; user-select: none;
+}
+.tab.active { background: var(--panel2); color: var(--text); border-color: var(--accent); font-weight: 600; }
+.panel {
+  display: none; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px;
+}
+.panel.active { display: block; }
+.drop {
+  border: 2px dashed var(--border); border-radius: 10px; padding: 32px;
+  text-align: center; color: var(--muted); cursor: pointer; transition: 0.15s;
+  margin-bottom: 14px;
+}
+.drop:hover, .drop.over { border-color: var(--accent); color: var(--text); background: rgba(59,130,246,.06); }
+.drop strong { color: var(--accent); }
+.options { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 14px; font-size: 13px; }
+.options label { color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+select, input[type="text"] {
+  background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 10px; font-size: 13px;
+}
+button {
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 10px 18px; font-size: 14px; cursor: pointer; font-weight: 600;
+}
+button:hover { background: var(--accent-hover); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.ghost { background: var(--panel2); border: 1px solid var(--border); color: var(--text); font-weight: 400; }
+button.ghost:hover { border-color: var(--accent); }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.file-list { list-style: none; margin-bottom: 14px; }
+.file-list li {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 6px; font-size: 13px;
+}
+.file-list .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-list .meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.file-list .rm {
+  background: none; border: none; color: var(--err); cursor: pointer;
+  font-size: 16px; padding: 0 4px; font-weight: 400;
+}
+.file-list .up, .file-list .down {
+  background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px;
+}
+.file-list .up:hover, .file-list .down:hover { color: var(--text); }
+.stats { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.stats b { color: var(--ok); }
+.preview {
+  background: #0b0f14; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px; white-space: pre-wrap; word-break: break-all;
+  max-height: 240px; overflow: auto; color: #9cdcfe; display: none;
+}
+.msg { font-size: 13px; margin-top: 10px; display: none; }
+.msg.ok { color: var(--ok); display: block; }
+.msg.err { color: var(--err); display: block; }
+.msg.warn { color: var(--warn); display: block; }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
+code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🧬 FASTA 格式转换工具</h1>
+  <p class="sub">多个 FASTA 文件 ↔ 单个 FASTA 文件，纯前端本地运行，不上传数据。支持 <code>.fa</code> / <code>.fasta</code> / <code>.seq</code> / <code>.txt</code></p>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-merge">⤵️ 合并：多 → 单</div>
+    <div class="tab" id="tab-split">⤴️ 拆分：单 → 多</div>
+  </div>
+
+  <!-- 合并 -->
+  <div class="panel active" id="panel-merge">
+    <div class="drop" id="drop-merge">
+      拖拽 FASTA 文件到此处，或 <strong>点击选择</strong>（可多选）
+      <br><small>支持 .fa .fasta .seq .txt，可混选</small>
+    </div>
+    <input type="file" id="file-merge" multiple accept=".fa,.fasta,.seq,.txt" style="display:none">
+    <div class="options">
+      <label>输出扩展名
+        <select id="merge-ext">
+          <option value=".fa">.fa</option>
+          <option value=".fasta" selected>.fasta</option>
+          <option value=".seq">.seq</option>
+          <option value=".txt">.txt</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="merge-prefix"> 标题前添加文件名前缀</label>
+      <label><input type="checkbox" id="merge-renumber"> ID 冲突时自动重编号</label>
+    </div>
+    <ul class="file-list" id="list-merge"></ul>
+    <div class="stats" id="stats-merge"></div>
+    <div class="btn-row">
+      <button id="btn-merge" disabled>⬇️ 合并并下载</button>
+      <button class="ghost" id="btn-merge-clear" disabled>清空列表</button>
+      <button class="ghost" id="btn-merge-preview" disabled>预览</button>
+    </div>
+    <div class="preview" id="preview-merge"></div>
+    <div class="msg" id="msg-merge"></div>
+    <p class="hint">
+      · 无 <code>&gt;</code> 标题的纯序列文件会以文件名（去掉扩展名）作为标题合并。<br>
+      · 合并顺序 = 列表顺序，可用 ↑↓ 调整。
+    </p>
+  </div>
+
+  <!-- 拆分 -->
+  <div class="panel" id="panel-split">
+    <div class="drop" id="drop-split">
+      拖拽单个 FASTA 文件到此处，或 <strong>点击选择</strong>
+      <br><small>按记录拆分为多个文件</small>
+    </div>
+    <input type="file" id="file-split" accept=".fa,.fasta,.seq,.txt" style="display:none">
+    <div class="options">
+      <label>输出扩展名
+        <select id="split-ext">
+          <option value=".fa">.fa</option>
+          <option value=".fasta" selected>.fasta</option>
+          <option value=".seq">.seq</option>
+          <option value=".txt">.txt</option>
+        </select>
+      </label>
+      <label>文件名取自
+        <select id="split-nameby">
+          <option value="id" selected>序列 ID（标题第一个词）</option>
+          <option value="index">序号 001, 002, …</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="split-keepall" checked> 保留完整标题</label>
+    </div>
+    <ul class="file-list" id="list-split"></ul>
+    <div class="stats" id="stats-split"></div>
+    <div class="btn-row">
+      <button id="btn-split" disabled>⬇️ 拆分并逐个下载</button>
+      <button class="ghost" id="btn-split-zip" disabled>⬇️ 打包为 ZIP 下载</button>
+      <button class="ghost" id="btn-split-clear" disabled>清空</button>
+    </div>
+    <div class="msg" id="msg-split"></div>
+    <p class="hint">
+      · 文件名会清洗非法字符；ID 重复时自动加 <code>_2</code>、<code>_3</code> 后缀。<br>
+      · 「逐个下载」浏览器可能询问是否允许多文件下载，请选择允许。<br>
+      · ZIP 为原生实现（不压缩），序列文件几乎无体积损失。
+    </p>
+  </div>
+</div>
+
+<script>
+// ─── FASTA 解析/序列化 ────────────────────────────────────────
+function parseFasta(text, fallbackName) {
+  const recs = [];
+  let cur = null;
+  for (let raw of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith(">")) {
+      if (cur) recs.push(cur);
+      cur = { header: line.slice(1).trim(), seq: [] };
+    } else if (cur) {
+      cur.seq.push(line.replace(/\s+/g, ""));
+    } else {
+      cur = { header: fallbackName || "seq", seq: [line.replace(/\s+/g, "")] };
+    }
+  }
+  if (cur) recs.push(cur);
+  return recs.map(r => ({ header: r.header, seq: r.seq.join("").toUpperCase() }));
+}
+
+function serializeFasta(recs) {
+  return recs.map(r => ">" + r.header + "\n" + wrapSeq(r.seq)).join("\n") + "\n";
+}
+
+function wrapSeq(s, w = Infinity) {
+  if (!s) return "";
+  if (w === Infinity) return s;
+  const out = [];
+  for (let i = 0; i < s.length; i += w) out.push(s.slice(i, i + w));
+  return out.join("\n");
+}
+
+function recId(header) {
+  const t = header.trim();
+  const sp = t.search(/\s/);
+  return sp === -1 ? t : t.slice(0, sp);
+}
+
+function sanitize(name) {
+  return (name || "seq").replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").replace(/\.+$/, "") || "seq";
+}
+
+function uniqueName(base, used) {
+  let n = base, i = 2;
+  while (used.has(n.toLowerCase())) n = base + "_" + (i++);
+  used.add(n.toLowerCase());
+  return n;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// ─── 最小 ZIP（store，无压缩）────────────────────────────────
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function makeZip(files) {
+  const enc = new TextEncoder();
+  const chunks = [], central = [];
+  let offset = 0;
+  const now = new Date();
+  const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF;
+  const dosDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+
+  for (const f of files) {
+    const nameB = enc.encode(f.name);
+    const dataB = enc.encode(f.content);
+    const crc = crc32(dataB);
+
+    const local = new Uint8Array(30 + nameB.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0x0800, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint16(10, dosTime, true);
+    lv.setUint16(12, dosDate, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, dataB.length, true);
+    lv.setUint32(22, dataB.length, true);
+    lv.setUint16(26, nameB.length, true);
+    lv.setUint16(28, 0, true);
+    local.set(nameB, 30);
+
+    chunks.push(local, dataB);
+
+    const cen = new Uint8Array(46 + nameB.length);
+    const cv = new DataView(cen.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0x0800, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, dosTime, true);
+    cv.setUint16(14, dosDate, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, dataB.length, true);
+    cv.setUint32(24, dataB.length, true);
+    cv.setUint16(28, nameB.length, true);
+    cv.setUint32(42, offset, true);
+    cen.set(nameB, 46);
+    central.push(cen);
+
+    offset += local.length + dataB.length;
+  }
+
+  let cenSize = 0;
+  for (const c of central) cenSize += c.length;
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cenSize, true);
+  ev.setUint32(16, offset, true);
+
+  return new Blob([...chunks, ...central, end], { type: "application/zip" });
+}
+
+// ─── UI 工具 ─────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+
+function showMsg(id, text, cls) {
+  const el = $(id);
+  el.textContent = text;
+  el.className = "msg " + cls;
+}
+
+function hideMsg(id) { $(id).className = "msg"; }
+
+function bindTabs() {
+  const t1 = $("tab-merge"), t2 = $("tab-split");
+  t1.onclick = () => { t1.classList.add("active"); t2.classList.remove("active"); $("panel-merge").classList.add("active"); $("panel-split").classList.remove("active"); };
+  t2.onclick = () => { t2.classList.add("active"); t1.classList.remove("active"); $("panel-split").classList.add("active"); $("panel-merge").classList.remove("active"); };
+}
+
+function bindDrop(dropEl, inputEl, onFiles) {
+  dropEl.onclick = () => inputEl.click();
+  dropEl.ondragover = e => { e.preventDefault(); dropEl.classList.add("over"); };
+  dropEl.ondragleave = () => dropEl.classList.remove("over");
+  dropEl.ondrop = e => {
+    e.preventDefault();
+    dropEl.classList.remove("over");
+    if (e.dataTransfer.files.length) onFiles([...e.dataTransfer.files]);
+  };
+  inputEl.onchange = () => {
+    if (inputEl.files.length) onFiles([...inputEl.files]);
+    inputEl.value = "";
+  };
+}
+
+const ALLOWED = /\.(fa|fasta|seq|txt)$/i;
+
+// ─── 合并 ────────────────────────────────────────────────────
+let mergeFiles = [];
+
+async function readFileText(file) {
+  return await file.text();
+}
+
+async function addMergeFiles(files) {
+  const bad = files.filter(f => !ALLOWED.test(f.name));
+  const good = files.filter(f => ALLOWED.test(f.name));
+  if (bad.length) showMsg("msg-merge", `已忽略 ${bad.length} 个不支持的文件：${bad.map(f => f.name).join(", ")}`, "warn");
+  else hideMsg("msg-merge");
+
+  for (const f of good) {
+    if (mergeFiles.some(m => m.file.name === f.name && m.file.size === f.size)) continue;
+    const text = await readFileText(f);
+    const fallback = f.name.replace(/\.[^.]+$/, "");
+    const recs = parseFasta(text, fallback);
+    mergeFiles.push({ file: f, recs });
+  }
+  renderMergeList();
+}
+
+function renderMergeList() {
+  const ul = $("list-merge");
+  ul.innerHTML = "";
+  let total = 0;
+  mergeFiles.forEach((item, i) => {
+    total += item.recs.length;
+    const li = document.createElement("li");
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = item.file.name;
+    name.title = item.file.name;
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    const bases = item.recs.reduce((s, r) => s + r.seq.length, 0);
+    meta.textContent = `${item.recs.length} 条 · ${bases.toLocaleString()} bp`;
+    const up = document.createElement("button");
+    up.className = "up"; up.textContent = "↑"; up.title = "上移";
+    up.disabled = i === 0;
+    up.onclick = () => { [mergeFiles[i-1], mergeFiles[i]] = [mergeFiles[i], mergeFiles[i-1]]; renderMergeList(); };
+    const down = document.createElement("button");
+    down.className = "down"; down.textContent = "↓"; down.title = "下移";
+    down.disabled = i === mergeFiles.length - 1;
+    down.onclick = () => { [mergeFiles[i+1], mergeFiles[i]] = [mergeFiles[i], mergeFiles[i+1]]; renderMergeList(); };
+    const rm = document.createElement("button");
+    rm.className = "rm"; rm.textContent = "✕"; rm.title = "移除";
+    rm.onclick = () => { mergeFiles.splice(i, 1); renderMergeList(); };
+    li.append(name, meta, up, down, rm);
+    ul.appendChild(li);
+  });
+  const n = mergeFiles.length;
+  $("stats-merge").innerHTML = n ? `共 <b>${n}</b> 个文件 · <b>${total}</b> 条序列` : "";
+  $("btn-merge").disabled = n === 0;
+  $("btn-merge-clear").disabled = n === 0;
+  $("btn-merge-preview").disabled = n === 0;
+  $("preview-merge").style.display = "none";
+  if (n === 0) hideMsg("msg-merge");
+}
+
+function buildMerged() {
+  const prefix = $("merge-prefix").checked;
+  const renumber = $("merge-renumber").checked;
+  const used = new Set();
+  const out = [];
+  const idMap = new Map();
+
+  for (const item of mergeFiles) {
+    const stem = item.file.name.replace(/\.[^.]+$/, "");
+    for (const r of item.recs) {
+      let header = r.header;
+      let id = recId(header);
+      const rest = header.length > id.length ? header.slice(id.length) : "";
+
+      if (prefix) {
+        id = sanitize(stem) + "|" + id;
+        header = id + rest;
+      }
+      if (renumber || prefix) {
+        if (used.has(id.toLowerCase())) {
+          let k = 2, nid;
+          do { nid = id + "_" + (k++); } while (used.has(nid.toLowerCase()));
+          idMap.set(id, nid);
+          id = nid;
+          header = id + rest;
+        }
+        used.add(id.toLowerCase());
+      }
+      out.push({ header, seq: r.seq });
+    }
+  }
+  return out;
+}
+
+function mergeStats(recs) {
+  const bases = recs.reduce((s, r) => s + r.seq.length, 0);
+  return `输出 <b>${recs.length}</b> 条序列 · <b>${bases.toLocaleString()}</b> bp`;
+}
+
+// ─── 拆分 ────────────────────────────────────────────────────
+let splitRecs = [];
+let splitSourceName = "";
+
+async function setSplitFile(file) {
+  if (!ALLOWED.test(file.name)) {
+    showMsg("msg-split", `不支持的文件类型：${file.name}`, "err");
+    return;
+  }
+  const text = await readFileText(file);
+  splitSourceName = file.name.replace(/\.[^.]+$/, "");
+  splitRecs = parseFasta(text, splitSourceName);
+  if (!splitRecs.length) {
+    showMsg("msg-split", "未解析到任何序列记录", "err");
+    renderSplitList();
+    return;
+  }
+  hideMsg("msg-split");
+  renderSplitList();
+}
+
+function renderSplitList() {
+  const ul = $("list-split");
+  ul.innerHTML = "";
+  splitRecs.forEach((r, i) => {
+    const li = document.createElement("li");
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = (i + 1) + ". " + (r.header || "(无标题)");
+    name.title = r.header;
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    meta.textContent = `${r.seq.length.toLocaleString()} bp`;
+    li.append(name, meta);
+    ul.appendChild(li);
+  });
+  const n = splitRecs.length;
+  $("stats-split").innerHTML = n ? `解析到 <b>${n}</b> 条记录` : "";
+  $("btn-split").disabled = n === 0;
+  $("btn-split-zip").disabled = n === 0;
+  $("btn-split-clear").disabled = n === 0;
+  if (n === 0 && !splitSourceName) hideMsg("msg-split");
+}
+
+function buildSplitFiles() {
+  const ext = $("split-ext").value;
+  const byId = $("split-nameby").value === "id";
+  const keepAll = $("split-keepall").checked;
+  const used = new Set();
+  const files = [];
+
+  splitRecs.forEach((r, i) => {
+    const id = recId(r.header) || ("seq" + (i + 1));
+    const base = sanitize(byId ? id : String(i + 1).padStart(3, "0"));
+    const name = uniqueName(base, used) + ext;
+    let header = keepAll ? r.header : id;
+    if (!header) header = id;
+    const content = serializeFasta([{ header, seq: r.seq }]);
+    files.push({ name, content });
+  });
+  return files;
+}
+
+// ─── 初始化 ──────────────────────────────────────────────────
+bindTabs();
+
+bindDrop($("drop-merge"), $("file-merge"), addMergeFiles);
+bindDrop($("drop-split"), $("file-split"), files => setSplitFile(files[0]));
+
+$("btn-merge-clear").onclick = () => { mergeFiles = []; renderMergeList(); };
+
+$("btn-merge-preview").onclick = () => {
+  const recs = buildMerged();
+  const text = serializeFasta(recs);
+  const p = $("preview-merge");
+  p.style.display = "block";
+  p.textContent = text.length > 4000 ? text.slice(0, 4000) + "\n…（预览截断，共 " + text.length + " 字符）" : text;
+  showMsg("msg-merge", mergeStats(recs), "ok");
+};
+
+$("btn-merge").onclick = () => {
+  try {
+    const recs = buildMerged();
+    if (!recs.length) { showMsg("msg-merge", "没有可合并的序列", "err"); return; }
+    const ext = $("merge-ext").value;
+    const text = serializeFasta(recs);
+    const name = sanitize(splitSourceName || "merged") + ext;
+    downloadBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), name);
+    showMsg("msg-merge", `已下载 ${name} — ${mergeStats(recs).replace(/<[^>]+>/g, "")}`, "ok");
+  } catch (e) {
+    showMsg("msg-merge", "合并失败：" + e.message, "err");
+  }
+};
+
+$("btn-split-clear").onclick = () => {
+  splitRecs = []; splitSourceName = "";
+  renderSplitList(); hideMsg("msg-split");
+};
+
+$("btn-split").onclick = () => {
+  try {
+    const files = buildSplitFiles();
+    if (!files.length) { showMsg("msg-split", "没有可拆分的记录", "err"); return; }
+    files.forEach((f, i) => {
+      setTimeout(() => {
+        downloadBlob(new Blob([f.content], { type: "text/plain;charset=utf-8" }), f.name);
+      }, i * 300);
+    });
+    showMsg("msg-split", `开始下载 ${files.length} 个文件，浏览器若提示请选择「允许」`, "ok");
+  } catch (e) {
+    showMsg("msg-split", "拆分失败：" + e.message, "err");
+  }
+};
+
+$("btn-split-zip").onclick = () => {
+  try {
+    const files = buildSplitFiles();
+    if (!files.length) { showMsg("msg-split", "没有可拆分的记录", "err"); return; }
+    const zip = makeZip(files);
+    const name = sanitize(splitSourceName || "split") + ".zip";
+    downloadBlob(zip, name);
+    showMsg("msg-split", `已下载 ${name}（含 ${files.length} 个文件）`, "ok");
+  } catch (e) {
+    showMsg("msg-split", "打包失败：" + e.message, "err");
+  }
+};
+</script>
+</body>
+</html>

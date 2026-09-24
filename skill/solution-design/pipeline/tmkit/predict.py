@@ -10,24 +10,32 @@ from .metrics import tm_score, parse_plddt, rmsd, \
 
 
 def multimer_fasta(assemble_records, chain_ids, outdir):
+    """Write one FASTA file per design; each file has one ``>`` record per
+    chain (AF2 multimer format: all records in a single file = one complex)."""
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-    fasta_records = []
+    paths = []
     for rec in assemble_records:
-        seqs = [rec['chains_full'][c] for c in chain_ids]
         name = rec['name'].replace(':', '_')
-        fasta_records.append((name, ':'.join(seqs)))
-    write_fasta(outdir / 'predict_input.fasta', fasta_records)
-    return outdir / 'predict_input.fasta'
+        fasta_records = [(f'{name}_{c}', rec['chains_full'][c])
+                         for c in chain_ids]
+        fa_path = outdir / f'{name}.fa'
+        write_fasta(fa_path, fasta_records)
+        paths.append(fa_path)
+    return paths
 
 
 def predict_command(config, fasta, outdir, dry_run=True):
     tool = config.get('predict_tool', 'colabfold')
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    if isinstance(fasta, (list, tuple)):
+        fasta_str = ','.join(str(f) for f in fasta)
+    else:
+        fasta_str = str(fasta)
     if tool == 'colabfold':
         cmd = [
-            'colabfold_batch', str(fasta),
+            'colabfold_batch', fasta_str,
             '--model-type', config.get('colabfold_model', 'alpha2_multimer_v3'),
             '--num-recycle', str(config.get('num_recycles', 3)),
             '--outdir', str(outdir),
@@ -38,7 +46,7 @@ def predict_command(config, fasta, outdir, dry_run=True):
     if tool == 'alphafold':
         cmd = [
             'python', str(config['alphafold_script']),
-            '--fasta_paths', str(fasta),
+            '--fasta_paths', fasta_str,
             '--output_dir', str(outdir),
             '--model_preset', 'multimer',
             '--db_preset', config.get('db_preset', 'full_dbs'),

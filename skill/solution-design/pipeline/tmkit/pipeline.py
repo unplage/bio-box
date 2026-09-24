@@ -128,6 +128,7 @@ def step_native(target, cfg, outdir):
         'tm_score': float(np.mean(tm_total)) if tm_total else float('nan'),
         'plddt': float('nan'), 'ecd_rmsd': 0.0,
         'surf_hydro': surface_hydrophobic_fraction(all_sasa, aa_map),
+        'surf_hydro_des': float('nan'),
         'seq_recovery': 1.0, 'score': float('nan'), 'mutations': 0,
         'chains_full': full, 'model': str(target.path),
     }

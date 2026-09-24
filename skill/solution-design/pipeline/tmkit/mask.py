@@ -1,5 +1,6 @@
 import json
-from .pdbio import chain_ordinal, map_to_reference, residue_sasa_map
+from .pdbio import chain_ordinal, map_to_reference, residue_sasa_map, \
+    mpnn_positions
 
 
 def classify_region(refn, tm_segments, ecd_segments, icd_segments, nterm='ICD', cterm='ICD'):
@@ -141,17 +142,19 @@ def resolve(target, chain_ids, mask):
     design = {}
     fixed = {}
     for cid in chain_ids:
-        ordinal = chain_ordinal(target, cid)
-        mapping = map_to_reference(target, cid)
+        positions = mpnn_positions(target, cid)
         design[cid] = []
         fixed[cid] = []
         for refn in sorted(mask[cid]):
             info = mask[cid][refn]
             pdb_res = info['pdb_residue']
+            pos = positions.get(pdb_res)
+            if pos is None:
+                continue
             if info['designable']:
-                design[cid].append(ordinal[pdb_res])
+                design[cid].append(pos)
             else:
-                fixed[cid].append(ordinal[pdb_res])
+                fixed[cid].append(pos)
     return design, fixed
 
 
@@ -163,14 +166,14 @@ def fixed_positions_dict(target, chain_ids, mask):
 def symmetry_ties_dict(target, chain_ids, mask):
     design, _ = resolve(target, chain_ids, mask)
     if not chain_ids:
-        return {}
+        return []
     first = chain_ids[0]
     if all(design[c] == design[chain_ids[0]] for c in chain_ids):
         positions = design[chain_ids[0]]
         item = {}
         for c in chain_ids:
             item[c] = [positions, [1.0] * len(positions)]
-        return {'0': [item]}
+        return [item]
     by_ref = {}
     for cid in chain_ids:
         ordinal = chain_ordinal(target, cid)
@@ -185,4 +188,4 @@ def symmetry_ties_dict(target, chain_ids, mask):
             for c in chain_ids:
                 item[c] = [[d[c]], [1.0]]
             items.append(item)
-    return {'0': items}
+    return items

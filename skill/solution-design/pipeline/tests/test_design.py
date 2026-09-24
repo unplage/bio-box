@@ -15,14 +15,18 @@ def test_prepare_inputs_writes_jsonls(target, cfg, tmp_path):
     ties = json.loads(inputs['ties'].read_text())
     design = json.loads(inputs['design_chains'].read_text())
     key = cfg['name']
-    # fixed + designable == modeled length per chain
+    from tmkit.pdbio import mpnn_positions
+    n_chain = max(max(mpnn_positions(target, c).values(), default=0)
+                  for c in cfg['chains'])
+    # fixed + designable == modeled residues; design_chains == X-padded
+    # MPNN chain length (gap positions get X, never designed)
     for c in cfg['chains']:
         n_des = sum(1 for info in mask[c].values() if info['designable'])
         assert len(fix[key][c]) == len(target.chains[c].residues) - n_des
-        assert len(design[key][c]) == len(target.chains[c].residues)
+        assert len(design[key][c]) == n_chain
     # C3 symmetry: single ties group across three chains
-    assert ties[key]['0'][0]['A'] == ties[key]['0'][0]['B'] == \
-        ties[key]['0'][0]['C']
+    assert ties[key][0]['A'][0] == ties[key][0]['B'][0] == \
+        ties[key][0]['C'][0]
 
 
 def test_mpnn_command_flags(target, cfg, tmp_path):

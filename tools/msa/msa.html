@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多序列比对工具 (MSA)</title>
+<style>
+:root {
+  --bg: #0f1419; --panel: #1a2332; --panel2: #243044; --border: #2d3f56;
+  --text: #e6edf3; --muted: #8b9cb3; --accent: #3b82f6; --accent-hover: #2563eb;
+  --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px; }
+.container { max-width: 1100px; margin: 0 auto; }
+h1 { font-size: 22px; margin-bottom: 6px; }
+.sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+.drop { border: 2px dashed var(--border); border-radius: 10px; padding: 28px; text-align: center; color: var(--muted); cursor: pointer; transition: .15s; }
+.drop:hover, .drop.over { border-color: var(--accent); color: var(--text); background: rgba(59,130,246,.06); }
+.drop strong { color: var(--accent); }
+details.params { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+details.params summary { cursor: pointer; color: var(--accent); font-size: 14px; user-select: none; font-weight: 600; }
+.param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 12px; }
+.param-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.param-grid label.row { flex-direction: row; align-items: center; gap: 8px; }
+select, input[type="number"] { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px; width: 100%; }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+button { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px; cursor: pointer; font-weight: 600; }
+button:hover { background: var(--accent-hover); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.ghost { background: var(--panel2); border: 1px solid var(--border); color: var(--text); font-weight: 400; }
+button.ghost:hover { border-color: var(--accent); }
+.stats { font-size: 13px; color: var(--muted); margin-top: 12px; line-height: 1.7; }
+.stats b { color: var(--ok); }
+.type-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
+.progress-wrap { display: none; margin-top: 14px; }
+.progress-wrap.on { display: block; }
+.progress-bar { height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #60a5fa); transition: width .2s; }
+.progress-text { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.msg { font-size: 13px; margin-top: 10px; display: none; line-height: 1.6; }
+.msg.ok { color: var(--ok); display: block; }
+.msg.err { color: var(--err); display: block; }
+.msg.warn { color: var(--warn); display: block; }
+#result { display: none; }
+.result-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.result-head h2 { font-size: 16px; }
+.result-head .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+.canvas-scroll { overflow: auto; max-height: 480px; border: 1px solid var(--border); border-radius: 8px; background: #0b0f14; }
+#alnCanvas { display: block; }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
+.hint code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🧬 多序列比对工具 (MSA)</h1>
+  <p class="sub">
+    上传 FASTA 核酸或氨基酸序列（<code>.fa</code> / <code>.fasta</code> / <code>.seq</code> / <code>.txt</code>，可多文件合并），
+    浏览器本地完成比对：两两 Needleman–Wunsch（仿射缺口）→ UPGMA 引导树 → 渐进 profile 比对。
+    计算在 Web Worker 中进行，数据不离开本机。
+  </p>
+
+  <div class="panel">
+    <div class="drop" id="dropZone">
+      拖拽 FASTA 文件到此处，或 <strong>点击选择</strong>（可多选）
+      <br><small>建议 ≤50 条 × ≤500 bp/aa</small>
+    </div>
+    <input type="file" id="fileInput" multiple accept=".fa,.fasta,.seq,.txt,.fas" style="display:none">
+    <div class="stats" id="seqStats"></div>
+
+    <details class="params">
+      <summary>⚙️ 参数设置（全量）</summary>
+      <div class="param-grid">
+        <label>序列类型
+          <select id="pType">
+            <option value="auto" selected>自动识别</option>
+            <option value="nt">核酸</option>
+            <option value="aa">蛋白质</option>
+          </select>
+        </label>
+        <label>打分矩阵 / 匹配分
+          <select id="pMatrix">
+            <option value="auto" selected>自动（核酸=匹配分，蛋白=BLOSUM62）</option>
+            <option value="blosum62">BLOSUM62</option>
+            <option value="pam250">PAM250</option>
+            <option value="custom">自定义匹配/错配</option>
+          </select>
+        </label>
+        <label>匹配分
+          <input type="number" id="pMatch" value="2" step="0.5">
+        </label>
+        <label>错配罚分
+          <input type="number" id="pMismatch" value="-1" step="0.5">
+        </label>
+        <label>缺口开放 gapOpen
+          <input type="number" id="pGapOpen" value="10" step="0.5">
+        </label>
+        <label>缺口延伸 gapExtend
+          <input type="number" id="pGapExtend" value="0.5" step="0.1">
+        </label>
+        <label class="row"><input type="checkbox" id="pEndGap"> 惩罚两端缺口（完全全局）</label>
+        <label class="row"><input type="checkbox" id="pUpper" checked> 输出转大写</label>
+        <label>着色方式
+          <select id="pColor">
+            <option value="consensus" selected>保守度背景 + 残基类型</option>
+            <option value="type">仅残基类型着色</option>
+            <option value="match">与 consensus 一致/不一致</option>
+          </select>
+        </label>
+        <label>保守列阈值 (%)
+          <input type="number" id="pThresh" value="60" min="0" max="100" step="5">
+        </label>
+      </div>
+    </details>
+
+    <div class="btn-row">
+      <button id="btnRun" disabled>🚀 开始比对</button>
+      <button class="ghost" id="btnClear" disabled>清空</button>
+    </div>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText">准备中…</div>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="panel" id="result">
+    <div class="result-head">
+      <h2>📊 比对结果</h2>
+      <div class="btns">
+        <button class="ghost" id="btnFasta">⬇️ 比对 FASTA</button>
+        <button class="ghost" id="btnConsensus">⬇️ consensus FASTA</button>
+        <button class="ghost" id="btnTree">⬇️ Newick 树</button>
+        <button class="ghost" id="btnPng">⬇️ 比对图片 PNG</button>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="canvas-scroll"><canvas id="alnCanvas"></canvas></div>
+    <div class="stats" id="alnStats"></div>
+  </div>
+
+  <p class="hint">
+    · 缺口长度 <code>k</code> 代价 = <code>gapOpen + (k−1) × gapExtend</code>；默认两端缺口自由，可改为完全全局。<br>
+    · 适用约 ≤50 条 × ≤500 bp/aa；更大规模请用 MUSCLE / MAFFT。精度接近 ClustalΩ，日常小规模分析足够。
+  </p>
+</div>
+
+<script id="msaWorkerSource" type="javascript/worker">
+"use strict";
+const AA = "ARNDCQEGHILKMFPSTWYVBZX*";
+const AA_IDX = {};
+for (let i = 0; i < AA.length; i++) AA_IDX[AA[i]] = i;
+
+const BLOSUM62 = [
+[4,-1,-2,-2,0,-1,-1,0,-2,-1,-1,-1,-1,-2,-1,1,0,-3,-2,0,-2,-1,0,-4],
+[-1,5,0,-2,-3,1,0,-2,0,-3,-2,2,-1,-3,-2,-1,-1,-3,-2,-3,-1,0,-1,-4],
+[-2,0,6,1,-3,0,0,0,1,-3,-3,0,-2,-3,-2,1,0,-4,-2,-3,3,0,-1,-4],
+[-2,-2,1,6,-3,0,2,-1,-1,-3,-4,-1,-3,-3,-1,0,-1,-4,-3,-3,4,1,-1,-4],
+[0,-3,-3,-3,9,-3,-4,-3,-3,-1,-1,-3,-1,-2,-3,-1,-1,-2,-2,-1,-3,-3,-2,-4],
+[-1,1,0,0,-3,5,2,-2,0,-3,-2,1,0,-3,-1,0,-1,-2,-1,-2,0,3,-1,-4],
+[-1,0,0,2,-4,2,5,-2,0,-3,-3,1,-2,-3,-1,0,-1,-3,-2,-2,1,4,-1,-4],
+[0,-2,0,-1,-3,-2,-2,6,-2,-4,-4,-2,-3,-3,-2,0,-2,-2,-3,-3,-1,-2,-1,-4],
+[-2,0,1,-1,-3,0,0,-2,8,-3,-3,-1,-2,-1,-2,-1,-2,-2,2,-3,0,0,-1,-4],
+[-1,-3,-3,-3,-1,-3,-3,-4,-3,4,2,-3,1,0,-3,-2,-1,-3,-1,3,-3,-3,-1,-4],
+[-1,-2,-3,-4,-1,-2,-3,-4,-3,2,4,-2,2,0,-3,-2,-1,-2,-1,1,-4,-3,-1,-4],
+[-1,2,0,-1,-3,1,1,-2,-1,-3,-2,5,-1,-3,-1,0,-1,-3,-2,-2,0,1,-1,-4],
+[-1,-1,-2,-3,-1,0,-2,-3,-2,1,2,-1,5,0,-2,-1,-1,-1,-1,1,-3,-1,-1,-4],
+[-2,-3,-3,-3,-2,-3,-3,-3,-1,0,0,-3,0,6,-4,-2,-2,1,3,-1,-3,-3,-1,-4],
+[-1,-2,-2,-1,-3,-1,-1,-2,-2,-3,-3,-1,-2,-4,7,-1,-1,-4,-3,-2,-2,-1,-2,-4],
+[1,-1,1,0,-1,0,0,0,-1,-2,-2,0,-1,-2,-1,4,1,-3,-2,-2,0,0,0,-4],
+[0,-1,0,-1,-1,-1,-1,-2,-2,-1,-1,-1,-1,-2,-1,1,5,-2,-2,0,-1,-1,0,-4],
+[-3,-3,-4,-4,-2,-2,-3,-2,-2,-3,-2,-3,-1,1,-4,-3,-2,11,2,-3,-4,-3,-2,-4],
+[-2,-2,-2,-3,-2,-1,-2,-3,2,-1,-1,-2,-1,3,-3,-2,-2,2,7,-1,-3,-2,-1,-4],
+[0,-3,-3,-3,-1,-2,-2,-3,-3,3,1,-2,1,-1,-2,-2,0,-3,-1,4,-3,-2,-1,-4],
+[-2,-1,3,4,-3,0,1,-1,0,-3,-4,0,-3,-3,-2,0,-1,-4,-3,-3,4,1,-1,-4],
+[-1,0,0,1,-3,3,4,-2,0,-3,-3,1,-1,-3,-1,0,-1,-3,-2,-2,1,4,-1,-4],
+[0,-1,-1,-1,-2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-2,0,0,-2,-1,-1,-1,-1,-1,-4],
+[-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,1]
+];
+
+const PAM250 = [
+[2,-2,0,0,-3,1,0,0,-2,-1,-1,-1,-2,-1,1,1,1,-6,-3,0,0,0,0,-8],
+[-2,6,0,-1,-4,3,1,-2,0,-3,-2,2,-1,-3,0,0,1,-2,-4,-1,0,1,0,-8],
+[0,0,2,2,-3,0,1,1,2,-2,-1,2,0,-2,1,0,1,-2,-1,1,1,1,0,-8],
+[0,-1,2,5,-4,2,3,0,1,-3,-2,3,1,-2,0,0,1,-5,-3,0,3,3,0,-8],
+[-3,-4,-3,-4,10,-4,-5,-4,-3,-3,-2,-4,-2,-3,0,0,-6,-4,-3,-3,-4,-4,0,-8],
+[1,3,0,2,-4,4,2,-1,1,-2,-1,2,0,-2,0,0,0,-3,-3,0,2,3,0,-8],
+[0,1,1,3,-5,2,4,-1,1,-3,-2,3,0,-2,0,0,0,-4,-3,1,3,4,0,-8],
+[0,-2,1,0,-4,-1,-1,5,-2,-3,-2,1,-1,-1,1,0,0,-4,-4,-1,1,1,0,-8],
+[-2,0,2,1,-3,1,1,-2,6,-3,-2,1,-2,-2,0,0,1,-4,-3,1,1,1,0,-8],
+[-1,-3,-2,-3,-3,-2,-3,-3,-3,4,2,-3,2,1,-3,-2,-1,-5,-3,3,-2,-3,0,-8],
+[-1,-2,-1,-2,-2,-1,-2,-2,-3,2,3,-2,3,2,-3,-1,-1,-4,-3,2,-1,-2,0,-8],
+[-1,2,2,3,-4,2,3,1,1,-3,-2,4,1,-2,0,0,0,-4,-3,1,2,3,0,-8],
+[-2,-1,0,1,-2,-2,0,-1,-2,2,3,-1,3,2,-2,-1,-1,-3,-3,2,0,-1,0,-8],
+[-1,-3,-2,-2,-3,-2,-2,-1,-2,1,2,-2,2,5,-3,-2,-1,-4,-3,1,-2,-2,0,-8],
+[1,0,1,0,0,0,0,1,0,-3,-3,0,-2,-3,6,1,0,-7,-4,0,0,0,0,-8],
+[1,0,0,0,0,0,0,0,0,-2,-1,0,-1,-2,1,2,1,-3,-3,0,0,0,0,-8],
+[1,1,1,1,-1,0,0,0,1,-1,-1,0,-1,-1,0,1,4,-5,-3,0,1,1,0,-8],
+[-6,-2,-2,-5,-4,-3,-4,-4,-4,-5,-4,-4,-3,-4,-7,-3,-5,14,3,-5,-4,-4,0,-8],
+[-3,-4,-1,-3,-3,-3,-3,-4,-3,-3,-3,-3,-3,3,-4,-3,-3,3,8,-3,-2,-3,0,-8],
+[0,-1,1,0,-3,0,1,-1,1,3,2,1,2,1,0,0,0,-5,-3,3,1,1,0,-8],
+[0,0,1,3,-4,0,3,1,1,-2,-1,2,0,-2,0,0,1,-4,-2,1,3,3,0,-8],
+[0,1,0,3,-4,3,4,1,1,-3,-2,3,-1,-2,0,0,1,-4,-3,1,4,4,0,-8],
+[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-8],
+[-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,1]
+];
+
+function makeScorer(params) {
+  const mismatch = Number(params.mismatch);
+  if (params.type === "aa") {
+    const M = params.matrix === "pam250" ? PAM250 : BLOSUM62;
+    return (x, y) => {
+      const i = AA_IDX[x], j = AA_IDX[y];
+      if (i === undefined || j === undefined) return mismatch;
+      return M[i][j];
+    };
+  }
+  const match = Number(params.match);
+  return (x, y) => (x === y ? match : mismatch);
+}
+
+const NEG = -1e18;
+
+function nwAlign(a, b, sf, go, ge, freeEnds) {
+  const n = a.length, m = b.length, W = m + 1;
+  const size = (n + 1) * W;
+  const M = new Float64Array(size);
+  const X = new Float64Array(size);
+  const Y = new Float64Array(size);
+  const pM = new Int8Array(size);
+  const pX = new Int8Array(size);
+  const pY = new Int8Array(size);
+
+  M[0] = 0;
+  for (let i = 1; i <= n; i++) {
+    const k = i * W;
+    if (freeEnds) {
+      M[k] = 0; X[k] = 0; Y[k] = NEG;
+      pM[k] = 0; pX[k] = 0;
+    } else {
+      M[k] = NEG;
+      X[k] = -(go + (i - 1) * ge);
+      pX[k] = 1;
+      Y[k] = NEG;
+    }
+  }
+  for (let j = 1; j <= m; j++) {
+    if (freeEnds) {
+      M[j] = 0; Y[j] = 0; X[j] = NEG;
+      pM[j] = 0; pY[j] = 0;
+    } else {
+      M[j] = NEG;
+      Y[j] = -(go + (j - 1) * ge);
+      pY[j] = 2;
+      X[j] = NEG;
+    }
+  }
+  X[0] = NEG; Y[0] = NEG;
+
+  for (let i = 1; i <= n; i++) {
+    const ai = a[i - 1];
+    const row = i * W, prow = (i - 1) * W;
+    for (let j = 1; j <= m; j++) {
+      const idx = row + j;
+      const prev = prow + j - 1;
+      let bs = M[prev], st = 0;
+      if (X[prev] > bs) { bs = X[prev]; st = 1; }
+      if (Y[prev] > bs) { bs = Y[prev]; st = 2; }
+      M[idx] = bs + sf(ai, b[j - 1]);
+      pM[idx] = st;
+
+      const a1 = M[prow + j] - go, a2 = X[prow + j] - ge, a3 = Y[prow + j] - go;
+      if (a1 >= a2 && a1 >= a3) { X[idx] = a1; pX[idx] = 0; }
+      else if (a2 >= a3) { X[idx] = a2; pX[idx] = 1; }
+      else { X[idx] = a3; pX[idx] = 2; }
+
+      const b1 = M[row + j - 1] - go, b2 = Y[row + j - 1] - ge, b3 = X[row + j - 1] - go;
+      if (b1 >= b2 && b1 >= b3) { Y[idx] = b1; pY[idx] = 0; }
+      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 1; }
+      else { Y[idx] = b3; pY[idx] = 2; }
+    }
+  }
+
+  let i = n, j = m, state = 0, finalScore;
+  let endI = n, endJ = m;
+  if (freeEnds) {
+    finalScore = NEG;
+    for (let jj = 0; jj <= m; jj++) {
+      const k = n * W + jj;
+      if (M[k] > finalScore) { finalScore = M[k]; i = n; j = jj; state = 0; }
+      if (X[k] > finalScore) { finalScore = X[k]; i = n; j = jj; state = 1; }
+    }
+    for (let ii = 0; ii <= n; ii++) {
+      const k = ii * W + m;
+      if (M[k] > finalScore) { finalScore = M[k]; i = ii; j = m; state = 0; }
+      if (Y[k] > finalScore) { finalScore = Y[k]; i = ii; j = m; state = 2; }
+    }
+    endI = i; endJ = j;
+  } else {
+    const k = n * W + m;
+    finalScore = M[k]; state = 0;
+    if (X[k] > finalScore) { finalScore = X[k]; state = 1; }
+    if (Y[k] > finalScore) { finalScore = Y[k]; state = 2; }
+  }
+
+  const ra = [], rb = [];
+  let matches = 0, both = 0, guard = 0;
+  while ((i > 0 || j > 0) && guard++ < n + m + 5) {
+    if (i === 0) {
+      ra.push("-"); rb.push(b[j - 1]); j--;
+      continue;
+    }
+    if (j === 0) {
+      ra.push(a[i - 1]); rb.push("-"); i--;
+      continue;
+    }
+    const idx = i * W + j;
+    if (state === 0) {
+      ra.push(a[i - 1]); rb.push(b[j - 1]);
+      both++;
+      if (a[i - 1] === b[j - 1]) matches++;
+      const st = pM[idx];
+      i--; j--; state = st;
+    } else if (state === 1) {
+      ra.push(a[i - 1]); rb.push("-");
+      const st = pX[idx];
+      i--; state = st;
+    } else {
+      ra.push("-"); rb.push(b[j - 1]);
+      const st = pY[idx];
+      j--; state = st;
+    }
+  }
+  ra.reverse(); rb.reverse();
+  if (freeEnds && endI < n && endJ >= m) {
+    for (let t = endI; t < n; t++) { ra.push(a[t]); rb.push("-"); }
+  } else if (freeEnds && endJ < m && endI >= n) {
+    for (let t = endJ; t < m; t++) { ra.push("-"); rb.push(b[t]); }
+  }
+  return { a: ra.join(""), b: rb.join(""), score: finalScore, matches, both };
+}
+
+function colScore(ca, cb, sf) {
+  let sum = 0, cnt = 0;
+  for (let i = 0; i < ca.length; i++) {
+    const x = ca[i];
+    if (x === "-") continue;
+    for (let j = 0; j < cb.length; j++) {
+      const y = cb[j];
+      if (y === "-") continue;
+      sum += sf(x, y);
+      cnt++;
+    }
+  }
+  return cnt ? sum / cnt : 0;
+}
+
+function alignProfiles(rowsA, rowsB, sf, go, ge, freeEnds) {
+  const n = rowsA[0].length, m = rowsB[0].length, W = m + 1;
+  const size = (n + 1) * W;
+  const M = new Float64Array(size);
+  const X = new Float64Array(size);
+  const Y = new Float64Array(size);
+  const pM = new Int8Array(size);
+  const pX = new Int8Array(size);
+  const pY = new Int8Array(size);
+
+  const colsA = [], colsB = [];
+  for (let i = 0; i < n; i++) {
+    let s = "";
+    for (const r of rowsA) s += r[i];
+    colsA.push(s);
+  }
+  for (let j = 0; j < m; j++) {
+    let s = "";
+    for (const r of rowsB) s += r[j];
+    colsB.push(s);
+  }
+
+  M[0] = 0;
+  for (let i = 1; i <= n; i++) {
+    const k = i * W;
+    if (freeEnds) { M[k] = 0; X[k] = 0; Y[k] = NEG; pM[k] = 0; pX[k] = 0; }
+    else { M[k] = NEG; X[k] = -(go + (i - 1) * ge); pX[k] = 1; Y[k] = NEG; }
+  }
+  for (let j = 1; j <= m; j++) {
+    if (freeEnds) { M[j] = 0; Y[j] = 0; X[j] = NEG; pM[j] = 0; pY[j] = 0; }
+    else { M[j] = NEG; Y[j] = -(go + (j - 1) * ge); pY[j] = 2; X[j] = NEG; }
+  }
+  X[0] = NEG; Y[0] = NEG;
+
+  for (let i = 1; i <= n; i++) {
+    const row = i * W, prow = (i - 1) * W;
+    const ca = colsA[i - 1];
+    for (let j = 1; j <= m; j++) {
+      const idx = row + j;
+      const prev = prow + j - 1;
+      let bs = M[prev], st = 0;
+      if (X[prev] > bs) { bs = X[prev]; st = 1; }
+      if (Y[prev] > bs) { bs = Y[prev]; st = 2; }
+      M[idx] = bs + colScore(ca, colsB[j - 1], sf);
+      pM[idx] = st;
+
+      const a1 = M[prow + j] - go, a2 = X[prow + j] - ge, a3 = Y[prow + j] - go;
+      if (a1 >= a2 && a1 >= a3) { X[idx] = a1; pX[idx] = 0; }
+      else if (a2 >= a3) { X[idx] = a2; pX[idx] = 1; }
+      else { X[idx] = a3; pX[idx] = 2; }
+
+      const b1 = M[row + j - 1] - go, b2 = Y[row + j - 1] - ge, b3 = X[row + j - 1] - go;
+      if (b1 >= b2 && b1 >= b3) { Y[idx] = b1; pY[idx] = 0; }
+      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 1; }
+      else { Y[idx] = b3; pY[idx] = 2; }
+    }
+  }
+
+  let i = n, j = m, state = 0;
+  let endI = n, endJ = m;
+  if (freeEnds) {
+    let best = NEG;
+    for (let jj = 0; jj <= m; jj++) {
+      const k = n * W + jj;
+      if (M[k] > best) { best = M[k]; i = n; j = jj; state = 0; }
+      if (X[k] > best) { best = X[k]; i = n; j = jj; state = 1; }
+    }
+    for (let ii = 0; ii <= n; ii++) {
+      const k = ii * W + m;
+      if (M[k] > best) { best = M[k]; i = ii; j = m; state = 0; }
+      if (Y[k] > best) { best = Y[k]; i = ii; j = m; state = 2; }
+    }
+    endI = i; endJ = j;
+  } else {
+    const k = n * W + m;
+    let best = M[k]; state = 0;
+    if (X[k] > best) { best = X[k]; state = 1; }
+    if (Y[k] > best) { state = 2; }
+  }
+
+  const ops = [];
+  let guard = 0;
+  while ((i > 0 || j > 0) && guard++ < n + m + 5) {
+    if (i === 0) { ops.push({ t: "Y", j: j - 1 }); j--; continue; }
+    if (j === 0) { ops.push({ t: "X", i: i - 1 }); i--; continue; }
+    const idx = i * W + j;
+    if (state === 0) {
+      ops.push({ t: "M", i: i - 1, j: j - 1 });
+      const st = pM[idx];
+      i--; j--; state = st;
+    } else if (state === 1) {
+      ops.push({ t: "X", i: i - 1 });
+      const st = pX[idx];
+      i--; state = st;
+    } else {
+      ops.push({ t: "Y", j: j - 1 });
+      const st = pY[idx];
+      j--; state = st;
+    }
+  }
+  ops.reverse();
+  if (freeEnds && endI < n && endJ >= m) {
+    for (let t = endI; t < n; t++) ops.push({ t: "X", i: t });
+  } else if (freeEnds && endJ < m && endI >= n) {
+    for (let t = endJ; t < m; t++) ops.push({ t: "Y", j: t });
+  }
+
+  const outA = rowsA.map(() => []);
+  const outB = rowsB.map(() => []);
+  for (const op of ops) {
+    if (op.t === "M") {
+      for (let k = 0; k < rowsA.length; k++) outA[k].push(rowsA[k][op.i]);
+      for (let k = 0; k < rowsB.length; k++) outB[k].push(rowsB[k][op.j]);
+    } else if (op.t === "X") {
+      for (let k = 0; k < rowsA.length; k++) outA[k].push(rowsA[k][op.i]);
+      for (let k = 0; k < rowsB.length; k++) outB[k].push("-");
+    } else {
+      for (let k = 0; k < rowsA.length; k++) outA[k].push("-");
+      for (let k = 0; k < rowsB.length; k++) outB[k].push(rowsB[k][op.j]);
+    }
+  }
+  const resA = outA.map(arr => arr.join(""));
+  const resB = outB.map(arr => arr.join(""));
+  return resA.concat(resB);
+}
+
+function upgma(dist, n) {
+  const clusters = [];
+  for (let i = 0; i < n; i++) clusters.push({ size: 1, left: i, right: -1 });
+  const d = [];
+  for (let i = 0; i < n; i++) d.push(Array.from(dist[i]));
+  let active = [];
+  for (let i = 0; i < n; i++) active.push(i);
+  const merges = [];
+
+  while (active.length > 1) {
+    let ia = active[0], ib = active[1], best = Infinity;
+    for (let a = 0; a < active.length; a++) {
+      for (let b = a + 1; b < active.length; b++) {
+        const v = d[active[a]][active[b]];
+        if (v < best) { best = v; ia = active[a]; ib = active[b]; }
+      }
+    }
+    const ca = clusters[ia], cb = clusters[ib];
+    const newIdx = clusters.length;
+    clusters.push({ size: ca.size + cb.size, left: ia, right: ib });
+    d.push(new Array(newIdx + 1).fill(0));
+    const rest = active.filter(x => x !== ia && x !== ib);
+    for (const k of rest) {
+      const nd = (ca.size * d[ia][k] + cb.size * d[ib][k]) / (ca.size + cb.size);
+      while (d[k].length <= newIdx) d[k].push(0);
+      d[k][newIdx] = nd;
+      d[newIdx][k] = nd;
+    }
+    merges.push({ a: ia, b: ib, node: newIdx });
+    rest.push(newIdx);
+    active = rest;
+  }
+  return { clusters, merges, root: active[0] };
+}
+
+function newickOf(clusters, root, n, nameOf) {
+  const build = (idx) => {
+    if (idx < n) return nameOf(idx).replace(/[(),:;\s]/g, "_");
+    const c = clusters[idx];
+    return "(" + build(c.left) + "," + build(c.right) + ")";
+  };
+  return build(root) + ";";
+}
+
+function detectType(seqs) {
+  let total = 0, ntOk = 0;
+  const ntSet = new Set("ACGTUNRYSWKMBDHVacgtunryswkmbdhv");
+  const all = new Set();
+  for (const s of seqs) {
+    for (const ch of s) {
+      if (ch === "-") continue;
+      total++;
+      all.add(ch.toUpperCase());
+      if (ntSet.has(ch)) ntOk++;
+    }
+  }
+  if (total === 0) return "nt";
+  const onlyNt = [...all].every(c => ntSet.has(c));
+  return onlyNt && ntOk / total >= 0.95 ? "nt" : "aa";
+}
+
+function runMSA(seqs, params, post) {
+  const n = seqs.length;
+  if (n < 2) throw new Error("至少需要 2 条序列");
+  for (let i = 0; i < n; i++) {
+    if (!seqs[i] || !seqs[i].length) throw new Error("第 " + (i + 1) + " 条序列为空");
+  }
+
+  let type = params.type;
+  if (type === "auto") type = detectType(seqs);
+  let matrixName = params.matrix;
+  if (matrixName === "auto") matrixName = type === "aa" ? "blosum62" : "custom";
+  if (type === "nt" && (matrixName === "blosum62" || matrixName === "pam250")) matrixName = "custom";
+
+  const eff = {
+    ...params, type, matrix: matrixName,
+    match: Number(params.match), mismatch: Number(params.mismatch),
+    gapOpen: Number(params.gapOpen), gapExtend: Number(params.gapExtend),
+    freeEnds: !params.endGap
+  };
+  const sf = makeScorer(eff);
+  const go = eff.gapOpen, ge = eff.gapExtend, freeEnds = eff.freeEnds;
+
+  post({ type: "progress", pct: 1, stage: `准备：${n} 条序列 · ${type === "nt" ? "核酸" : "蛋白质"} · ${matrixName}` });
+
+  const dist = Array.from({ length: n }, () => new Float64Array(n));
+  const pairs = [];
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) pairs.push([i, j]);
+  const totalPairs = pairs.length;
+  const step = Math.max(1, Math.floor(totalPairs / 25));
+  for (let t = 0; t < totalPairs; t++) {
+    const [i, j] = pairs[t];
+    const r = nwAlign(seqs[i], seqs[j], sf, go, ge, freeEnds);
+    const id = r.both > 0 ? r.matches / r.both : 0;
+    dist[i][j] = dist[j][i] = 1 - id;
+    if ((t + 1) % step === 0 || t === totalPairs - 1) {
+      post({ type: "progress", pct: 2 + ((t + 1) / totalPairs) * 56, stage: `两两比对 ${t + 1}/${totalPairs}` });
+    }
+  }
+
+  post({ type: "progress", pct: 60, stage: "构建 UPGMA 引导树…" });
+  const tree = upgma(dist, n);
+
+  post({ type: "progress", pct: 64, stage: "渐进比对…" });
+  const prof = new Array(tree.clusters.length);
+  const profIds = new Array(tree.clusters.length);
+  for (let i = 0; i < n; i++) { prof[i] = [seqs[i]]; profIds[i] = [i]; }
+
+  for (let mi = 0; mi < tree.merges.length; mi++) {
+    const { a, b, node } = tree.merges[mi];
+    prof[node] = alignProfiles(prof[a], prof[b], sf, go, ge, freeEnds);
+    profIds[node] = profIds[a].concat(profIds[b]);
+    if (mi % 2 === 0 || mi === tree.merges.length - 1) {
+      post({ type: "progress", pct: 64 + ((mi + 1) / tree.merges.length) * 32, stage: `渐进比对 ${mi + 1}/${tree.merges.length}` });
+    }
+  }
+
+  const rootRows = prof[tree.root];
+  const rootIds = profIds[tree.root];
+  const aligned = new Array(n);
+  for (let k = 0; k < n; k++) aligned[rootIds[k]] = rootRows[k];
+  if (aligned.some(r => r === undefined)) throw new Error("渐进比对失败：行序恢复出错");
+  if (new Set(aligned.map(r => r.length)).size !== 1) throw new Error("渐进比对失败：列长不一致");
+
+  post({ type: "progress", pct: 97, stage: "计算 consensus…" });
+  const L = aligned[0].length;
+  const cons = [], consFrac = [];
+  for (let c = 0; c < L; c++) {
+    const count = Object.create(null);
+    let nonGap = 0;
+    for (const row of aligned) {
+      const ch = row[c];
+      if (ch === "-" || ch === ".") continue;
+      nonGap++;
+      count[ch] = (count[ch] || 0) + 1;
+    }
+    let bestCh = "-", bestN = 0;
+    for (const k in count) if (count[k] > bestN) { bestN = count[k]; bestCh = k; }
+    cons.push(nonGap === 0 ? "-" : bestCh);
+    consFrac.push(bestN / n);
+  }
+
+  const nk = newickOf(tree.clusters, tree.root, n, (i) => "seq" + (i + 1));
+  post({ type: "progress", pct: 100, stage: "完成" });
+  post({
+    type: "done", aligned, consensus: cons.join(""), consFrac,
+    newick: nk, seqType: type, matrix: matrixName, params: eff
+  });
+}
+
+if (typeof self !== "undefined" && typeof importScripts !== "undefined") {
+  self.onmessage = (e) => {
+    try {
+      runMSA(e.data.seqs, e.data.params, (msg) => self.postMessage(msg));
+    } catch (err) {
+      self.postMessage({ type: "error", message: err.message || String(err) });
+    }
+  };
+}
+
+</script>
+
+<script>
+"use strict";
+function $(id) { return document.getElementById(id); }
+const ALLOWED = /\.(fa|fasta|seq|txt|fas)$/i;
+
+function parseFasta(text, fallbackName) {
+  const recs = [];
+  let cur = null;
+  for (const raw of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith(">")) {
+      if (cur) recs.push(cur);
+      cur = { header: line.slice(1).trim(), seq: [] };
+    } else if (cur) {
+      cur.seq.push(line.replace(/\s+/g, ""));
+    } else {
+      cur = { header: fallbackName || "seq", seq: [line.replace(/\s+/g, "")] };
+    }
+  }
+  if (cur) recs.push(cur);
+  return recs
+    .filter(r => r.seq.join("").length > 0)
+    .map(r => ({ header: r.header || "seq", seq: r.seq.join("").toUpperCase() }));
+}
+
+function recId(header) {
+  const t = header.trim();
+  const sp = t.search(/\s/);
+  return sp === -1 ? t : t.slice(0, sp);
+}
+
+function serializeFasta(headers, seqs) {
+  return headers.map((h, i) => ">" + h + "\n" + seqs[i]).join("\n") + "\n";
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+let records = [];
+let worker = null;
+let resultData = null;
+let resultHeaders = [];
+
+const dropZone = $("dropZone");
+const fileInput = $("fileInput");
+dropZone.onclick = () => fileInput.click();
+dropZone.ondragover = e => { e.preventDefault(); dropZone.classList.add("over"); };
+dropZone.ondragleave = () => dropZone.classList.remove("over");
+dropZone.ondrop = e => {
+  e.preventDefault();
+  dropZone.classList.remove("over");
+  if (e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]);
+};
+fileInput.onchange = () => {
+  if (fileInput.files.length) addFiles([...fileInput.files]);
+  fileInput.value = "";
+};
+
+async function addFiles(files) {
+  hideMsg();
+  const good = files.filter(f => ALLOWED.test(f.name));
+  const bad = files.filter(f => !ALLOWED.test(f.name));
+  if (bad.length) showMsg("已忽略不支持的文件：" + bad.map(f => f.name).join(", "), "warn");
+  const used = new Set(records.map(r => recId(r.header).toLowerCase()));
+  for (const f of good) {
+    const recs = parseFasta(await f.text(), f.name.replace(/\.[^.]+$/, ""));
+    for (const r of recs) {
+      let id = recId(r.header) || "seq";
+      let header = r.header || id;
+      if (used.has(id.toLowerCase())) {
+        let k = 2, nid;
+        do { nid = id + "_" + (k++); } while (used.has(nid.toLowerCase()));
+        header = nid + (header.length > id.length ? header.slice(id.length) : "");
+        id = nid;
+      }
+      used.add(id.toLowerCase());
+      records.push({ header, seq: r.seq });
+    }
+  }
+  renderStats();
+}
+
+function detectTypeUI(seqs) {
+  let total = 0, ntOk = 0;
+  const ntSet = new Set("ACGTUNRYSWKMBDHVacgtunryswkmbdhv");
+  const all = new Set();
+  for (const s of seqs) for (const ch of s) {
+    if (ch === "-") continue;
+    total++; all.add(ch.toUpperCase());
+    if (ntSet.has(ch)) ntOk++;
+  }
+  if (!total) return "nt";
+  const onlyNt = [...all].every(c => ntSet.has(c));
+  return onlyNt && ntOk / total >= 0.95 ? "nt" : "aa";
+}
+
+function renderStats() {
+  const n = records.length;
+  if (!n) {
+    $("seqStats").innerHTML = "";
+    $("btnRun").disabled = true;
+    $("btnClear").disabled = true;
+    return;
+  }
+  const lens = records.map(r => r.seq.length);
+  const min = Math.min(...lens), max = Math.max(...lens);
+  const total = lens.reduce((a, b) => a + b, 0);
+  const auto = detectTypeUI(records.map(r => r.seq));
+  $("seqStats").innerHTML =
+    `已载入 <b>${n}</b> 条 · 长度 ${min}–${max}（共 ${total.toLocaleString()} 残基） · 识别为 ` +
+    `<span class="type-tag">${auto === "nt" ? "核酸" : "蛋白质"}</span>` +
+    (n < 2 ? ` · <span style="color:var(--warn)">至少需要 2 条</span>` : "") +
+    (n > 50 || max > 500 ? ` · <span style="color:var(--warn)">规模较大，可能较慢</span>` : "");
+  $("btnRun").disabled = n < 2;
+  $("btnClear").disabled = n < 2;
+}
+
+$("btnClear").onclick = () => {
+  records = [];
+  resultData = null;
+  $("result").style.display = "none";
+  hideMsg();
+  renderStats();
+};
+
+function setProgress(pct, stage) {
+  $("progressFill").style.width = pct.toFixed(1) + "%";
+  $("progressText").textContent = stage + "（" + pct.toFixed(0) + "%）";
+}
+function showMsg(text, cls) {
+  const el = $("msg");
+  el.textContent = text;
+  el.className = "msg " + cls;
+}
+function hideMsg() { $("msg").className = "msg"; }
+
+$("btnRun").onclick = () => {
+  if (records.length < 2) return;
+  hideMsg();
+  if (worker) { worker.terminate(); worker = null; }
+
+  const params = {
+    type: $("pType").value,
+    matrix: $("pMatrix").value,
+    match: $("pMatch").value,
+    mismatch: $("pMismatch").value,
+    gapOpen: $("pGapOpen").value,
+    gapExtend: $("pGapExtend").value,
+    endGap: $("pEndGap").checked,
+    upper: $("pUpper").checked,
+    color: $("pColor").value,
+    thresh: Number($("pThresh").value) / 100
+  };
+
+  const src = $("msaWorkerSource").textContent;
+  worker = new Worker(URL.createObjectURL(new Blob([src], { type: "application/javascript" })));
+
+  $("btnRun").disabled = true;
+  $("progressWrap").classList.add("on");
+  setProgress(0, "启动 Worker…");
+
+  const finish = () => {
+    $("btnRun").disabled = records.length < 2;
+    $("progressWrap").classList.remove("on");
+    if (worker) { worker.terminate(); worker = null; }
+  };
+
+  worker.onmessage = (e) => {
+    const msg = e.data;
+    if (msg.type === "progress") setProgress(msg.pct, msg.stage);
+    else if (msg.type === "done") {
+      setProgress(100, "完成");
+      resultData = msg;
+      showResult(msg, params);
+      finish();
+    } else if (msg.type === "error") {
+      showMsg("比对失败：" + msg.message, "err");
+      finish();
+    }
+  };
+  worker.onerror = (err) => {
+    showMsg("Worker 错误：" + (err.message || "未知错误"), "err");
+    finish();
+  };
+
+  resultHeaders = records.map(r => r.header);
+  const seqs = records.map(r => (params.upper ? r.seq.toUpperCase() : r.seq));
+  worker.postMessage({ seqs, params });
+};
+
+const NT_COLORS = { A: "#59e391", G: "#f9e25d", C: "#79b8ff", T: "#ff7b7b", U: "#ff7b7b", N: "#8b9cb3" };
+const AA_GROUPS = [
+  ["AVLIMFW", "#6db3f2"], ["KRH", "#ff8787"], ["DE", "#da77f2"], ["STNQ", "#69db7c"],
+  ["C", "#ffd43b"], ["G", "#ffa94d"], ["P", "#f783ac"], ["YW", "#b197fc"]
+];
+
+function residueColor(ch, type) {
+  if (ch === "-" || ch === ".") return null;
+  const c = ch.toUpperCase();
+  if (type === "nt") return NT_COLORS[c] || NT_COLORS.N;
+  for (const [g, col] of AA_GROUPS) if (g.includes(c)) return col;
+  return "#ced4da";
+}
+
+function buildLegend(type, colorMode, thresh) {
+  const parts = [];
+  const sw = (color, label) => parts.push(`<span><span class="sw" style="background:${color}"></span>${label}</span>`);
+  if (type === "nt") {
+    sw(NT_COLORS.A, "A"); sw(NT_COLORS.G, "G"); sw(NT_COLORS.C, "C"); sw(NT_COLORS.T, "T/U"); sw(NT_COLORS.N, "N");
+  } else {
+    for (const [g, col] of AA_GROUPS) sw(col, g.split("").join("/"));
+    sw("#ced4da", "其他");
+  }
+  if (colorMode === "consensus") {
+    parts.push(`<span><span class="sw" style="background:rgba(34,197,94,.55)"></span>保守列（≥${Math.round(thresh * 100)}%）</span>`);
+  } else if (colorMode === "match") {
+    sw("#22c55e", "= consensus"); sw("#ef4444", "≠ consensus");
+  }
+  $("legend").innerHTML = parts.join("");
+}
+
+function showResult(msg, params) {
+  $("result").style.display = "block";
+  const type = msg.seqType;
+  const colorMode = params.color;
+  const thresh = params.thresh;
+  buildLegend(type, colorMode, thresh);
+
+  const aligned = msg.aligned;
+  const consensus = msg.consensus;
+  const consFrac = msg.consFrac;
+  const n = aligned.length;
+  const L = aligned[0].length;
+  const headers = resultHeaders;
+
+  const nameW = 150, cw = 9, rh = 16, consH = 14, padTop = 4;
+  const W = nameW + L * cw + 8;
+  const H = padTop + consH + rh + n * rh + 8;
+  const canvas = $("alnCanvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#0b0f14";
+  ctx.fillRect(0, 0, W, H);
+  ctx.font = "12px ui-monospace, Consolas, monospace";
+  ctx.textBaseline = "middle";
+
+  ctx.fillStyle = "#8b9cb3";
+  ctx.fillText("ID", 8, padTop + consH / 2);
+  ctx.fillText("consensus", 8, padTop + consH + rh / 2);
+  ctx.fillStyle = "#151c26";
+  ctx.fillRect(0, padTop + consH, W, rh);
+
+  for (let c = 0; c < L; c++) {
+    const x = nameW + c * cw;
+    const frac = consFrac[c];
+    ctx.fillStyle = `rgba(34,197,94,${(Math.max(0, frac - 0.15) / 0.85) * 0.9})`;
+    ctx.fillRect(x, padTop, cw, consH);
+    const ch = consensus[c];
+    ctx.fillStyle = colorMode === "match" ? "#e6edf3" : (residueColor(ch, type) || "#8b9cb3");
+    ctx.fillText(ch, x + 1, padTop + consH + rh / 2);
+    if (colorMode === "consensus" && frac >= thresh) {
+      ctx.fillStyle = "rgba(34,197,94,0.22)";
+      ctx.fillRect(x, padTop + consH, cw, rh);
+    }
+  }
+
+  for (let r = 0; r < n; r++) {
+    const y = padTop + consH + rh + r * rh;
+    if (r % 2 === 1) {
+      ctx.fillStyle = "rgba(255,255,255,0.02)";
+      ctx.fillRect(0, y, W, rh);
+    }
+    ctx.fillStyle = "#8b9cb3";
+    const label = headers[r].length > 22 ? headers[r].slice(0, 21) + "…" : headers[r];
+    ctx.fillText(label, 8, y + rh / 2);
+    const row = aligned[r];
+    for (let c = 0; c < L; c++) {
+      const ch = row[c];
+      if (ch === "-") continue;
+      const x = nameW + c * cw;
+      if (colorMode === "consensus" && consFrac[c] >= thresh) {
+        ctx.fillStyle = ch === consensus[c] ? "rgba(34,197,94,0.22)" : "rgba(0,0,0,0.15)";
+        ctx.fillRect(x, y, cw, rh);
+      }
+      if (colorMode === "match") {
+        ctx.fillStyle = ch === consensus[c] ? "#22c55e" : "#ef4444";
+      } else {
+        ctx.fillStyle = residueColor(ch, type) || "#8b9cb3";
+      }
+      ctx.fillText(ch, x + 1, y + rh / 2);
+    }
+  }
+
+  let identityCols = 0;
+  for (let c = 0; c < L; c++) if (consFrac[c] >= thresh) identityCols++;
+  $("alnStats").innerHTML =
+    `<b>${n}</b> 条序列 · 比对长度 <b>${L}</b> · 保守列（≥${Math.round(thresh * 100)}%）<b>${identityCols}</b>（${(identityCols / L * 100).toFixed(1)}%） · ` +
+    `类型 <span class="type-tag">${type === "nt" ? "核酸" : "蛋白质"}</span> · 矩阵 ${msg.matrix}`;
+
+  $("btnFasta").onclick = () => {
+    downloadBlob(new Blob([serializeFasta(headers, aligned)], { type: "text/plain;charset=utf-8" }), "msa_aligned.fasta");
+  };
+  $("btnConsensus").onclick = () => {
+    downloadBlob(new Blob([">consensus\n" + consensus + "\n"], { type: "text/plain;charset=utf-8" }), "msa_consensus.fasta");
+  };
+  $("btnTree").onclick = () => {
+    downloadBlob(new Blob([msg.newick + "\n"], { type: "text/plain;charset=utf-8" }), "msa_tree.nwk");
+  };
+  $("btnPng").onclick = () => {
+    canvas.toBlob((blob) => {
+      if (blob) downloadBlob(blob, "msa_alignment.png");
+    }, "image/png");
+  };
+
+  $("result").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+</script>
+</body>
+</html>

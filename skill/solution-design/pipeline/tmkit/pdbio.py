@@ -149,6 +149,17 @@ def chain_ordinal(target, chain_id):
     return {r.id[1]: i + 1 for i, r in enumerate(target.chains[chain_id].residues)}
 
 
+def mpnn_positions(target, chain_id):
+    """Positions (1-based) of residues in the ProteinMPNN chain coordinate
+    system: the PDB residue-number range (min..max), with X inserted at
+    unmodeled positions. pos(pdb_res) = pdb_res - min_number + 1."""
+    res = target.chains[chain_id].residues
+    if not res:
+        return {}
+    first = min(r.id[1] for r in res)
+    return {r.id[1]: r.id[1] - first + 1 for r in res}
+
+
 def map_to_reference(target, chain_id):
     return target.reference_map.get(chain_id, {})
 
@@ -175,15 +186,22 @@ def full_length_sequence(ref_seq, designed_positions, designed_seq):
 
 
 class _ChainSelect(Select):
-    def __init__(self, chains, omit_resnames=None, omit_resseq=None):
+    def __init__(self, chains, omit_resnames=None, omit_resseq=None,
+                 accept_resids=None):
         self.chains = chains
         self.omit_resnames = omit_resnames or set()
         self.omit_resseq = omit_resseq or set()
+        self.accept_resids = accept_resids or {}
 
     def accept_chain(self, chain):
         return chain.id in self.chains
 
     def accept_residue(self, residue):
+        parent = residue.get_parent()
+        cid = parent.id if parent is not None else ''
+        if self.accept_resids and residue.id[1] not in \
+                self.accept_resids.get(cid, ()):
+            return 0
         if residue.id[0] != ' ':
             return 0
         if residue.resname == 'HOH':
@@ -195,9 +213,18 @@ class _ChainSelect(Select):
         return 1 if AMINO3.get(residue.resname) else 0
 
 
-def write_structure(target, path, chains=None, omit_resnames=None, omit_resseq=None):
+def write_structure(target, path, chains=None, omit_resnames=None,
+                    omit_resseq=None):
+    """Write only the residues tracked in target.chains (harmonized), so the
+    output chain order/ordinals exactly match chain_ordinal / ChainData."""
     io = PDBIO()
-    sel = _ChainSelect(chains or list(target.chains), omit_resnames, omit_resseq)
+    chains = chains or list(target.chains)
+    accept = {}
+    for cid in chains:
+        data = target.chains.get(cid)
+        if data is not None:
+            accept[cid] = {r.id[1] for r in data.residues}
+    sel = _ChainSelect(chains, omit_resnames, omit_resseq, accept)
     io.set_structure(target.structure)
     io.save(str(path), sel)
 

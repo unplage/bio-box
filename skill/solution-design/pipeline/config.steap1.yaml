@@ -83,9 +83,9 @@ filters:
 pocket_residues:
 - 175
 - 268
-proteinmpnn_dir: /opt/proteinmpnn
+proteinmpnn_dir: /data1/Downloads/ProteinMPNN
 soluble_model: true
-num_seqs: 32
+num_seqs: 8
 temperature: 0.15 0.2
 predict_tool: colabfold
 colabfold_model: alpha2_multimer_v3
@@ -94,4 +94,4 @@ colabfold_amber: true
 predict_native: true
 results_dir: ''
 output: outputs
-workdir: /tmp/opencode
+workdir: /home/jiemiaoxing/work/opencode_task/tmp

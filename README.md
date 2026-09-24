@@ -9,23 +9,23 @@
 
 | 工具 | 文件 | 描述 |
 |:---|:---|:---|
-| 🎯 靶点调研报告生成器 | `target.html` | PWA Web 应用，一键生成靶点调研报告 |
+| 🎯 靶点调研报告生成器 | `tools/target-info/target.html` | PWA Web 应用，一键生成靶点调研报告 |
 | 🧹 精准数据清理工具 | `clear.html` | Web 应用，用于清理和标准化数据 |
-| 🧬 BsaI 酶切位点重复分析 | `bsaitest.html` | 分析4-mer在 BsaI 位点数据库中的出现频率 |
-| 🧪 NNK 引物生成器 | `NNKprimer.html` | 输入编码区序列，生成 NNK 突变引物组合 |
-| 🧬 His-mut 多点组氨酸突变引物 | `Hismut.html` | 按标记序列定位多个突变点，生成组氨酸（CAC）突变引物并去重计数 |
-| 🔬 2ED Maturation 反向引物 | `2edmaturation.html` | 截取 NNK 前24bp 计算 Tm，生成反向互补引物 |
-| 📊 CDR 序列提取工具 | `CDR-extract-V1.2.1-260618.py` | 从 Excel/CSV 提取 CDR 序列 |
-| 🔍 CDR3/CDR2/CDR1 搜索工具 | `igblast-solo-SQLite260618-V1.3.2.py` | SQLite 数据库搜索 CDR 区域 |
-| 🧮 引物 Tm 值计算器 | `primer_Tm-calculator.py` | 批量计算引物 Tm 值 |
-| 🎯 靶点调研（Python 版） | `target_info.py` | PyQt5 桌面版靶点调研工具 |
+| 🧬 BsaI 酶切位点重复分析 | `tools/maturation/bsaitest.html` | 分析4-mer在 BsaI 位点数据库中的出现频率 |
+| 🧪 NNK 引物生成器 | `tools/maturation/NNKprimer.html` | 输入编码区序列，生成 NNK 突变引物组合 |
+| 🧬 His-mut 多点组氨酸突变引物 | `tools/his-mut/Hismut.html` | 按标记序列定位多个突变点，生成组氨酸（CAC）突变引物并去重计数 |
+| 🔬 2ED Maturation 反向引物 | `tools/maturation/2edmaturation.html` | 截取 NNK 前24bp 计算 Tm，生成反向互补引物 |
+| 📊 CDR 序列提取工具 | `tools/mab-db/CDR-extract-V1.2.1-260618.py` | 从 Excel/CSV 提取 CDR 序列 |
+| 🔍 CDR3/CDR2/CDR1 搜索工具 | `tools/mab-db/igblast-solo-SQLite260618-V1.3.2.py` | SQLite 数据库搜索 CDR 区域 |
+| 🧮 引物 Tm 值计算器 | `tools/Tm-calculate/primer_Tm-calculator.py` | 批量计算引物 Tm 值 |
+| 🎯 靶点调研（Python 版） | `tools/target-info/target_info.py` | PyQt5 桌面版靶点调研工具 |
 | 🦠 菌落计数 | [cfu_count](https://github.com/unplage/cfu_count) | 菌落计数工具（独立仓库） |
 
 ---
 
 ## 🎯 靶点调研报告生成器 (PWA)
 
-**target.html** 是一个纯前端 PWA Web 应用，可直接在浏览器中运行，无需安装任何软件。
+**tools/target-info/target.html** 是一个纯前端 PWA Web 应用，可直接在浏览器中运行，无需安装任何软件。
 
 ### ✨ 功能特性
 
@@ -48,7 +48,7 @@
 
 如果仓库已部署到 GitHub Pages，直接访问：
 ```
-https://unplage.github.io/bio-box/target.html
+https://unplage.github.io/bio-box/tools/target-info/target.html
 ```
 
 #### 方式二：本地使用
@@ -59,16 +59,16 @@ git clone https://github.com/unplage/bio-box.git
 cd bio-box
 ```
 
-2. 用浏览器打开 `target.html`
+2. 用浏览器打开 `tools/target-info/target.html`
 ```bash
 # macOS
-open target.html
+open tools/target-info/target.html
 
 # Linux
-xdg-open target.html
+xdg-open tools/target-info/target.html
 
 # Windows
-start target.html
+start tools\target-info\target.html
 ```
 
 #### 方式三：部署到 GitHub Pages
@@ -82,13 +82,13 @@ start target.html
 
 #### 手机端（iOS/Android）
 
-1. 用 Chrome/Safari 打开 `target.html`
+1. 用 Chrome/Safari 打开 `tools/target-info/target.html`
 2. 点击浏览器菜单中的「添加到主屏幕」或「安装应用」
 3. 确认安装，即可像 App 一样使用
 
 #### 桌面端（Windows/Mac/Linux）
 
-1. 用 Chrome/Edge 打开 `target.html`
+1. 用 Chrome/Edge 打开 `tools/target-info/target.html`
 2. 点击地址栏右侧的安装图标 📥
 3. 或进入菜单 → 更多工具 → 创建快捷方式
 4. 即可在桌面创建独立应用
@@ -178,7 +178,7 @@ Google Patents 的 XHR 接口不返回 CORS 头，浏览器直连会被拦截。
 
 ## 🧬 BsaI 酶切位点重复分析
 
-`bsaitest.html` 分析 DNA 序列中每个4-mer在 BsaI 位点数据库中的出现频率。
+`tools/maturation/bsaitest.html` 分析 DNA 序列中每个4-mer在 BsaI 位点数据库中的出现频率。
 
 ### 功能
 
@@ -188,13 +188,13 @@ Google Patents 的 XHR 接口不返回 CORS 头，浏览器直连会被拦截。
 
 ### 使用
 
-直接用浏览器打开 `bsaitest.html`，输入序列点击「分析」即可。
+直接用浏览器打开 `tools/maturation/bsaitest.html`，输入序列点击「分析」即可。
 
 ---
 
 ## 🧪 NNK 引物生成器
 
-`NNKprimer.html` 输入编码区序列，自动生成 NNK 突变引物组合。
+`tools/maturation/NNKprimer.html` 输入编码区序列，自动生成 NNK 突变引物组合。
 
 ### 功能
 
@@ -204,13 +204,13 @@ Google Patents 的 XHR 接口不返回 CORS 头，浏览器直连会被拦截。
 
 ### 使用
 
-直接用浏览器打开 `NNKprimer.html`，填写参数点击「Generate」即可。
+直接用浏览器打开 `tools/maturation/NNKprimer.html`，填写参数点击「Generate」即可。
 
 ---
 
 ## 🧬 His-mut 多点组氨酸突变引物生成器
 
-`Hismut.html` 是 `His-mut.py` 的纯前端 Web 版，从测序 FASTA 序列中按标记序列定位突变点，生成组氨酸（His/CAC）突变引物并去重计数。
+`tools/his-mut/Hismut.html` 是 `His-mut.py` 的纯前端 Web 版，从测序 FASTA 序列中按标记序列定位突变点，生成组氨酸（His/CAC）突变引物并去重计数。
 
 ### 功能
 
@@ -223,13 +223,13 @@ Google Patents 的 XHR 接口不返回 CORS 头，浏览器直连会被拦截。
 
 ### 使用
 
-直接用浏览器打开 `Hismut.html`，粘贴 FASTA 或选择文件，配置突变点后点击「生成引物」即可。
+直接用浏览器打开 `tools/his-mut/Hismut.html`，粘贴 FASTA 或选择文件，配置突变点后点击「生成引物」即可。
 
 ---
 
 ## 🔬 2ED Maturation 反向引物生成器
 
-`2edmaturation.html` 处理含 NNK 的序列，自动生成反向引物并计算 Tm 值。
+`tools/maturation/2edmaturation.html` 处理含 NNK 的序列，自动生成反向引物并计算 Tm 值。
 
 ### 功能
 
@@ -261,7 +261,7 @@ Google Patents 的 XHR 接口不返回 CORS 头，浏览器直连会被拦截。
 ### CDR 序列提取工具
 
 ```bash
-python CDR-extract-V1.2.1-260618.py
+python tools/mab-db/CDR-extract-V1.2.1-260618.py
 ```
 
 功能：
@@ -272,7 +272,7 @@ python CDR-extract-V1.2.1-260618.py
 ### CDR3/CDR2/CDR1 搜索工具
 
 ```bash
-python igblast-solo-SQLite260618-V1.3.2.py
+python tools/mab-db/igblast-solo-SQLite260618-V1.3.2.py
 ```
 
 功能：
@@ -283,7 +283,7 @@ python igblast-solo-SQLite260618-V1.3.2.py
 ### 引物 Tm 值计算器
 
 ```bash
-python primer_Tm-calculator.py
+python tools/Tm-calculate/primer_Tm-calculator.py
 ```
 
 功能：
@@ -295,7 +295,7 @@ python primer_Tm-calculator.py
 
 ## 🛠️ 技术栈
 
-### target.html (PWA)
+### tools/target-info/target.html (PWA)
 
 - **前端**：纯 HTML/CSS/JavaScript，无框架依赖
 - **PWA**：支持安装到设备，可离线使用
