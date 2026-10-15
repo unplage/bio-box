@@ -54,14 +54,35 @@ button.ghost:hover { border-color: var(--accent); }
 #alnCanvas { display: block; }
 .hint { font-size: 12px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
 .hint code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+details.paste-box { margin-top: 12px; }
+details.paste-box summary { cursor: pointer; color: var(--accent); font-size: 13px; user-select: none; font-weight: 600; }
+textarea#pasteArea { display: block; width: 100%; margin-top: 10px; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 13px; font-family: ui-monospace, Consolas, monospace; resize: vertical; }
+textarea#pasteArea:focus { outline: none; border-color: var(--accent); }
+details.paste-box .btn-row { margin-top: 10px; }
+button.ghost.active { border-color: var(--accent); color: var(--accent); }
+.aln-text { display: none; padding: 12px; margin: 0; max-height: 480px; overflow: auto; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; color: var(--text); background: #0b0f14; border: 1px solid var(--border); border-radius: 8px; white-space: pre; user-select: text; }
+.aln-text.on { display: block; }
+.aln-text .arow { white-space: pre; }
+.aln-text .alabel { color: var(--muted); }
+.canvas-scroll.off { display: none; }
+.edit-panel { display: none; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: var(--panel2); }
+.edit-panel.on { display: block; }
+.edit-panel .edit-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+.edit-panel .edit-head .mini { display: flex; gap: 8px; }
+.edit-panel .edit-head button { padding: 4px 10px; font-size: 12px; }
+.edit-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; max-height: 220px; overflow: auto; margin-bottom: 10px; }
+.edit-list label { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); user-select: none; }
+.edit-list label:hover { border-color: var(--accent); }
+.edit-list label .len { color: var(--muted); font-size: 12px; margin-left: auto; }
+.edit-panel .btn-row { margin-top: 0; }
 </style>
 </head>
 <body>
 <div class="container">
   <h1>🧬 多序列比对工具 (MSA)</h1>
   <p class="sub">
-    上传 FASTA 核酸或氨基酸序列（<code>.fa</code> / <code>.fasta</code> / <code>.seq</code> / <code>.txt</code>，可多文件合并），
-    浏览器本地完成比对：两两 Needleman–Wunsch（仿射缺口）→ UPGMA 引导树 → 渐进 profile 比对。
+    上传或粘贴 FASTA 核酸 / 氨基酸序列（<code>.fa</code> / <code>.fasta</code> / <code>.seq</code> / <code>.txt</code>，可多文件合并），
+    浏览器本地完成比对：两两 Needleman–Wunsch（仿射缺口）→ Neighbor-Joining 引导树 → 渐进 profile 比对 → 迭代精修。
     计算在 Web Worker 中进行，数据不离开本机。
   </p>
 
@@ -71,6 +92,10 @@ button.ghost:hover { border-color: var(--accent); }
       <br><small>建议 ≤50 条 × ≤500 bp/aa</small>
     </div>
     <input type="file" id="fileInput" multiple accept=".fa,.fasta,.seq,.txt,.fas" style="display:none">
+    <details class="paste-box" open>
+      <summary>📋 或直接粘贴 FASTA / 序列文本</summary>
+      <textarea id="pasteArea" rows="6" placeholder="粘贴 FASTA（&gt;header + 序列行），或每行一条裸序列…，输入后自动解析"></textarea>
+    </details>
     <div class="stats" id="seqStats"></div>
 
     <details class="params">
@@ -119,7 +144,7 @@ button.ghost:hover { border-color: var(--accent); }
     </details>
 
     <div class="btn-row">
-      <button id="btnRun" disabled>🚀 开始比对</button>
+      <button id="btnRun">🚀 开始比对</button>
       <button class="ghost" id="btnClear" disabled>清空</button>
     </div>
     <div class="progress-wrap" id="progressWrap">
@@ -133,14 +158,34 @@ button.ghost:hover { border-color: var(--accent); }
     <div class="result-head">
       <h2>📊 比对结果</h2>
       <div class="btns">
+        <button class="ghost view-btn active" id="btnViewCanvas">图形视图</button>
+        <button class="ghost view-btn" id="btnViewText">文本视图</button>
+        <button class="ghost" id="btnEdit">✂️ 编辑序列</button>
+        <button class="ghost" id="btnCopyText">📋 复制比对文本</button>
         <button class="ghost" id="btnFasta">⬇️ 比对 FASTA</button>
         <button class="ghost" id="btnConsensus">⬇️ consensus FASTA</button>
         <button class="ghost" id="btnTree">⬇️ Newick 树</button>
         <button class="ghost" id="btnPng">⬇️ 比对图片 PNG</button>
       </div>
     </div>
+    <div class="edit-panel" id="editPanel">
+      <div class="edit-head">
+        <span>勾选参与比对的序列（取消勾选的不参与），确认后用当前参数重新比对</span>
+        <span class="mini">
+          <button class="ghost" id="btnSelAll">全选</button>
+          <button class="ghost" id="btnSelNone">全不选</button>
+        </span>
+      </div>
+      <div class="edit-list" id="editList"></div>
+      <div class="btn-row">
+        <button id="btnRerun">🔁 重新比对所选（<span id="editCount">0</span> 条）</button>
+        <button class="ghost" id="btnEditCancel">取消</button>
+      </div>
+      <div class="msg" id="editMsg"></div>
+    </div>
     <div class="legend" id="legend"></div>
-    <div class="canvas-scroll"><canvas id="alnCanvas"></canvas></div>
+    <div class="canvas-scroll" id="canvasScroll"><canvas id="alnCanvas"></canvas></div>
+    <pre class="aln-text" id="alnText"></pre>
     <div class="stats" id="alnStats"></div>
   </div>
 
@@ -281,8 +326,8 @@ function nwAlign(a, b, sf, go, ge, freeEnds) {
 
       const b1 = M[row + j - 1] - go, b2 = Y[row + j - 1] - ge, b3 = X[row + j - 1] - go;
       if (b1 >= b2 && b1 >= b3) { Y[idx] = b1; pY[idx] = 0; }
-      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 1; }
-      else { Y[idx] = b3; pY[idx] = 2; }
+      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 2; }
+      else { Y[idx] = b3; pY[idx] = 1; }
     }
   }
 
@@ -413,8 +458,8 @@ function alignProfiles(rowsA, rowsB, sf, go, ge, freeEnds) {
 
       const b1 = M[row + j - 1] - go, b2 = Y[row + j - 1] - ge, b3 = X[row + j - 1] - go;
       if (b1 >= b2 && b1 >= b3) { Y[idx] = b1; pY[idx] = 0; }
-      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 1; }
-      else { Y[idx] = b3; pY[idx] = 2; }
+      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 2; }
+      else { Y[idx] = b3; pY[idx] = 1; }
     }
   }
 
@@ -486,46 +531,72 @@ function alignProfiles(rowsA, rowsB, sf, go, ge, freeEnds) {
   return resA.concat(resB);
 }
 
-function upgma(dist, n) {
+function neighborJoining(dist, n) {
   const clusters = [];
-  for (let i = 0; i < n; i++) clusters.push({ size: 1, left: i, right: -1 });
-  const d = [];
-  for (let i = 0; i < n; i++) d.push(Array.from(dist[i]));
+  for (let i = 0; i < n; i++) clusters.push({ size: 1, left: -1, right: -1, blLeft: 0, blRight: 0 });
+  const dmap = {};
+  const k2 = (i, j) => (i < j ? i + "," + j : j + "," + i);
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) dmap[k2(i, j)] = dist[i][j];
+  const getD = (i, j) => (i === j ? 0 : dmap[k2(i, j)]);
   let active = [];
   for (let i = 0; i < n; i++) active.push(i);
   const merges = [];
 
-  while (active.length > 1) {
-    let ia = active[0], ib = active[1], best = Infinity;
-    for (let a = 0; a < active.length; a++) {
-      for (let b = a + 1; b < active.length; b++) {
-        const v = d[active[a]][active[b]];
-        if (v < best) { best = v; ia = active[a]; ib = active[b]; }
+  while (active.length > 2) {
+    const m = active.length;
+    const rSum = {};
+    for (const i of active) {
+      let s = 0;
+      for (const k of active) if (k !== i) s += getD(i, k);
+      rSum[i] = s;
+    }
+    let best = Infinity, bi = active[0], bj = active[1];
+    for (let a = 0; a < m; a++) {
+      for (let b = a + 1; b < m; b++) {
+        const i = active[a], j = active[b];
+        const q = (m - 2) * getD(i, j) - rSum[i] - rSum[j];
+        if (q < best) { best = q; bi = i; bj = j; }
       }
     }
-    const ca = clusters[ia], cb = clusters[ib];
-    const newIdx = clusters.length;
-    clusters.push({ size: ca.size + cb.size, left: ia, right: ib });
-    d.push(new Array(newIdx + 1).fill(0));
-    const rest = active.filter(x => x !== ia && x !== ib);
-    for (const k of rest) {
-      const nd = (ca.size * d[ia][k] + cb.size * d[ib][k]) / (ca.size + cb.size);
-      while (d[k].length <= newIdx) d[k].push(0);
-      d[k][newIdx] = nd;
-      d[newIdx][k] = nd;
+    const dij = getD(bi, bj);
+    const diu = 0.5 * dij + (rSum[bi] - rSum[bj]) / (2 * (m - 2));
+    const dju = dij - diu;
+    const u = clusters.length;
+    for (const k of active) {
+      if (k === bi || k === bj) continue;
+      dmap[k2(u, k)] = 0.5 * (getD(bi, k) + getD(bj, k) - dij);
     }
-    merges.push({ a: ia, b: ib, node: newIdx });
-    rest.push(newIdx);
-    active = rest;
+    clusters.push({
+      size: clusters[bi].size + clusters[bj].size,
+      left: bi, right: bj,
+      blLeft: Math.max(0, diu), blRight: Math.max(0, dju)
+    });
+    merges.push({ a: bi, b: bj, node: u });
+    active = active.filter(x => x !== bi && x !== bj);
+    active.push(u);
   }
-  return { clusters, merges, root: active[0] };
+  const [ia, ib] = active;
+  const dab = getD(ia, ib);
+  const root = clusters.length;
+  clusters.push({
+    size: clusters[ia].size + clusters[ib].size,
+    left: ia, right: ib,
+    blLeft: dab / 2, blRight: dab / 2
+  });
+  merges.push({ a: ia, b: ib, node: root });
+  return { clusters, merges, root };
+}
+
+function fmtBL(v) {
+  if (!isFinite(v) || v < 0) v = 0;
+  return String(Math.round(v * 1e5) / 1e5);
 }
 
 function newickOf(clusters, root, n, nameOf) {
   const build = (idx) => {
     if (idx < n) return nameOf(idx).replace(/[(),:;\s]/g, "_");
     const c = clusters[idx];
-    return "(" + build(c.left) + "," + build(c.right) + ")";
+    return "(" + build(c.left) + ":" + fmtBL(c.blLeft) + "," + build(c.right) + ":" + fmtBL(c.blRight) + ")";
   };
   return build(root) + ";";
 }
@@ -586,8 +657,8 @@ function runMSA(seqs, params, post) {
     }
   }
 
-  post({ type: "progress", pct: 60, stage: "构建 UPGMA 引导树…" });
-  const tree = upgma(dist, n);
+  post({ type: "progress", pct: 60, stage: "构建 NJ 引导树…" });
+  const tree = neighborJoining(dist, n);
 
   post({ type: "progress", pct: 64, stage: "渐进比对…" });
   const prof = new Array(tree.clusters.length);
@@ -605,12 +676,31 @@ function runMSA(seqs, params, post) {
 
   const rootRows = prof[tree.root];
   const rootIds = profIds[tree.root];
-  const aligned = new Array(n);
+  let aligned = new Array(n);
   for (let k = 0; k < n; k++) aligned[rootIds[k]] = rootRows[k];
   if (aligned.some(r => r === undefined)) throw new Error("渐进比对失败：行序恢复出错");
   if (new Set(aligned.map(r => r.length)).size !== 1) throw new Error("渐进比对失败：列长不一致");
 
-  post({ type: "progress", pct: 97, stage: "计算 consensus…" });
+  const REFINEMENT_ROUNDS = 2;
+  for (let round = 0; round < REFINEMENT_ROUNDS; round++) {
+    for (let i = 0; i < n; i++) {
+      const others = [];
+      for (let k = 0; k < n; k++) if (k !== i) others.push(aligned[k]);
+      const res = alignProfiles(others, [seqs[i]], sf, go, ge, freeEnds);
+      const newRows = res.slice(0, n - 1);
+      const ins = res[n - 1];
+      const rebuilt = new Array(n);
+      for (let k = 0, j = 0; k < n; k++) rebuilt[k] = (k === i ? ins : newRows[j++]);
+      aligned = rebuilt;
+      if (i % 10 === 0 || i === n - 1) {
+        const done = round * n + i + 1, total = REFINEMENT_ROUNDS * n;
+        post({ type: "progress", pct: 96 + (done / total) * 3, stage: `迭代精修 第 ${round + 1}/${REFINEMENT_ROUNDS} 轮（${i + 1}/${n}）` });
+      }
+    }
+  }
+  if (new Set(aligned.map(r => r.length)).size !== 1) throw new Error("迭代精修失败：列长不一致");
+
+  post({ type: "progress", pct: 99, stage: "计算 consensus…" });
   const L = aligned[0].length;
   const cons = [], consFrac = [];
   for (let c = 0; c < L; c++) {
@@ -674,6 +764,17 @@ function parseFasta(text, fallbackName) {
     .map(r => ({ header: r.header || "seq", seq: r.seq.join("").toUpperCase() }));
 }
 
+function parsePasted(text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n").map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  if (!lines.some(l => l.startsWith(">"))) {
+    return lines
+      .map((l, i) => ({ header: "seq" + (i + 1), seq: l.replace(/\s+/g, "").toUpperCase() }))
+      .filter(r => r.seq.length > 0);
+  }
+  return parseFasta(text, "seq");
+}
+
 function recId(header) {
   const t = header.trim();
   const sp = t.search(/\s/);
@@ -693,10 +794,16 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+let fileRecords = [];
 let records = [];
 let worker = null;
 let resultData = null;
 let resultHeaders = [];
+let resultText = "";
+let sessionInputs = { seqs: [], headers: [] };
+let currentSel = [];
+let lastParams = null;
+let lastDisplayOrder = [];
 
 const dropZone = $("dropZone");
 const fileInput = $("fileInput");
@@ -713,29 +820,46 @@ fileInput.onchange = () => {
   fileInput.value = "";
 };
 
+function mergeDedup(base, extra) {
+  const out = base.map(r => ({ header: r.header, seq: r.seq }));
+  const used = new Set(out.map(r => recId(r.header).toLowerCase()));
+  for (const r of extra) {
+    let id = recId(r.header) || "seq";
+    let header = r.header || id;
+    if (used.has(id.toLowerCase())) {
+      let k = 2, nid;
+      do { nid = id + "_" + (k++); } while (used.has(nid.toLowerCase()));
+      header = nid + (header.length > id.length ? header.slice(id.length) : "");
+      id = nid;
+    }
+    used.add(id.toLowerCase());
+    out.push({ header, seq: r.seq });
+  }
+  return out;
+}
+
+function refreshRecords() {
+  records = mergeDedup(fileRecords, parsePasted($("pasteArea").value));
+  renderStats();
+}
+
 async function addFiles(files) {
   hideMsg();
   const good = files.filter(f => ALLOWED.test(f.name));
   const bad = files.filter(f => !ALLOWED.test(f.name));
   if (bad.length) showMsg("已忽略不支持的文件：" + bad.map(f => f.name).join(", "), "warn");
-  const used = new Set(records.map(r => recId(r.header).toLowerCase()));
+  let recs = [];
   for (const f of good) {
-    const recs = parseFasta(await f.text(), f.name.replace(/\.[^.]+$/, ""));
-    for (const r of recs) {
-      let id = recId(r.header) || "seq";
-      let header = r.header || id;
-      if (used.has(id.toLowerCase())) {
-        let k = 2, nid;
-        do { nid = id + "_" + (k++); } while (used.has(nid.toLowerCase()));
-        header = nid + (header.length > id.length ? header.slice(id.length) : "");
-        id = nid;
-      }
-      used.add(id.toLowerCase());
-      records.push({ header, seq: r.seq });
-    }
+    recs = recs.concat(parseFasta(await f.text(), f.name.replace(/\.[^.]+$/, "")));
   }
-  renderStats();
+  fileRecords = mergeDedup(fileRecords, recs);
+  refreshRecords();
 }
+
+$("pasteArea").oninput = () => {
+  hideMsg();
+  refreshRecords();
+};
 
 function detectTypeUI(seqs) {
   let total = 0, ntOk = 0;
@@ -755,7 +879,6 @@ function renderStats() {
   const n = records.length;
   if (!n) {
     $("seqStats").innerHTML = "";
-    $("btnRun").disabled = true;
     $("btnClear").disabled = true;
     return;
   }
@@ -768,13 +891,20 @@ function renderStats() {
     `<span class="type-tag">${auto === "nt" ? "核酸" : "蛋白质"}</span>` +
     (n < 2 ? ` · <span style="color:var(--warn)">至少需要 2 条</span>` : "") +
     (n > 50 || max > 500 ? ` · <span style="color:var(--warn)">规模较大，可能较慢</span>` : "");
-  $("btnRun").disabled = n < 2;
-  $("btnClear").disabled = n < 2;
+  $("btnClear").disabled = false;
 }
 
 $("btnClear").onclick = () => {
+  fileRecords = [];
   records = [];
+  $("pasteArea").value = "";
   resultData = null;
+  resultText = "";
+  sessionInputs = { seqs: [], headers: [] };
+  currentSel = [];
+  lastDisplayOrder = [];
+  $("editPanel").classList.remove("on");
+  $("alnText").textContent = "";
   $("result").style.display = "none";
   hideMsg();
   renderStats();
@@ -791,23 +921,10 @@ function showMsg(text, cls) {
 }
 function hideMsg() { $("msg").className = "msg"; }
 
-$("btnRun").onclick = () => {
-  if (records.length < 2) return;
+function runAlignment(seqs, headers, params, selSessionIdx) {
   hideMsg();
+  $("editPanel").classList.remove("on");
   if (worker) { worker.terminate(); worker = null; }
-
-  const params = {
-    type: $("pType").value,
-    matrix: $("pMatrix").value,
-    match: $("pMatch").value,
-    mismatch: $("pMismatch").value,
-    gapOpen: $("pGapOpen").value,
-    gapExtend: $("pGapExtend").value,
-    endGap: $("pEndGap").checked,
-    upper: $("pUpper").checked,
-    color: $("pColor").value,
-    thresh: Number($("pThresh").value) / 100
-  };
 
   const src = $("msaWorkerSource").textContent;
   worker = new Worker(URL.createObjectURL(new Blob([src], { type: "application/javascript" })));
@@ -817,7 +934,7 @@ $("btnRun").onclick = () => {
   setProgress(0, "启动 Worker…");
 
   const finish = () => {
-    $("btnRun").disabled = records.length < 2;
+    $("btnRun").disabled = false;
     $("progressWrap").classList.remove("on");
     if (worker) { worker.terminate(); worker = null; }
   };
@@ -828,6 +945,9 @@ $("btnRun").onclick = () => {
     else if (msg.type === "done") {
       setProgress(100, "完成");
       resultData = msg;
+      lastParams = params;
+      resultHeaders = headers.slice();
+      if (selSessionIdx) currentSel = selSessionIdx.slice();
       showResult(msg, params);
       finish();
     } else if (msg.type === "error") {
@@ -840,9 +960,84 @@ $("btnRun").onclick = () => {
     finish();
   };
 
-  resultHeaders = records.map(r => r.header);
-  const seqs = records.map(r => (params.upper ? r.seq.toUpperCase() : r.seq));
   worker.postMessage({ seqs, params });
+}
+
+$("btnRun").onclick = () => {
+  if (records.length < 2) {
+    showMsg("请先上传或粘贴至少 2 条序列", "warn");
+    return;
+  }
+  const params = {
+    type: $("pType").value,
+    matrix: $("pMatrix").value,
+    match: $("pMatch").value,
+    mismatch: $("pMismatch").value,
+    gapOpen: $("pGapOpen").value,
+    gapExtend: $("pGapExtend").value,
+    endGap: $("pEndGap").checked,
+    upper: $("pUpper").checked,
+    color: $("pColor").value,
+    thresh: Number($("pThresh").value) / 100
+  };
+  const headers = records.map(r => r.header);
+  const seqs = records.map(r => (params.upper ? r.seq.toUpperCase() : r.seq));
+  sessionInputs = { seqs: seqs.slice(), headers: headers.slice() };
+  runAlignment(seqs, headers, params, headers.map((_, i) => i));
+};
+
+function updateEditCount() {
+  const checked = $("editList").querySelectorAll("input:checked").length;
+  $("editCount").textContent = checked;
+  $("btnRerun").disabled = checked < 2;
+}
+function showEditMsg(text, cls) {
+  $("editMsg").textContent = text || "";
+  $("editMsg").className = cls ? "msg " + cls : "msg";
+}
+$("btnEdit").onclick = () => {
+  if (!resultData || sessionInputs.headers.length < 2) return;
+  const list = $("editList");
+  list.innerHTML = "";
+  const inSel = new Set(currentSel);
+  const partOrder = lastDisplayOrder.filter(i => inSel.has(i));
+  const rest = sessionInputs.headers.map((_, i) => i).filter(i => !inSel.has(i));
+  [...partOrder, ...rest].forEach(i => {
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = inSel.has(i);
+    cb.value = String(i);
+    cb.onchange = updateEditCount;
+    const name = document.createElement("span");
+    name.textContent = sessionInputs.headers[i];
+    const len = document.createElement("span");
+    len.className = "len";
+    len.textContent = sessionInputs.seqs[i].length + " 位";
+    label.append(cb, name, len);
+    list.appendChild(label);
+  });
+  updateEditCount();
+  showEditMsg("");
+  $("editPanel").classList.add("on");
+};
+$("btnSelAll").onclick = () => {
+  $("editList").querySelectorAll("input").forEach(cb => { cb.checked = true; });
+  updateEditCount();
+};
+$("btnSelNone").onclick = () => {
+  $("editList").querySelectorAll("input").forEach(cb => { cb.checked = false; });
+  updateEditCount();
+};
+$("btnEditCancel").onclick = () => $("editPanel").classList.remove("on");
+$("btnRerun").onclick = () => {
+  const sel = [...$("editList").querySelectorAll("input:checked")].map(cb => Number(cb.value)).sort((a, b) => a - b);
+  if (sel.length < 2) {
+    showEditMsg("至少勾选 2 条序列才能比对", "warn");
+    return;
+  }
+  if (!lastParams) return;
+  runAlignment(sel.map(i => sessionInputs.seqs[i]), sel.map(i => sessionInputs.headers[i]), lastParams, sel);
 };
 
 const NT_COLORS = { A: "#59e391", G: "#f9e25d", C: "#79b8ff", T: "#ff7b7b", U: "#ff7b7b", N: "#8b9cb3" };
@@ -876,6 +1071,140 @@ function buildLegend(type, colorMode, thresh) {
   $("legend").innerHTML = parts.join("");
 }
 
+function buildAlignmentText(headers, aligned, consensus, L, excluded) {
+  const nameW = Math.max(4, ...headers.map(h => h.length)) + 2;
+  const pad = s => s.padEnd(nameW, " ");
+  const numCells = new Array(L).fill(" ");
+  const tickCells = new Array(L).fill("·");
+  for (let c = 0; c < L; c++) {
+    if (c % 10 === 0) {
+      tickCells[c] = "|";
+      const s = String(c + 1);
+      for (let k = 0; k < s.length && c + k < L; k++) numCells[c + k] = s[k];
+    }
+  }
+  const lines = [pad("pos") + numCells.join(""), pad("") + tickCells.join(""), pad("cons") + consensus];
+  for (let r = 0; r < aligned.length; r++) lines.push(pad(headers[r]) + aligned[r]);
+  if (excluded && excluded.headers.length) {
+    lines.push("── 未参与比对（仅展示原始序列，不计入共识 / 树 / 导出比对）──");
+    for (let i = 0; i < excluded.headers.length; i++) lines.push(pad(excluded.headers[i]) + excluded.seqs[i]);
+  }
+  return lines.join("\n") + "\n";
+}
+
+function buildAlignmentHTML(headers, aligned, consensus, consFrac, type, colorMode, thresh, excluded) {
+  const L = aligned[0].length;
+  const nameW = Math.max(4, ...headers.map(h => h.length)) + 2;
+  const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const pad = s => esc(String(s).padEnd(nameW, " "));
+
+  const numCells = new Array(L).fill(" ");
+  const tickCells = new Array(L).fill("·");
+  for (let c = 0; c < L; c++) {
+    if (c % 10 === 0) {
+      tickCells[c] = "|";
+      const s = String(c + 1);
+      for (let k = 0; k < s.length && c + k < L; k++) numCells[c + k] = s[k];
+    }
+  }
+  const baseCells = new Array(L).fill("─");
+
+  const renderCells = (chars, styleOf) => {
+    let out = "", run = "", runCss = null;
+    for (let c = 0; c < chars.length; c++) {
+      const css = styleOf(chars[c], c);
+      if (css !== runCss) {
+        if (run) out += runCss ? `<span style="${runCss}">${esc(run)}</span>` : esc(run);
+        run = chars[c]; runCss = css;
+      } else run += chars[c];
+    }
+    if (run) out += runCss ? `<span style="${runCss}">${esc(run)}</span>` : esc(run);
+    return out;
+  };
+
+  const row = (label, cellsHtml, extraCss) =>
+    `<div class="arow"${extraCss ? ` style="${extraCss}"` : ""}><span class="alabel">${pad(label)}</span>${cellsHtml}</div>`;
+
+  const out = [];
+  out.push(row("pos", renderCells(numCells, () => "color:#8b9cb3")));
+  out.push(row("", renderCells(tickCells, ch => (ch === "|" ? "color:#8b9cb3" : "color:#2d3f56"))));
+  out.push(row("", renderCells(baseCells, () => "color:#2d3f56")));
+
+  out.push(row("con%", renderCells(new Array(L).fill(" "), (_, c) => {
+    const a = (Math.max(0, consFrac[c] - 0.15) / 0.85) * 0.9;
+    return `background:rgba(34,197,94,${a.toFixed(3)})`;
+  })));
+
+  out.push(row("cons", renderCells(consensus.split(""), (ch, c) => {
+    const color = colorMode === "match" ? "#e6edf3" : (residueColor(ch, type) || "#8b9cb3");
+    let css = `color:${color}`;
+    if (colorMode === "consensus" && consFrac[c] >= thresh) css += ";background:rgba(34,197,94,.22)";
+    return css;
+  })));
+
+  for (let r = 0; r < aligned.length; r++) {
+    const bgRow = r % 2 === 1 ? "background:rgba(255,255,255,.02);" : "";
+    out.push(row(headers[r], renderCells(aligned[r].split(""), (ch, c) => {
+      const parts = [];
+      if (ch === "-" || ch === ".") {
+        parts.push("color:#2d3f56");
+        if (colorMode === "consensus" && consFrac[c] >= thresh) parts.push("background:rgba(34,197,94,.22)");
+        return parts.join(";");
+      }
+      if (colorMode === "consensus" && consFrac[c] >= thresh) {
+        parts.push(`background:${ch === consensus[c] ? "rgba(34,197,94,.22)" : "rgba(0,0,0,.15)"}`);
+      }
+      if (colorMode === "match") parts.push(`color:${ch === consensus[c] ? "#22c55e" : "#ef4444"}`);
+      else parts.push(`color:${residueColor(ch, type) || "#8b9cb3"}`);
+      return parts.join(";");
+    }), bgRow));
+  }
+  if (excluded && excluded.headers.length) {
+    out.push(`<div class="arow" style="color:#556270">── 未参与比对（仅展示原始序列，不计入共识 / 树 / 导出比对）──</div>`);
+    for (let i = 0; i < excluded.headers.length; i++) {
+      out.push(row(excluded.headers[i], renderCells(excluded.seqs[i].split(""), () => "color:#556270")));
+    }
+  }
+  return out.join("");
+}
+
+function setResultView(mode) {
+  const isCanvas = mode === "canvas";
+  $("btnViewCanvas").classList.toggle("active", isCanvas);
+  $("btnViewText").classList.toggle("active", !isCanvas);
+  $("canvasScroll").classList.toggle("off", !isCanvas);
+  $("alnText").classList.toggle("on", !isCanvas);
+}
+$("btnViewCanvas").onclick = () => setResultView("canvas");
+$("btnViewText").onclick = () => setResultView("text");
+
+$("btnCopyText").onclick = async () => {
+  if (!resultText) { showMsg("暂无比对结果", "warn"); return; }
+  try {
+    await navigator.clipboard.writeText(resultText);
+    showMsg("比对文本已复制到剪贴板", "ok");
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = resultText;
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e2) { ok = false; }
+    ta.remove();
+    if (ok) showMsg("比对文本已复制到剪贴板", "ok");
+    else showMsg("复制失败，请在文本视图中手动选择复制", "err");
+  }
+};
+
+function treeDisplayOrder(newick, n) {
+  const order = [];
+  const re = /seq(\d+)/g;
+  let m;
+  while ((m = re.exec(newick))) order.push(Number(m[1]) - 1);
+  const ok = order.length === n && new Set(order).size === n && order.every(i => i >= 0 && i < n);
+  return ok ? order : Array.from({ length: n }, (_, i) => i);
+}
+
 function showResult(msg, params) {
   $("result").style.display = "block";
   const type = msg.seqType;
@@ -883,16 +1212,29 @@ function showResult(msg, params) {
   const thresh = params.thresh;
   buildLegend(type, colorMode, thresh);
 
-  const aligned = msg.aligned;
   const consensus = msg.consensus;
   const consFrac = msg.consFrac;
-  const n = aligned.length;
-  const L = aligned[0].length;
-  const headers = resultHeaders;
+  const n = msg.aligned.length;
+  const L = msg.aligned[0].length;
+  const order = treeDisplayOrder(msg.newick, n);
+  lastDisplayOrder = order.map(i => (currentSel[i] !== undefined ? currentSel[i] : i));
+  const headers = order.map(i => resultHeaders[i]);
+  const aligned = order.map(i => msg.aligned[i]);
+  const inSel = new Set(currentSel);
+  const exclIdx = sessionInputs.headers.map((_, i) => i).filter(i => !inSel.has(i));
+  const excluded = {
+    headers: exclIdx.map(i => sessionInputs.headers[i]),
+    seqs: exclIdx.map(i => sessionInputs.seqs[i])
+  };
+  resultText = buildAlignmentText(headers, aligned, consensus, L, excluded);
+  $("alnText").innerHTML = buildAlignmentHTML(headers, aligned, consensus, consFrac, type, colorMode, thresh, excluded);
 
   const nameW = 150, cw = 9, rh = 16, consH = 14, rulerH = 16, padTop = 4;
-  const W = nameW + L * cw + 8;
-  const H = padTop + rulerH + consH + rh + n * rh + 8;
+  const exclN = excluded.headers.length;
+  const maxExclLen = exclN ? excluded.seqs.reduce((m, s) => Math.max(m, s.length), 0) : 0;
+  const W = nameW + Math.max(L, maxExclLen) * cw + 8;
+  const exclBlockH = exclN ? (exclN + 2) * rh : 0;
+  const H = padTop + rulerH + consH + rh + n * rh + exclBlockH + 8;
   const canvas = $("alnCanvas");
   canvas.width = W;
   canvas.height = H;
@@ -963,8 +1305,16 @@ function showResult(msg, params) {
     const row = aligned[r];
     for (let c = 0; c < L; c++) {
       const ch = row[c];
-      if (ch === "-") continue;
       const x = nameW + c * cw;
+      if (ch === "-") {
+        if (colorMode === "consensus" && consFrac[c] >= thresh) {
+          ctx.fillStyle = "rgba(34,197,94,0.22)";
+          ctx.fillRect(x, y, cw, rh);
+        }
+        ctx.fillStyle = "#2d3f56";
+        ctx.fillText(ch, x + 1, y + rh / 2);
+        continue;
+      }
       if (colorMode === "consensus" && consFrac[c] >= thresh) {
         ctx.fillStyle = ch === consensus[c] ? "rgba(34,197,94,0.22)" : "rgba(0,0,0,0.15)";
         ctx.fillRect(x, y, cw, rh);
@@ -978,11 +1328,39 @@ function showResult(msg, params) {
     }
   }
 
+  if (exclN) {
+    let ey = consRowY + rh + n * rh + rh / 2;
+    ctx.strokeStyle = "#2d3f56";
+    ctx.beginPath();
+    ctx.moveTo(0, ey);
+    ctx.lineTo(W, ey);
+    ctx.stroke();
+    ey += rh / 2 + 2;
+    ctx.fillStyle = "#556270";
+    ctx.fillText("── 未参与比对（仅展示原始序列，不计入共识 / 树 / 导出比对）──", 8, ey);
+    ey += rh;
+    for (let i = 0; i < exclN; i++) {
+      const y = ey + i * rh;
+      if (i % 2 === 1) {
+        ctx.fillStyle = "rgba(255,255,255,0.02)";
+        ctx.fillRect(0, y, W, rh);
+      }
+      const exLabel = excluded.headers[i].length > 22 ? excluded.headers[i].slice(0, 21) + "…" : excluded.headers[i];
+      ctx.fillStyle = "#556270";
+      ctx.fillText(exLabel, 8, y + rh / 2);
+      const raw = excluded.seqs[i];
+      for (let c = 0; c < raw.length; c++) {
+        ctx.fillText(raw[c], nameW + c * cw + 1, y + rh / 2);
+      }
+    }
+  }
+
   let identityCols = 0;
   for (let c = 0; c < L; c++) if (consFrac[c] >= thresh) identityCols++;
   $("alnStats").innerHTML =
     `<b>${n}</b> 条序列 · 比对长度 <b>${L}</b> · 保守列（≥${Math.round(thresh * 100)}%）<b>${identityCols}</b>（${(identityCols / L * 100).toFixed(1)}%） · ` +
-    `类型 <span class="type-tag">${type === "nt" ? "核酸" : "蛋白质"}</span> · 矩阵 ${msg.matrix}`;
+    `类型 <span class="type-tag">${type === "nt" ? "核酸" : "蛋白质"}</span> · 矩阵 ${msg.matrix}` +
+    (exclN ? ` · <b>${exclN}</b> 条未参与比对（灰显于下方）` : "");
 
   $("btnFasta").onclick = () => {
     downloadBlob(new Blob([serializeFasta(headers, aligned)], { type: "text/plain;charset=utf-8" }), "msa_aligned.fasta");

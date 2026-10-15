@@ -128,8 +128,8 @@ function nwAlign(a, b, sf, go, ge, freeEnds) {
 
       const b1 = M[row + j - 1] - go, b2 = Y[row + j - 1] - ge, b3 = X[row + j - 1] - go;
       if (b1 >= b2 && b1 >= b3) { Y[idx] = b1; pY[idx] = 0; }
-      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 1; }
-      else { Y[idx] = b3; pY[idx] = 2; }
+      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 2; }
+      else { Y[idx] = b3; pY[idx] = 1; }
     }
   }
 
@@ -260,8 +260,8 @@ function alignProfiles(rowsA, rowsB, sf, go, ge, freeEnds) {
 
       const b1 = M[row + j - 1] - go, b2 = Y[row + j - 1] - ge, b3 = X[row + j - 1] - go;
       if (b1 >= b2 && b1 >= b3) { Y[idx] = b1; pY[idx] = 0; }
-      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 1; }
-      else { Y[idx] = b3; pY[idx] = 2; }
+      else if (b2 >= b3) { Y[idx] = b2; pY[idx] = 2; }
+      else { Y[idx] = b3; pY[idx] = 1; }
     }
   }
 
@@ -333,46 +333,72 @@ function alignProfiles(rowsA, rowsB, sf, go, ge, freeEnds) {
   return resA.concat(resB);
 }
 
-function upgma(dist, n) {
+function neighborJoining(dist, n) {
   const clusters = [];
-  for (let i = 0; i < n; i++) clusters.push({ size: 1, left: i, right: -1 });
-  const d = [];
-  for (let i = 0; i < n; i++) d.push(Array.from(dist[i]));
+  for (let i = 0; i < n; i++) clusters.push({ size: 1, left: -1, right: -1, blLeft: 0, blRight: 0 });
+  const dmap = {};
+  const k2 = (i, j) => (i < j ? i + "," + j : j + "," + i);
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) dmap[k2(i, j)] = dist[i][j];
+  const getD = (i, j) => (i === j ? 0 : dmap[k2(i, j)]);
   let active = [];
   for (let i = 0; i < n; i++) active.push(i);
   const merges = [];
 
-  while (active.length > 1) {
-    let ia = active[0], ib = active[1], best = Infinity;
-    for (let a = 0; a < active.length; a++) {
-      for (let b = a + 1; b < active.length; b++) {
-        const v = d[active[a]][active[b]];
-        if (v < best) { best = v; ia = active[a]; ib = active[b]; }
+  while (active.length > 2) {
+    const m = active.length;
+    const rSum = {};
+    for (const i of active) {
+      let s = 0;
+      for (const k of active) if (k !== i) s += getD(i, k);
+      rSum[i] = s;
+    }
+    let best = Infinity, bi = active[0], bj = active[1];
+    for (let a = 0; a < m; a++) {
+      for (let b = a + 1; b < m; b++) {
+        const i = active[a], j = active[b];
+        const q = (m - 2) * getD(i, j) - rSum[i] - rSum[j];
+        if (q < best) { best = q; bi = i; bj = j; }
       }
     }
-    const ca = clusters[ia], cb = clusters[ib];
-    const newIdx = clusters.length;
-    clusters.push({ size: ca.size + cb.size, left: ia, right: ib });
-    d.push(new Array(newIdx + 1).fill(0));
-    const rest = active.filter(x => x !== ia && x !== ib);
-    for (const k of rest) {
-      const nd = (ca.size * d[ia][k] + cb.size * d[ib][k]) / (ca.size + cb.size);
-      while (d[k].length <= newIdx) d[k].push(0);
-      d[k][newIdx] = nd;
-      d[newIdx][k] = nd;
+    const dij = getD(bi, bj);
+    const diu = 0.5 * dij + (rSum[bi] - rSum[bj]) / (2 * (m - 2));
+    const dju = dij - diu;
+    const u = clusters.length;
+    for (const k of active) {
+      if (k === bi || k === bj) continue;
+      dmap[k2(u, k)] = 0.5 * (getD(bi, k) + getD(bj, k) - dij);
     }
-    merges.push({ a: ia, b: ib, node: newIdx });
-    rest.push(newIdx);
-    active = rest;
+    clusters.push({
+      size: clusters[bi].size + clusters[bj].size,
+      left: bi, right: bj,
+      blLeft: Math.max(0, diu), blRight: Math.max(0, dju)
+    });
+    merges.push({ a: bi, b: bj, node: u });
+    active = active.filter(x => x !== bi && x !== bj);
+    active.push(u);
   }
-  return { clusters, merges, root: active[0] };
+  const [ia, ib] = active;
+  const dab = getD(ia, ib);
+  const root = clusters.length;
+  clusters.push({
+    size: clusters[ia].size + clusters[ib].size,
+    left: ia, right: ib,
+    blLeft: dab / 2, blRight: dab / 2
+  });
+  merges.push({ a: ia, b: ib, node: root });
+  return { clusters, merges, root };
+}
+
+function fmtBL(v) {
+  if (!isFinite(v) || v < 0) v = 0;
+  return String(Math.round(v * 1e5) / 1e5);
 }
 
 function newickOf(clusters, root, n, nameOf) {
   const build = (idx) => {
     if (idx < n) return nameOf(idx).replace(/[(),:;\s]/g, "_");
     const c = clusters[idx];
-    return "(" + build(c.left) + "," + build(c.right) + ")";
+    return "(" + build(c.left) + ":" + fmtBL(c.blLeft) + "," + build(c.right) + ":" + fmtBL(c.blRight) + ")";
   };
   return build(root) + ";";
 }
@@ -433,8 +459,8 @@ function runMSA(seqs, params, post) {
     }
   }
 
-  post({ type: "progress", pct: 60, stage: "构建 UPGMA 引导树…" });
-  const tree = upgma(dist, n);
+  post({ type: "progress", pct: 60, stage: "构建 NJ 引导树…" });
+  const tree = neighborJoining(dist, n);
 
   post({ type: "progress", pct: 64, stage: "渐进比对…" });
   const prof = new Array(tree.clusters.length);
@@ -452,12 +478,31 @@ function runMSA(seqs, params, post) {
 
   const rootRows = prof[tree.root];
   const rootIds = profIds[tree.root];
-  const aligned = new Array(n);
+  let aligned = new Array(n);
   for (let k = 0; k < n; k++) aligned[rootIds[k]] = rootRows[k];
   if (aligned.some(r => r === undefined)) throw new Error("渐进比对失败：行序恢复出错");
   if (new Set(aligned.map(r => r.length)).size !== 1) throw new Error("渐进比对失败：列长不一致");
 
-  post({ type: "progress", pct: 97, stage: "计算 consensus…" });
+  const REFINEMENT_ROUNDS = 2;
+  for (let round = 0; round < REFINEMENT_ROUNDS; round++) {
+    for (let i = 0; i < n; i++) {
+      const others = [];
+      for (let k = 0; k < n; k++) if (k !== i) others.push(aligned[k]);
+      const res = alignProfiles(others, [seqs[i]], sf, go, ge, freeEnds);
+      const newRows = res.slice(0, n - 1);
+      const ins = res[n - 1];
+      const rebuilt = new Array(n);
+      for (let k = 0, j = 0; k < n; k++) rebuilt[k] = (k === i ? ins : newRows[j++]);
+      aligned = rebuilt;
+      if (i % 10 === 0 || i === n - 1) {
+        const done = round * n + i + 1, total = REFINEMENT_ROUNDS * n;
+        post({ type: "progress", pct: 96 + (done / total) * 3, stage: `迭代精修 第 ${round + 1}/${REFINEMENT_ROUNDS} 轮（${i + 1}/${n}）` });
+      }
+    }
+  }
+  if (new Set(aligned.map(r => r.length)).size !== 1) throw new Error("迭代精修失败：列长不一致");
+
+  post({ type: "progress", pct: 99, stage: "计算 consensus…" });
   const L = aligned[0].length;
   const cons = [], consFrac = [];
   for (let c = 0; c < L; c++) {
