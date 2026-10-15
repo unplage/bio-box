@@ -60,10 +60,10 @@ textarea#pasteArea { display: block; width: 100%; margin-top: 10px; background: 
 textarea#pasteArea:focus { outline: none; border-color: var(--accent); }
 details.paste-box .btn-row { margin-top: 10px; }
 button.ghost.active { border-color: var(--accent); color: var(--accent); }
-.aln-text { display: none; padding: 0 12px 12px; margin: 0; max-height: 480px; overflow: auto; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; color: var(--text); background: #0b0f14; border: 1px solid var(--border); border-radius: 8px; white-space: pre; user-select: text; }
+.aln-text { display: none; padding: 0 12px 12px 0; margin: 0; max-height: 480px; overflow: auto; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; color: var(--text); background: #0b0f14; border: 1px solid var(--border); border-radius: 8px; white-space: pre; user-select: text; }
 .aln-text.on { display: block; }
-.aln-text .arow { white-space: pre; }
-.aln-text .alabel { color: var(--muted); }
+.aln-text .arow { white-space: pre; width: max-content; min-width: 100%; }
+.aln-text .alabel { color: var(--muted); position: sticky; left: 0; display: inline-block; background: #0b0f14; }
 .aln-text .arow.ruler-row { position: sticky; top: 0; background: #0b0f14; z-index: 2; }
 .canvas-scroll.off { display: none; }
 .edit-panel { display: none; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: var(--panel2); }
