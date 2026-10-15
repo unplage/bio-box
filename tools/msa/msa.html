@@ -60,14 +60,11 @@ textarea#pasteArea { display: block; width: 100%; margin-top: 10px; background: 
 textarea#pasteArea:focus { outline: none; border-color: var(--accent); }
 details.paste-box .btn-row { margin-top: 10px; }
 button.ghost.active { border-color: var(--accent); color: var(--accent); }
-.aln-text { display: none; padding: 12px; margin: 0; max-height: 480px; overflow: auto; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; color: var(--text); background: #0b0f14; border: 1px solid var(--border); border-radius: 8px; white-space: pre; user-select: text; }
+.aln-text { display: none; padding: 0 12px 12px; margin: 0; max-height: 480px; overflow: auto; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.5; color: var(--text); background: #0b0f14; border: 1px solid var(--border); border-radius: 8px; white-space: pre; user-select: text; }
 .aln-text.on { display: block; }
 .aln-text .arow { white-space: pre; }
 .aln-text .alabel { color: var(--muted); }
-.aln-text .arow.ruler-row { position: sticky; background: #0b0f14; z-index: 2; }
-.aln-text .arow.ruler-row.r0 { top: 0; }
-.aln-text .arow.ruler-row.r1 { top: 18px; }
-.aln-text .arow.ruler-row.r2 { top: 36px; }
+.aln-text .arow.ruler-row { position: sticky; top: 0; background: #0b0f14; z-index: 2; }
 .canvas-scroll.off { display: none; }
 .edit-panel { display: none; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: var(--panel2); }
 .edit-panel.on { display: block; }
@@ -1078,16 +1075,15 @@ function buildLegend(type, colorMode, thresh) {
 function buildAlignmentText(headers, aligned, consensus, L, excluded) {
   const nameW = Math.max(4, ...headers.map(h => h.length)) + 2;
   const pad = s => s.padEnd(nameW, " ");
-  const numCells = new Array(L).fill(" ");
   const tickCells = new Array(L).fill("·");
   for (let c = 0; c < L; c++) {
     if (c % 10 === 0) {
       tickCells[c] = "|";
       const s = String(c + 1);
-      for (let k = 0; k < s.length && c + k < L; k++) numCells[c + k] = s[k];
+      for (let k = 0; k < s.length && c + 1 + k < L; k++) tickCells[c + 1 + k] = s[k];
     }
   }
-  const lines = [pad("pos") + numCells.join(""), pad("") + tickCells.join(""), pad("cons") + consensus];
+  const lines = [pad("pos") + tickCells.join(""), pad("cons") + consensus];
   for (let r = 0; r < aligned.length; r++) lines.push(pad(headers[r]) + aligned[r]);
   if (excluded && excluded.headers.length) {
     lines.push("── 未参与比对（仅展示原始序列，不计入共识 / 树 / 导出比对）──");
@@ -1102,16 +1098,14 @@ function buildAlignmentHTML(headers, aligned, consensus, consFrac, type, colorMo
   const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const pad = s => esc(String(s).padEnd(nameW, " "));
 
-  const numCells = new Array(L).fill(" ");
   const tickCells = new Array(L).fill("·");
   for (let c = 0; c < L; c++) {
     if (c % 10 === 0) {
       tickCells[c] = "|";
       const s = String(c + 1);
-      for (let k = 0; k < s.length && c + k < L; k++) numCells[c + k] = s[k];
+      for (let k = 0; k < s.length && c + 1 + k < L; k++) tickCells[c + 1 + k] = s[k];
     }
   }
-  const baseCells = new Array(L).fill("─");
 
   const renderCells = (chars, styleOf) => {
     let out = "", run = "", runCss = null;
@@ -1130,9 +1124,9 @@ function buildAlignmentHTML(headers, aligned, consensus, consFrac, type, colorMo
     `<div class="arow${cls ? " " + cls : ""}"${extraCss ? ` style="${extraCss}"` : ""}><span class="alabel">${pad(label)}</span>${cellsHtml}</div>`;
 
   const out = [];
-  out.push(row("pos", renderCells(numCells, () => "color:#8b9cb3"), "", "ruler-row r0"));
-  out.push(row("", renderCells(tickCells, ch => (ch === "|" ? "color:#8b9cb3" : "color:#2d3f56")), "", "ruler-row r1"));
-  out.push(row("", renderCells(baseCells, () => "color:#2d3f56"), "", "ruler-row r2"));
+  out.push(row("pos", renderCells(tickCells, ch =>
+    (ch === "|" || (ch >= "0" && ch <= "9")) ? "color:#8b9cb3" : "color:#2d3f56"
+  ), "", "ruler-row"));
 
   out.push(row("con%", renderCells(new Array(L).fill(" "), (_, c) => {
     const a = (Math.max(0, consFrac[c] - 0.15) / 0.85) * 0.9;
