@@ -64,6 +64,10 @@ button.ghost.active { border-color: var(--accent); color: var(--accent); }
 .aln-text.on { display: block; }
 .aln-text .arow { white-space: pre; }
 .aln-text .alabel { color: var(--muted); }
+.aln-text .arow.ruler-row { position: sticky; background: #0b0f14; z-index: 2; }
+.aln-text .arow.ruler-row.r0 { top: 0; }
+.aln-text .arow.ruler-row.r1 { top: 18px; }
+.aln-text .arow.ruler-row.r2 { top: 36px; }
 .canvas-scroll.off { display: none; }
 .edit-panel { display: none; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: var(--panel2); }
 .edit-panel.on { display: block; }
@@ -1122,13 +1126,13 @@ function buildAlignmentHTML(headers, aligned, consensus, consFrac, type, colorMo
     return out;
   };
 
-  const row = (label, cellsHtml, extraCss) =>
-    `<div class="arow"${extraCss ? ` style="${extraCss}"` : ""}><span class="alabel">${pad(label)}</span>${cellsHtml}</div>`;
+  const row = (label, cellsHtml, extraCss, cls) =>
+    `<div class="arow${cls ? " " + cls : ""}"${extraCss ? ` style="${extraCss}"` : ""}><span class="alabel">${pad(label)}</span>${cellsHtml}</div>`;
 
   const out = [];
-  out.push(row("pos", renderCells(numCells, () => "color:#8b9cb3")));
-  out.push(row("", renderCells(tickCells, ch => (ch === "|" ? "color:#8b9cb3" : "color:#2d3f56"))));
-  out.push(row("", renderCells(baseCells, () => "color:#2d3f56")));
+  out.push(row("pos", renderCells(numCells, () => "color:#8b9cb3"), "", "ruler-row r0"));
+  out.push(row("", renderCells(tickCells, ch => (ch === "|" ? "color:#8b9cb3" : "color:#2d3f56")), "", "ruler-row r1"));
+  out.push(row("", renderCells(baseCells, () => "color:#2d3f56"), "", "ruler-row r2"));
 
   out.push(row("con%", renderCells(new Array(L).fill(" "), (_, c) => {
     const a = (Math.max(0, consFrac[c] - 0.15) / 0.85) * 0.9;

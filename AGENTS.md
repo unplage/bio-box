@@ -8,7 +8,7 @@ Not an app monorepo — a **biomedical tools collection** + one Python pipeline 
 |:---|:---|
 | `tools/*/` | Standalone tools; almost all **pure-frontend single HTML** (open in browser, no build/CDN) + a few tkinter/PyQt5 scripts. Each tool dir has its own `README.md` (convention: keep it updated when you add/changed the tool). |
 | `clear.html` | Deliberately stays at **repo root** (not under `tools/`). |
-| `skill/solution-design/pipeline/` | Only real package with tests: `tmkit` (soluble TM-protein redesign, STEAP1 reference target). |
+| `skill/solution-design/pipeline/` | Python package with pytest suite: `tmkit` (soluble TM-protein redesign, STEAP1 reference target). `tools/msa/tests/` is the other test suite (zero-dep node). |
 | `skill/target_skill/` | OpenCode skill (`SKILL.md`) for patent research — not application code. |
 | `database/igblast/` | IgBLAST data files (moved here from repo root). |
 | Root `README.md` | Tool index with paths — **must stay in sync** with `tools/…` locations after the reorg. |
@@ -43,7 +43,7 @@ python -m pytest tests
 ## HTML tools
 
 - Single-file, offline, no npm/CDN. Open with `open tools/<name>/<file>.html`.
-- **`tools/msa/`**: algorithm lives twice — `msa-worker.js` (source) and a full copy inside `msa.html` (`<script id="msaWorkerSource">`). The browser only runs the HTML copy; after editing the worker, re-inject it into the HTML or changes won’t take effect.
+- **`tools/msa/`**: algorithm lives twice — `msa-worker.js` (source) and a full copy inside `msa.html` (`<script id="msaWorkerSource">`). The browser only runs the HTML copy; after editing the worker, re-inject it into the HTML or changes won’t take effect. After any worker change run `node tools/msa/tests/run.js` (zero-dep regression suite; `MSA_WORKER=<path>` tests an alternate copy; optional arg filters by test name).
 - Export conventions users rely on: FASTA sequences are **one line** (no 60-col wrap); MSA image export includes the position ruler (ticks every column, numeric labels every 10).
 - Python GUI tools (`tools/mab-db`, `tools/Tm-calculate`, `tools/target-info/*.py`) need tkinter/PyQt5 + pandas/httpx as documented in each dir README — not installed by any repo-level setup.
 
