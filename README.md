@@ -20,6 +20,7 @@
 | 🧮 引物 Tm 值计算器 | `tools/Tm-calculate/primer_Tm-calculator.py` | 批量计算引物 Tm 值 |
 | 🎯 靶点调研（Python 版） | `tools/target-info/target_info.py` | PyQt5 桌面版靶点调研工具 |
 | 🦠 菌落计数 | [cfu_count](https://github.com/unplage/cfu_count) | 菌落计数工具（独立仓库） |
+| 🤖 RFD4-Proteina 分析 + 亲和力成熟 Pipeline | `tools/RFD4-Proteina/` | 开源模型论文分析 + 调用 NVIDIA NIM 的 VHH/Fab CDR 设计、报告与湿实验建议 |
 
 ---
 

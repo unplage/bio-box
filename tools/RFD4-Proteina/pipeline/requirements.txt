@@ -1,0 +1,7 @@
+# Python 3.9+
+#
+# Core pipeline uses only the standard library.  ANARCI is optional but
+# strongly recommended: it gives IMGT/Kabat/Chothia CDR boundaries via HMMER.
+# Without it the pipeline falls back to a conservative motif heuristic and
+# warns loudly.
+anarci>=2024.1
