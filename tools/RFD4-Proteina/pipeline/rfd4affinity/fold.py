@@ -121,9 +121,18 @@ def fold_vhh(
     try:
         return esmfold_sequence(sequence, api_key, base_url, timeout)
     except PipelineError as exc:
+        detail = str(exc)
+        if "404" in detail:
+            reason = (
+                "The ESMFold NIM is not enabled for this NVIDIA account "
+                "(the deployment answers 404 'Function ... not found for account')."
+            )
+        else:
+            reason = (
+                "The public ESMFold NIM is deprecated and/or unavailable right now."
+            )
         raise PipelineError(
-            "ESMFold could not fold the VHH sequence. The public ESMFold NIM is "
-            "marked deprecated; supply --antibody-structure instead. "
+            f"{reason} Supply --antibody-structure instead. "
             f"Original error: {exc}"
         ) from exc
 

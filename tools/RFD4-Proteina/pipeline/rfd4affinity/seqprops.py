@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import math
 import re
 
 KD = {
@@ -83,9 +82,15 @@ def liability_motifs(sequence: str) -> list[dict]:
             }
         )
 
+    # N-glycosylation sequons first: an Asn inside one is not counted again as
+    # a deamidation site, otherwise every sequon is reported twice.
+    sequon_starts = set()
     for match in re.finditer(r"N[^P][ST]", seq):
+        sequon_starts.add(match.start())
         add("N-糖基化", match.start() + 1, match.group(0), "N-X-S/T，建议突变以降低异质性")
     for match in re.finditer(r"N[GSQTH]", seq):
+        if match.start() in sequon_starts:
+            continue
         add("脱酰胺", match.start() + 1, match.group(0), "Asn 脱酰胺热点，关注长期稳定性")
     for match in re.finditer(r"D[GP]", seq):
         add("异构化/酸水解", match.start() + 1, match.group(0), "Asp 异构化或 DP 酸性切割热点")

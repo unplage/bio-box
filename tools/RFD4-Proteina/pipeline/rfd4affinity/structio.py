@@ -190,6 +190,8 @@ def parse_cif(text: str) -> dict[str, Chain]:
             continue
         chain_id = get(row, "auth_asym_id", "label_asym_id", default="_")
         seq_id = get(row, "auth_seq_id", "label_seq_id", default="0")
+        if seq_id in (".", "?"):
+            seq_id = get(row, "label_seq_id", default="0")
         try:
             resseq = int(float(seq_id))
         except ValueError:
@@ -230,12 +232,10 @@ def read_structure(path: Path) -> dict[str, Chain]:
 def chain_label_ids(chain: Chain) -> list[int]:
     """Per-residue ``label_seq_id`` values.
 
-    Preserve author numbering when it is unique (matches the official
-    examples); fall back to 1..N when insertion codes would collide.
+    mmCIF requires ``label_seq_id`` to be a contiguous 1..N index inside the
+    entity, so it is always rebuilt from scratch.  The author numbering stays
+    available in ``auth_seq_id``.
     """
-    resseqs = [res.resseq for res in chain.residues]
-    if len(set(resseqs)) == len(resseqs):
-        return resseqs
     return list(range(1, len(chain.residues) + 1))
 
 
@@ -246,74 +246,6 @@ def _element(atom_name: str) -> str:
     if cleaned[:2] in ("CL", "BR", "SE"):
         return cleaned[:2]
     return cleaned[:1] or "C"
-
-
-def write_mmcif(chains: dict[str, Chain], path: Path, data_name: str = "complex") -> None:
-    """Write a plain ``_atom_site`` mmCIF (no condition annotations)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = [
-        f"data_{data_name}",
-        "#",
-        "loop_",
-        "_atom_site.group_PDB",
-        "_atom_site.type_symbol",
-        "_atom_site.label_atom_id",
-        "_atom_site.label_alt_id",
-        "_atom_site.label_comp_id",
-        "_atom_site.label_asym_id",
-        "_atom_site.label_entity_id",
-        "_atom_site.label_seq_id",
-        "_atom_site.pdbx_PDB_ins_code",
-        "_atom_site.auth_seq_id",
-        "_atom_site.auth_comp_id",
-        "_atom_site.auth_asym_id",
-        "_atom_site.auth_atom_id",
-        "_atom_site.B_iso_or_equiv",
-        "_atom_site.occupancy",
-        "_atom_site.pdbx_formal_charge",
-        "_atom_site.Cartn_x",
-        "_atom_site.Cartn_y",
-        "_atom_site.Cartn_z",
-        "_atom_site.pdbx_PDB_model_num",
-        "_atom_site.id",
-    ]
-    atom_id = 0
-    for entity_id, (chain_id, chain) in enumerate(chains.items(), start=1):
-        label_ids = chain_label_ids(chain)
-        for label_seq_id, residue in zip(label_ids, chain.residues):
-            for atom_name, (x, y, z) in residue.atoms.items():
-                atom_id += 1
-                icode = residue.icode or "."
-                bfactor = residue.bfactors.get(atom_name, 0.0)
-                lines.append(
-                    " ".join(
-                        [
-                            "ATOM",
-                            _element(atom_name),
-                            atom_name,
-                            ".",
-                            residue.name,
-                            chain_id,
-                            str(entity_id),
-                            str(label_seq_id),
-                            icode,
-                            str(residue.resseq),
-                            residue.name,
-                            chain_id,
-                            atom_name,
-                            f"{bfactor:.2f}",
-                            "1.00",
-                            "?",
-                            f"{x:.3f}",
-                            f"{y:.3f}",
-                            f"{z:.3f}",
-                            "1",
-                            str(atom_id),
-                        ]
-                    )
-                )
-    lines.append("#")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def copy_chain(chain: Chain, new_id: str | None = None) -> Chain:
@@ -377,22 +309,6 @@ def mean_plddt_from_chains(chains: dict[str, Chain]) -> float | None:
     return sum(values) / len(values)
 
 
-def mean_plddt(pdb_text: str) -> tuple[float | None, list[float]]:
-    values: list[float] = []
-    for line in pdb_text.splitlines():
-        if not line.startswith("ATOM"):
-            continue
-        if line[12:16].strip() != "CA":
-            continue
-        try:
-            values.append(float(line[60:66]))
-        except (ValueError, IndexError):
-            continue
-    if not values:
-        return None, []
-    return sum(values) / len(values), values
-
-
 def map_sequence_positions(
     query_seq: str,
     chain: Chain,
@@ -401,7 +317,15 @@ def map_sequence_positions(
     """Map 1-based positions in *query_seq* to residue numbers in *chain*."""
     chain_seq = chain.sequence()
     if query_seq == chain_seq:
-        return [chain.residues[p - 1].resseq for p in positions if 1 <= p <= len(chain_seq)]
+        out: list[int] = []
+        for pos in positions:
+            if not 1 <= pos <= len(chain_seq):
+                raise PipelineError(
+                    f"Position {pos} is outside chain {chain.id} "
+                    f"(1-{len(chain_seq)} residues)."
+                )
+            out.append(chain.residues[pos - 1].resseq)
+        return out
 
     matcher = difflib.SequenceMatcher(None, query_seq, chain_seq, autojunk=False)
     ratio = matcher.ratio()
@@ -430,7 +354,3 @@ def map_sequence_positions(
             )
         out.append(chain.residues[mapping[idx]].resseq)
     return out
-
-
-def make_offset(distance: float = 60.0) -> tuple[float, float, float]:
-    return (float(distance), 0.0, 0.0)

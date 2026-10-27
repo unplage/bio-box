@@ -1,5 +1,4 @@
 import csv
-import json
 
 from rfd4affinity.report import diff_sequences, write_outputs
 from rfd4affinity.seqprops import gravy, isoelectric_point, net_charge
@@ -64,8 +63,8 @@ def test_fab_design_extraction(fab_pdb, tmp_path, sequences):
     run = build_run(cfg, api_key=None, out_dir=tmp_path / "run")
     vh = list(sequences["vh"])
     vl = list(sequences["vl"])
-    vh[110] = "A"   # HCDR3
-    vl[30] = "W"    # LCDR1
+    vh[100] = "A"   # HCDR3 (97-109)
+    vl[30] = "W"    # LCDR1 (27-32)
     response = {
         "request_id": "fab",
         "model": {"model_name": "rfd4-proteina"},

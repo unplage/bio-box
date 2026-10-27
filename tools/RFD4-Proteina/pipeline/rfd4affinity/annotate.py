@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .structio import Chain, _element, chain_label_ids
-from .util import slugify
+from .util import cif_data_name
 
 BACKBONE_ATOMS = {"N", "CA", "C", "O", "OXT"}
 
@@ -133,7 +133,7 @@ def write_annotated_mmcif(
     data_name: str = "complex",
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    data_name = slugify(data_name, default="complex")
+    data_name = cif_data_name(data_name, default="complex")
     lines = [f"data_{data_name}", "#", "loop_"]
     lines.extend(f"_atom_site.{column}" for column in COLUMNS)
 

@@ -4,10 +4,8 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,14 +19,10 @@ AA3_TO_1 = {
     "MSE": "M", "SEC": "U", "PYL": "O",
 }
 
-AA1_TO_3 = {
-    "A": "ALA", "R": "ARG", "N": "ASN", "D": "ASP", "C": "CYS",
-    "Q": "GLN", "E": "GLU", "G": "GLY", "H": "HIS", "I": "ILE",
-    "L": "LEU", "K": "LYS", "M": "MET", "F": "PHE", "P": "PRO",
-    "S": "SER", "T": "THR", "W": "TRP", "Y": "TYR", "V": "VAL",
-}
-
 STANDARD_AA1 = set("ARNDCQEGHILKMFPSTWYV")
+
+# Anything that looks like an NVIDIA API key must never reach a log file.
+SECRET_PATTERN = re.compile(r"nvapi-[A-Za-z0-9_\-]{16,}")
 
 
 def now_utc() -> str:
@@ -45,9 +39,16 @@ def slugify(value: str, default: str = "run") -> str:
     return value or default
 
 
-def ensure_dir(path: Path) -> Path:
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+def cif_data_name(value: str, default: str = "design") -> str:
+    """Return a valid mmCIF ``data_`` block code.
+
+    CIF block codes must start with a letter, so ``8UCD_vhh`` has to become
+    ``d8UCD_vhh``; otherwise strict parsers reject the whole file.
+    """
+    name = slugify(value, default=default)
+    if not name or not name[0].isalpha():
+        name = f"d{name}" if name else default
+    return name
 
 
 def write_json(path: Path, obj) -> None:
@@ -65,9 +66,7 @@ def redact(value: str) -> str:
     """Mask a secret so it can safely appear in logs."""
     if not value:
         return "<unset>"
-    if len(value) <= 8:
-        return "***"
-    return value[:4] + "..." + value[-3:]
+    return "***REDACTED***"
 
 
 _LOG_VERBOSE = False
@@ -79,16 +78,18 @@ def set_verbose(flag: bool) -> None:
     _LOG_VERBOSE = flag
 
 
-def set_log_file(path: Path) -> None:
+def set_log_file(path: Path | None) -> None:
     global _LOG_FILE
     _LOG_FILE = path
+    if path is None:
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("", encoding="utf-8")
 
 
 def log(message: str, level: str = "INFO") -> None:
     stamp = datetime.now().strftime("%H:%M:%S")
-    line = f"[{stamp}] {level:5s} {message}"
+    line = f"[{stamp}] {level:5s} {SECRET_PATTERN.sub('***REDACTED***', message)}"
     print(line, file=sys.stderr, flush=True)
     if _LOG_FILE is not None:
         with _LOG_FILE.open("a", encoding="utf-8") as handle:
@@ -130,18 +131,101 @@ def read_fasta(path: Path) -> dict[str, str]:
     return {key: "".join(parts).upper() for key, parts in records.items()}
 
 
+def _looks_like_path(value: str) -> bool:
+    """Decide whether *value* is a file name rather than a raw sequence.
+
+    A long raw sequence must never be handed to ``Path.is_file()``: the
+    kernel rejects it with ``OSError: File name too long``.
+    """
+    stripped = value.strip()
+    if not stripped or len(stripped) > 240 or "\n" in stripped or "\x00" in stripped:
+        return False
+    if "/" in stripped or "\\" in stripped:
+        return True
+    if stripped.lower().endswith((".fa", ".fasta", ".faa", ".txt", ".seq")):
+        return True
+    try:
+        return Path(stripped).is_file()
+    except OSError:
+        return False
+
+
+def _parse_fasta(text: str) -> dict[str, str]:
+    records: dict[str, str] = {}
+    name: str | None = None
+    parts: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(">"):
+            if name is not None:
+                records[name] = "".join(parts).upper()
+            name = line[1:].strip().split()[0] or f"seq{len(records) + 1}"
+            parts = []
+        elif name is not None:
+            parts.append(line)
+    if name is not None:
+        records[name] = "".join(parts).upper()
+    return {key: val for key, val in records.items() if val}
+
+
+def _select_record(records: dict[str, str], selector: str, label: str) -> str:
+    if not records:
+        raise PipelineError(f"{label} contains no sequence")
+    if selector:
+        lowered = selector.lower()
+        for key, value in records.items():
+            if key.lower() == lowered:
+                return value
+        for key, value in records.items():
+            if key.lower().startswith(lowered):
+                return value
+        raise PipelineError(
+            f"No record named {selector!r} in {label}; available: "
+            f"{', '.join(records)}"
+        )
+    if len(records) > 1:
+        raise PipelineError(
+            f"{label} contains {len(records)} records ({', '.join(records)}); "
+            "select one with '<file>#<record name>'."
+        )
+    return next(iter(records.values()))
+
+
 def read_sequence_arg(value: str) -> str:
-    """Accept a raw sequence or an existing FASTA/plain file path."""
-    candidate = Path(value)
-    if candidate.exists() and candidate.is_file():
+    """Accept a raw sequence, an inline FASTA record or a FASTA/plain file.
+
+    ``<file>#<record>`` selects one record from a multi-record FASTA.
+    """
+    raw, _, selector = value.partition("#")
+    raw = raw.strip()
+    selector = selector.strip()
+    if raw.startswith(">"):
+        return _select_record(_parse_fasta(raw), selector, "Sequence")
+    if _looks_like_path(raw):
+        candidate = Path(raw)
+        try:
+            exists = candidate.is_file()
+        except OSError:
+            exists = False
+        if not exists:
+            raise PipelineError(f"Sequence file not found: {candidate}")
         text = candidate.read_text(encoding="utf-8")
         if text.lstrip().startswith(">"):
-            recs = read_fasta(candidate)
-            if not recs:
-                raise PipelineError(f"FASTA file is empty: {candidate}")
-            return next(iter(recs.values()))
+            return _select_record(
+                _parse_fasta(text), selector, f"FASTA file {candidate}"
+            )
+        if selector:
+            raise PipelineError(
+                f"{candidate} holds a single raw sequence; '#{selector}' is not usable."
+            )
         return re.sub(r"\s+", "", text).upper()
-    return re.sub(r"\s+", "", value).upper()
+    if selector:
+        raise PipelineError(
+            f"Record selector '#{selector}' only works with a FASTA file or record."
+        )
+    return re.sub(r"\s+", "", raw).upper()
 
 
 def validate_sequence(seq: str, label: str = "sequence") -> str:

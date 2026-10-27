@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .util import PipelineError, log, validate_sequence, warn
+from .util import PipelineError, validate_sequence, warn
 
 # Scheme position ranges (inclusive) for the three antibody CDRs.
 CDR_BOUNDS = {
@@ -22,7 +22,6 @@ CDR_BOUNDS = {
 }
 
 CDR_NAMES = ("CDR1", "CDR2", "CDR3")
-ROLE_CHAIN = {"A": "A", "H": "H", "L": "L"}
 
 
 @dataclass
@@ -110,7 +109,14 @@ def _anarci_cdr_hits(sequence: str, scheme: str, role: str) -> list[CDRHit] | No
     hits: list[CDRHit] = []
     for cdr in (1, 2, 3):
         lo, hi = bounds[cdr]
-        positions = [sp for sp, _, _ in scheme_positions if lo <= sp <= hi]
+        # Filter on the *numbering* position but report the *sequence* positions:
+        # the two differ whenever the framework has indels (IMGT insertions),
+        # and using the numbering positions would redesign framework residues.
+        positions = [
+            seq_pos
+            for scheme_pos, seq_pos, _ in scheme_positions
+            if lo <= scheme_pos <= hi
+        ]
         if not positions:
             continue
         start = min(positions)
@@ -155,6 +161,8 @@ def _heuristic_cdr_hits(sequence: str, role: str) -> list[CDRHit]:
         c3_start = min(cys2 + 3, n)
         c3_end = n - 1
         for j in range(cys2 + 7, max(cys2 + 8, n - 3)):
+            if j + 3 >= n:
+                break
             if s[j] == "W" and s[j + 1] == "G" and s[j + 3] == "G":
                 c3_end = j - 1
                 break
@@ -217,26 +225,25 @@ def _parse_cdr_names(mode: str, raw: str) -> list[tuple[str, int]]:
 
     selected: list[tuple[str, int]] = []
     for token in [t.strip() for t in text.split(",") if t.strip()]:
-        token = token.replace("CDR", "CDR")
-        digit = None
-        for char in token:
-            if char in "123":
-                digit = int(char)
-        if digit is None:
-            raise PipelineError(f"Unrecognised CDR name {token!r}; use e.g. CDR3 or HCDR3")
+        digits = [char for char in token if char.isdigit()]
+        if len(digits) != 1 or digits[0] not in "123":
+            raise PipelineError(
+                f"Unrecognised CDR name {token!r}; use e.g. CDR3 or HCDR3"
+            )
+        digit = int(digits[0])
         role = None
         for candidate in roles:
             if token.startswith(candidate + "CDR"):
                 role = candidate
                 break
-        if role is None and f"{token}" in (f"CDR{digit}",):
+        if role is None and token == f"CDR{digit}":
             if len(roles) == 1:
                 role = roles[0]
             else:
                 raise PipelineError(
                     f"{token!r} is ambiguous for a Fab; write HCDR{digit} or LCDR{digit}."
                 )
-        if role is None and token in (f"{roles[0]}CDR{digit}",):
+        if role is None and token == f"{roles[0]}CDR{digit}":
             role = roles[0]
         if role is None:
             raise PipelineError(f"Unrecognised CDR name {token!r} for mode {mode}.")
@@ -265,9 +272,15 @@ def _parse_cdr_ranges(raw: str, roles: list[str]) -> dict[str, list[tuple[int, i
         span = span.replace("..", "-")
         if "-" in span:
             start_s, end_s = span.split("-", 1)
-            start, end = int(start_s), int(end_s)
         else:
-            start = end = int(span)
+            start_s = end_s = span
+        try:
+            start, end = int(start_s), int(end_s)
+        except ValueError:
+            raise PipelineError(
+                f"Invalid CDR range {span!r} for chain {chain}; expected integers "
+                "such as 99-109."
+            ) from None
         if start < 1 or end < start:
             raise PipelineError(f"Invalid range {span!r} for chain {chain}")
         out.setdefault(chain, []).append((start, end))

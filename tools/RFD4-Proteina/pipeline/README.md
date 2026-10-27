@@ -17,7 +17,8 @@
 | `run.py` | 命令行入口（等价于 `python -m rfd4affinity`） |
 | `rfd4affinity/` | Python 包 |
 | `examples/` | VHH/Fab 示例序列、表位写法、运行脚本 |
-| `tests/` | pytest 测试（CDR、条件结构、报告） |
+| `inputs/` | 本地测试输入（**不纳入版本库**，见 `.gitignore`）：`amg110.fasta`（VH/VL 序列）+ `amg110_donor/rank_*.pdb`（AlphaFold 预测的 Fab 供体结构） |
+| `tests/` | pytest 测试（CDR、条件结构、报告、回归） |
 | `requirements.txt` | 唯一可选依赖 ANARCI（需系统 HMMER） |
 
 ## 工作流
@@ -44,7 +45,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt     # 可选但强烈推荐：ANARCI
 ```
 
-- Python 3.9+；核心代码只用标准库。
+- Python 3.8 及以上；核心代码只用标准库（在 3.8.5 上跑通全部测试）。
 - ANARCI 需要系统里有 `hmmscan`（Ubuntu: `sudo apt install hmmer`）。
 - 没有 ANARCI 时会退化为保守的基序启发式，并在日志/报告中标注 `heuristic`；**生产前必须人工核对 CDR 边界**。
 - 不需要 GPU：所有计算都在 NVIDIA 托管 API 上完成。
@@ -57,10 +58,19 @@ pip install -r requirements.txt     # 可选但强烈推荐：ANARCI
 export NVIDIA_API_KEY="nvapi-..."
 ```
 
-也可以每次 `--api-key` 传入。**key 不会写入 `request.json`/`run.log`**。
+也可以每次 `--api-key` 传入。**key 不会写入 `request.json`/`run.log`/`response.json`**，
+日志里出现的任何 `nvapi-…` 串都会被自动替换成 `***REDACTED***`。
+
+> 注意：`--api-key` 的值会出现在进程列表（`ps aux`）里。多人共用的机器上建议改用
+> `export NVIDIA_API_KEY=…`，或把 key 放进一个 0600 权限的文件再由 shell 读取。
 
 托管端点是免费试用（约 40 RPM，官方声明不适合生产）。批量或生产请用自托管
 NIM：`nvcr.io/nim/ipd/rfd4-proteina:1.0.0`。
+
+> **服务状态提醒（2026-10 实测）**：`health.api.nvidia.com` 上托管的 RFD4-Proteina
+> 端点目前会对**所有**设计请求返回 `HTTP 500 internal_error`（`AcceleratorError: CUDA
+> error: an illegal memory access`），包括 NVIDIA 官方文档里那份逐字复制即可 200 的
+> Example 1 请求。这是服务端 GPU 运行时故障，与本流程无关；自托管 NIM 不受影响。
 
 ## 快速开始
 
@@ -131,12 +141,54 @@ python run.py \
 
 也可以 `--complex-structure fab_complex.pdb --antibody-chains H,L --target-chains T`。
 
+### 用 AMG110 供体结构跑一遍（本地测试数据）
+
+`inputs/` 里放的是 AMG110（CD19×CD3 双抗）的 VH/VL 序列与 5 个 AlphaFold 预测的 Fab
+供体结构（链 A = 重链 120 aa，链 B = 轻链 113 aa）。该目录在 `.gitignore` 里，**仓库
+不含这些文件**，请自行把结构/序列放进去（或用 `--complex-structure` 指向你自己的
+文件）：
+
+```bash
+# 只构建请求，不调 API
+python run.py --mode fab \
+  --antibody-structure inputs/amg110_donor/rank_1.pdb \
+  --antibody-chains A,B --target-name AMG110 --cdrs all --dry-run
+
+# 真正提交
+python run.py --mode fab \
+  --antibody-structure inputs/amg110_donor/rank_1.pdb \
+  --antibody-chains A,B --target-name AMG110 --cdrs all \
+  --num-designs 4 --api-key "$NVIDIA_API_KEY"
+```
+
+这份输入没有靶点结构，所以走的是「场景 C（仅抗体）」，报告会明确写出结果不能当
+亲和力提升证据。序列也可以直接用 FASTA 里的两条记录：
+
+```bash
+python run.py --mode fab --antibody-structure inputs/amg110_donor/rank_1.pdb \
+  --antibody-chains A,B \
+  --vh-seq "inputs/amg110.fasta#AMG110.H" \
+  --vl-seq "inputs/amg110.fasta#AMG110.L" \
+  --target-name AMG110 --cdrs all --dry-run
+```
+
+ANARCI/IMGT 给出的 CDR（**序列坐标**；括号里是 IMGT 编号）：
+
+| | CDR1 | CDR2 | CDR3 |
+|:---|:---|:---|:---|
+| VH | 27–34 `GYAFTNYW`（27–38） | 52–59 `IFPGSGNI`（56–65） | 98–109 `ARLRNWDEPMDY`（105–117） |
+| VL | 27–38 `QSLLNSGNQKNY`（27–38） | 56–58 `WAS`（56–65） | 95–103 `QNDYSYPLT`（105–117） |
+
+注意轻链 CDR3 的 IMGT 编号（105–117）比序列坐标（95–103）靠后 10 位——正是
+「编号 ≠ 序列位置」的典型例子。若直接拿编号当序列位置，设计区会一路吃到保守的 FR4
+（`FGAGTKLEIK`）。
+
 ## 常用参数
 
 | 参数 | 说明 |
 |:---|:---|
 | `--mode vhh\|fab` | 抗体形式，默认 `vhh` |
-| `--vhh-seq / --vh-seq / --vl-seq` | 序列字符串或 FASTA 文件 |
+| `--vhh-seq / --vh-seq / --vl-seq` | 序列字符串或 FASTA 文件；多记录 FASTA 用 `文件#记录名` 选一条（如 `inputs/amg110.fasta#AMG110.H`） |
 | `--complex-structure` | 抗体–靶点复合物；与 `--target-structure` 互斥 |
 | `--antibody-structure` | 仅抗体结构 |
 | `--antibody-chains` | 抗体链；Fab 为 `H,L`（重,轻） |
@@ -150,24 +202,45 @@ python run.py \
 | `--offset` | docking 模式下靶点初始质心距离，默认 60 Å |
 | `--fix-sidechains` | 抗体侧链也固定；靶点始终全原子固定，默认抗体只固定主链 |
 | `--num-designs` | 设计数，默认 4 |
-| `--num-steps` | 扩散步数；默认用 `--recycle` 预设（60 步 / 185 trunk pass） |
+| `--num-steps` | 扩散步数（1–200，服务端上限）；默认用 `--recycle` 预设（60 步 / 185 trunk pass） |
 | `--recycle` | `thinking_low/medium/high` |
 | `--seed` | 随机种子 |
-| `--metrics-tags` | 逗号分隔，覆盖默认 `design,antibody,developability,...` |
+| `--metrics-tags` | 逗号分隔，覆盖默认 `design` + 与条件策略匹配的 conditioning 标签 |
 | `--dry-run` | 只构建 `input_complex.cif` + `request.json`，不调用 API |
 | `--replay response.json` | 复用已保存响应，重新出报告 |
 | `--no-html` | 不生成 HTML |
 
 `--help` 有完整列表和示例。
 
+### metric tag 与托管端点的兼容性
+
+默认只请求 `design`，再按条件策略追加 `hotspot_conditioning`、
+`interchain_interactions`、`internal_coordinate_conditioning`——这些标签在托管端点上
+可通过 schema 校验。
+
+下面这些标签需要托管端点**没有**的额外运行时（PyRosetta 或结构预测 oracle），
+一请求就会被服务端以 `HTTP 422` 拒绝，**只能**在自托管 NIM 上使用：
+
+`antibody`、`developability`、`unconditional_refolding`、`ppi_refolding`、
+`motif_scaffold_refolding`、`internal_coordinate_motif_scaffold_refolding`、
+`sm_binder_refolding`、`dna_refolding`、`apo_refolding`、`ame_refolding`、
+`ame_no_ligand_refolding`、`disco_refolding`。
+
+显式传 `--metrics-tags developability` 时流程会先给出 WARN；服务端返回 422 时会直接
+告诉你删掉哪个标签。
+
 ## CDR 识别
 
 - ANARCI 把序列按选定 scheme 编号，再把 scheme 位置映射回 **输入序列的 1-based 位置**。
+  注意这两个坐标系并不相同：框架里只要有 indel（IMGT 的插入码），编号就会相对序列
+  偏移。流程按「编号落在 CDR 区间内 → 取其**序列**位置」来求区间，因此 CDR3 不会
+  越界到保守的 FR4（`WGQGTLVTVSS`）。
 - CDR 区间：IMGT `27-38 / 56-65 / 105-117`；Kabat `31-35 / 50-65 / 95-102`；
   Chothia `26-32 / 52-56 / 95-102`；Martin `26-35 / 50-58 / 95-102`。
 - 若输入的是结构 + 单独序列，序列与结构不一致时会做对齐并把 CDR 位置投影到
   结构的 `auth_seq_id`；一致性低于 80% 直接报错。
-- `--cdr-ranges` 的坐标始终是**输入序列坐标**，优先级最高。
+- `--cdr-ranges` 的坐标始终是**输入序列坐标**，优先级最高；越界会直接报错，
+  不会被静默截断。
 - `--dry-run` 后检查 `input_complex.cif` 的 `mask_sequence_1_residue` 列，
   确认 CDR 残基是 `False`（自由设计），框架是 `True`。
 
@@ -187,11 +260,13 @@ NIM 只接受 UTF-8 mmCIF；本流程会把 PDB/普通 CIF 清洗后重写，并
 
 默认策略：
 
-- 靶点**全原子**绝对固定；抗体框架主链绝对/内部固定，**侧链自由重排**
-  （`--fix-sidechains` 可把抗体侧链也固定）；
+- 靶点**全原子**绝对固定；抗体框架主链绝对/内部固定，侧链交给模型重排
+  （`--fix-sidechains` 可把抗体侧链也固定；注意这与官方 antibody 示例「整条框架
+  原子全固定」略有差别，默认值更激进，见「局限」）；
 - 选中 CDR：不加坐标/序列约束 → 序列与局部构象一起重设计；
 - 水、非标准残基、配体、多模型、altloc 会被丢弃；MSE→MET；
-- `label_seq_id` 保留作者编号（插入码冲突时退化为 1..N），`auth_seq_id` 始终是原编号；
+- `label_seq_id` 是每条链的 1..N 连续索引（mmCIF 要求），`auth_seq_id` 始终保留
+  作者编号（Kabat/Chothia 等自定义编号也能正确回溯）；
 - 单请求上限 1024 tokens、32 MB；超限会给出明确错误。
 
 > 也支持官方 `condition_spec` JSON，但本流程统一用 `annotated_cif`：
@@ -215,6 +290,11 @@ output/<时间>_<靶点>_<模式>/
 报告包含：运行摘要、输入链/CDR/热点、条件策略、候选总表、逐候选序列与突变、
 pLDDT、pI/GRAVY/净电荷/风险基序、NIM 指标、聚合指标、湿实验建议、局限与文件清单。
 
+`designs.csv` 的列：`rank, design_id, replicate_index, seed, cdr_mutations,
+framework_mutations, plddt, pI, net_charge_pH7.4, gravy, liabilities, pass_passed,
+pass_total, antibody_sequence, design_sequence`——`antibody_sequence` 只含抗体链，
+`design_sequence` 是服务端返回的完整序列（复合物情形还包含靶点链）。
+
 **排名是启发式的**：通过标准 → pLDDT → 风险位点数，不等于真实亲和力排序。
 
 ## 湿实验建议（生成在报告第 6 节）
@@ -230,6 +310,11 @@ pLDDT、pI/GRAVY/净电荷/风险基序、NIM 指标、聚合指标、湿实验�
 - 计算预测 ≠ 实测亲和力；必须做 SPR/BLI 和功能实验。
 - 场景 B/C 的结合模式/靶点缺失，不确定性最大；报告会显式标注。
 - RFD4 可能改变 CDR 长度或框架边界；报告统计框架突变，优先推进框架突变少的候选。
+- 默认只固定抗体框架主链，侧链交给模型重排（官方 antibody 示例是整条框架原子固定）。
+  想要更保守的行为请加 `--fix-sidechains`。
+- 报告里的 pLDDT 取自返回结构的 CA 原子 B 因子；若服务端不在 B 因子里写 pLDDT，
+  该列会退化成输入结构的 B 因子均值，只能当参考。
+- pI/净电荷是对「重链+轻链拼接序列」算的，Fab 的真实 pI 会受链间二硫键与装配影响。
 - 托管 NIM 是试用端点，可能限流/变更；生产请自托管。
 - 只处理 20 种标准氨基酸；抗体标签、His-tag、非天然残基请先去除。
 
@@ -241,17 +326,21 @@ python -m pytest tests
 ```
 
 测试不需要 API key，也不会联网；使用合成 PDB 覆盖三种场景、CDR 选择、
-annotated CIF 列和报告生成。
+annotated CIF 列、报告生成，以及一批回归用例（CDR 编号↔序列坐标换算、
+metric tag 兼容性、CDR 越界报错、日志 key 脱敏、服务端 500 不重试等）。
 
 ## 常见问题
 
 | 现象 | 处理 |
 |:---|:---|
 | `HTTP 401/403` | 检查 `NVIDIA_API_KEY`，试用 key 以 `nvapi-` 开头 |
+| `HTTP 422 metric tag(s) … require PyRosetta / oracle` | 去掉这些标签：`--metrics-tags design` |
+| `HTTP 500 … CUDA error: an illegal memory access` | 服务端 GPU 运行时故障（非本流程问题），换自托管 NIM 或稍后重试 |
 | `HTTP 429` | 试用端点限流；降低 `--num-designs` 或稍后重试（客户端会自动退避） |
 | `No standard protein atoms` | 输入可能是核酸/配体，或残基名不在标准表 |
 | `ESMFold could not fold` | 端点已 deprecated；改用 `--antibody-structure` |
-| `2048/1024 tokens` 超限 | 只保留靶点胞外域/单结构域，别把整个膜蛋白放进去 |
+| `1024 tokens` 超限 | 只保留靶点胞外域/单结构域，别把整个膜蛋白放进去 |
+| `Position N is outside chain X` | `--cdr-ranges` 超出序列长度；ANARCI 边界请改用 `--cdr-scheme` |
 | CDR 边界可疑 | 用 `--cdr-scheme kabat` 或 `--cdr-ranges` 手动指定，并做 `--dry-run` 核对 |
 | Fab 没有结构 | 先预测/实验解析 VH–VL；不要用单链 ESMFold 结果冒充 Fab |
 

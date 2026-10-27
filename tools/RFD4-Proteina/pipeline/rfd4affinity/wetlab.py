@@ -12,7 +12,6 @@ if TYPE_CHECKING:  # pragma: no cover
 def build_wetlab_plan(run: "RunResult", designs: list[dict]) -> list[dict]:
     top = [str(d.get("design_id")) for d in designs[:3] if d.get("design_id")]
     top_text = "、".join(top) if top else "首选候选"
-    mode = run.role_to_chain
     target = run.target_name
 
     sections: list[dict] = []

@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
+import traceback
 from pathlib import Path
 
 from . import __version__
@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mode", choices=["vhh", "fab"], default="vhh", help="抗体形式（默认 vhh）")
 
     seq = parser.add_argument_group("序列输入")
-    seq.add_argument("--vhh-seq", help="VHH 氨基酸序列或 FASTA 文件")
+    seq.add_argument("--vhh-seq", help="VHH 氨基酸序列或 FASTA 文件（多记录用 文件#记录名）")
     seq.add_argument("--vh-seq", help="Fab 重链（VH）序列或 FASTA 文件")
     seq.add_argument("--vl-seq", help="Fab 轻链（VL）序列或 FASTA 文件")
 
@@ -87,7 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--fix-sidechains", action="store_true",
                         help="抗体侧链也固定（靶点始终全原子固定；默认抗体只固定主链、侧链重排）")
     design.add_argument("--num-designs", type=int, default=4, help="设计数（默认 4）")
-    design.add_argument("--num-steps", type=int, default=None, help="扩散步数（默认用预设 60）")
+    design.add_argument(
+        "--num-steps",
+        type=int,
+        default=None,
+        help="扩散步数（1–200，服务端上限；默认用 recycle 预设）",
+    )
     design.add_argument(
         "--recycle",
         choices=["thinking_low", "thinking_medium", "thinking_high"],
@@ -127,7 +132,6 @@ def main(argv: list[str] | None = None) -> int:
         log("NVIDIA API key detected")
     else:
         log("No NVIDIA API key found (set NVIDIA_API_KEY or pass --api-key)")
-
     cfg = RunConfig(
         mode=args.mode,
         vhh_seq=args.vhh_seq,
@@ -215,6 +219,11 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         log("Interrupted", "ERROR")
         return 130
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        log(f"Unexpected failure: {type(exc).__name__}: {exc}", "ERROR")
+        log(traceback.format_exc(), "ERROR")
+        warn("Run aborted with an unexpected error; the traceback is above and in run.log.")
+        return 3
 
 
 if __name__ == "__main__":  # pragma: no cover

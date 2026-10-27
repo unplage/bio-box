@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import time
 import urllib.error
 import urllib.request
@@ -63,6 +64,33 @@ def get_text(url: str, timeout: float = 60.0, retries: int = 3) -> str:
     raise PipelineError(f"Failed to fetch {url}: {last_error}")
 
 
+def _is_fatal_server_error(detail: str) -> bool:
+    """Detect deterministic backend crashes that retrying cannot fix."""
+    lowered = detail.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "cuda error",
+            "acceleratorerror",
+            "illegal memory access",
+            "out of memory",
+            "outofmemory",
+        )
+    )
+
+
+def _metric_tag_hint(detail: str) -> str:
+    """Extract the offending metric tags from a 422 payload."""
+    tags = sorted(set(re.findall(r"'([a-z0-9_]+)'", detail)))
+    if not tags:
+        return ""
+    return (
+        " The server rejected metric tag(s) "
+        + ", ".join(tags)
+        + "; drop them with --metrics-tags (for example --metrics-tags design)."
+    )
+
+
 def post_json(
     url: str,
     payload: dict,
@@ -97,6 +125,19 @@ def post_json(
                 detail = exc.read().decode("utf-8", errors="replace")[:1200]
             except Exception:
                 detail = ""
+            if exc.code == 422 and "metric tag" in detail:
+                raise PipelineError(
+                    f"HTTP 422 from {url}: the deployment rejected the requested "
+                    f"metric tag(s).{_metric_tag_hint(detail)}"
+                ) from exc
+            if exc.code >= 500 and _is_fatal_server_error(detail):
+                raise PipelineError(
+                    f"HTTP {exc.code} from {url}: the NIM backend crashed while "
+                    "running the model "
+                    f"({detail[:300]}). This is a server-side failure; retrying "
+                    "will not help. Check the service status or use a self-hosted "
+                    "NIM (nvcr.io/nim/ipd/rfd4-proteina)."
+                ) from exc
             if exc.code in (429, 500, 502, 503, 504) and attempt + 1 < retries:
                 retry_after = _retry_after(exc.headers.get("Retry-After"))
                 warn(

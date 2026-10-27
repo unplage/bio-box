@@ -9,6 +9,7 @@ import html
 from pathlib import Path
 
 from .seqprops import (
+    aromaticity,
     gravy,
     isoelectric_point,
     liability_motifs,
@@ -16,10 +17,10 @@ from .seqprops import (
     net_charge,
 )
 from .structio import mean_plddt_from_chains, parse_structure_text
-from .util import fmt_float, log, safe_filename, warn, write_json
+from .util import fmt_float, log, now_utc, safe_filename, warn, write_json
+from .wetlab import build_wetlab_plan
 
 ROLE_LABELS = {"A": "VHH", "H": "VH", "L": "VL"}
-from .wetlab import build_wetlab_plan
 
 
 def _flatten(value, prefix: str = "") -> dict:
@@ -120,6 +121,25 @@ def _split_by_lengths(sequence: str, roles: list[str], lengths: list[int]) -> di
     return out
 
 
+def _reference_to_child(reference: str, child: str) -> dict[int, int]:
+    """Map every reference position to the matching child position.
+
+    ``SequenceMatcher.get_matching_blocks()`` only reports the *equal* runs, so
+    the substituted positions would be dropped and the extracted antibody would
+    be shorter than the parent.  Walking the opcodes keeps the substitutions.
+    """
+    matcher = difflib.SequenceMatcher(None, reference, child, autojunk=False)
+    mapping: dict[int, int] = {}
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            for offset in range(i2 - i1):
+                mapping[i1 + offset] = j1 + offset
+        elif tag == "replace":
+            for offset in range(min(i2 - i1, j2 - j1)):
+                mapping[i1 + offset] = j1 + offset
+    return mapping
+
+
 def _extract_antibody_segments(design_sequence: str, run) -> dict[str, str]:
     roles = list(run.sequences)
     lengths = [len(run.sequences[role]) for role in roles]
@@ -129,33 +149,27 @@ def _extract_antibody_segments(design_sequence: str, run) -> dict[str, str]:
     if len(roles) == 1 and not run.target_chain_ids:
         return {roles[0]: design_sequence}
 
-    if len(design_sequence) == total:
+    target_sequences = [
+        run.chains[cid].sequence() for cid in run.target_chain_ids if cid in run.chains
+    ]
+    reference = "".join(run.sequences[role] for role in roles) + "".join(target_sequences)
+
+    if len(design_sequence) == total and not target_sequences:
+        # The design only covers the antibody: pick the chain order that best
+        # matches the parent sequences.
         candidates = [_split_by_lengths(design_sequence, roles, lengths)]
         if len(roles) == 2:
             candidates.append(
                 _split_by_lengths(design_sequence, roles[::-1], lengths[::-1])
             )
-        best = max(
+        return max(
             candidates,
             key=lambda cand: sum(
                 _identity(cand[role], run.sequences[role]) for role in roles
             ),
         )
-        return best
 
-    target_sequences = [
-        run.chains[cid].sequence() for cid in run.target_chain_ids if cid in run.chains
-    ]
-    reference = "".join(run.sequences[role] for role in roles) + "".join(target_sequences)
-    if len(design_sequence) == len(reference):
-        return _split_by_lengths(design_sequence, roles, lengths)
-
-    matcher = difflib.SequenceMatcher(None, reference, design_sequence, autojunk=False)
-    ref_to_child: dict[int, int] = {}
-    for block in matcher.get_matching_blocks():
-        for offset in range(block.size):
-            ref_to_child[block.a + offset] = block.b + offset
-
+    ref_to_child = _reference_to_child(reference, design_sequence)
     out: dict[str, str] = {}
     cursor = 0
     for role, length in zip(roles, lengths):
@@ -250,6 +264,7 @@ def enrich_designs(response: dict, run, out_dir: Path) -> list[dict]:
                 "replicate_index": design.get("replicate_index", index),
                 "seed": design.get("seed"),
                 "sequence": sequence,
+                "antibody_sequence": antibody_seq,
                 "antibody_sequences": segments,
                 "mutations": mutations_by_role,
                 "cdr_mutations": cdr_mutations,
@@ -270,10 +285,7 @@ def enrich_designs(response: dict, run, out_dir: Path) -> list[dict]:
                     "net_charge_pH7.4": round(net_charge(antibody_seq), 2),
                     "gravy": round(gravy(antibody_seq), 3),
                     "cysteines": antibody_seq.count("C"),
-                    "aromaticity": round(
-                        sum(1 for aa in antibody_seq if aa in "FWY") / max(len(antibody_seq), 1),
-                        3,
-                    ),
+                    "aromaticity": round(aromaticity(antibody_seq), 3),
                 },
                 "diagnostics": design.get("diagnostics") or {},
             }
@@ -359,6 +371,7 @@ def build_report(run, response: dict, designs: list[dict]) -> tuple[str, str]:
                 ["GPU", str(runtime.get("gpu") or "-")],
                 ["请求 ID", str(response.get("request_id") or "-")],
                 ["耗时", f"{response.get('duration_ms', 0) / 1000:.1f} s" if response.get("duration_ms") else "-"],
+                ["报告生成时间 (UTC)", now_utc()],
             ],
         )
     )
@@ -500,30 +513,38 @@ def build_report(run, response: dict, designs: list[dict]) -> tuple[str, str]:
         "它不等于真实亲和力排序。"
     )
     lines.append("")
+    lines.append(
+        "> pLDDT 一列取自返回结构的 CA 原子 B 因子；若服务端不在 B 因子里写 pLDDT，"
+        "该列会显示输入结构的 B 因子均值，仅作参考。"
+    )
+    lines.append("")
 
     lines.append("## 4. 逐候选详情")
     lines.append("")
     for design in designs:
         lines.append(f"### 4.{design['rank']} {design['design_id']}")
         lines.append("")
-        lines.append(
-            _md_table(
-                ["属性", "值"],
-                [
-                    ["seed", str(design.get("seed") or "-")],
-                    ["抗体序列", f"`{design.get('sequence') or '-'}`"],
-                    ["CDR 突变", _mutation_text(design["cdr_mutations"])],
-                    ["框架突变", _mutation_text(design["framework_mutations"])],
-                    ["pLDDT", fmt_float(design["plddt"], 1)],
-                    ["分子量 (kDa)", str(design["biophys"]["mw_kda"])],
-                    ["pI", str(design["biophys"]["pI"])],
-                    ["净电荷 (pH 7.4)", str(design["biophys"]["net_charge_pH7.4"])],
-                    ["GRAVY", str(design["biophys"]["gravy"])],
-                    ["半胱氨酸数", str(design["biophys"]["cysteines"])],
-                    ["结构文件", design.get("structure_path") or "（响应未含结构）"],
-                ],
-            )
+        antibody_seq = design.get("antibody_sequence") or "-"
+        rows = [
+            ["seed", str(design.get("seed") or "-")],
+            ["抗体序列", f"`{antibody_seq}`"],
+        ]
+        if design.get("sequence") and design["sequence"] != antibody_seq:
+            rows.append(["完整设计序列（含靶点链）", f"`{design['sequence']}`"])
+        rows.extend(
+            [
+                ["CDR 突变", _mutation_text(design["cdr_mutations"])],
+                ["框架突变", _mutation_text(design["framework_mutations"])],
+                ["pLDDT（B 因子均值）", fmt_float(design["plddt"], 1)],
+                ["分子量 (kDa)", str(design["biophys"]["mw_kda"])],
+                ["pI", str(design["biophys"]["pI"])],
+                ["净电荷 (pH 7.4)", str(design["biophys"]["net_charge_pH7.4"])],
+                ["GRAVY", str(design["biophys"]["gravy"])],
+                ["半胱氨酸数", str(design["biophys"]["cysteines"])],
+                ["结构文件", design.get("structure_path") or "（响应未含结构）"],
+            ]
         )
+        lines.append(_md_table(["属性", "值"], rows))
         if design["liabilities"]:
             lines.append("")
             lines.append("**序列风险位点：**")
@@ -761,7 +782,8 @@ def write_outputs(run, response: dict, out_dir: Path, no_html: bool = False) -> 
                 "rank", "design_id", "replicate_index", "seed",
                 "cdr_mutations", "framework_mutations", "plddt",
                 "pI", "net_charge_pH7.4", "gravy", "liabilities",
-                "pass_passed", "pass_total", "sequence",
+                "pass_passed", "pass_total",
+                "antibody_sequence", "design_sequence",
             ]
         )
         for design in designs:
@@ -773,7 +795,8 @@ def write_outputs(run, response: dict, out_dir: Path, no_html: bool = False) -> 
                     fmt_float(design["plddt"], 2), design["biophys"]["pI"],
                     design["biophys"]["net_charge_pH7.4"], design["biophys"]["gravy"],
                     design["n_liabilities"], design["pass_passed"],
-                    design["pass_total"], design.get("sequence"),
+                    design["pass_total"], design.get("antibody_sequence"),
+                    design.get("sequence"),
                 ]
             )
 

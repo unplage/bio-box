@@ -1,5 +1,3 @@
-import json
-
 from rfd4affinity.spec import RunConfig, build_run
 
 

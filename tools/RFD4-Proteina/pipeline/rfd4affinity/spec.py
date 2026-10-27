@@ -15,10 +15,10 @@ from .structio import (
     combine_chains,
     map_sequence_positions,
     read_structure,
-    translate_chain,
 )
 from .util import (
     PipelineError,
+    debug,
     log,
     read_sequence_arg,
     require,
@@ -28,20 +28,52 @@ from .util import (
     write_json,
 )
 
-METRIC_TAGS = {
-    "design", "hotspot_conditioning", "rasa_conditioning",
-    "centroid_conditioning", "interchain_interactions",
-    "3d_coordinate_conditioning", "internal_coordinate_conditioning",
-    "unindexed", "partial_diffusion", "small_molecule_only", "no_ligand",
-    "cms", "cath", "structure_prediction", "developability",
-    "unconditional_refolding", "ppi_refolding", "antibody",
-    "motif_scaffold_refolding", "internal_coordinate_motif_scaffold_refolding",
-    "sm_binder_refolding", "dna_refolding", "apo_refolding", "ame_refolding",
-    "ame_no_ligand_refolding", "disco_refolding",
+# Metric tags understood by the RFD4-Proteina NIM.
+#
+# ``ORACLE_METRIC_TAGS`` need an optional runtime that the hosted trial
+# deployment does not ship (PyRosetta or the structure-prediction oracle), so
+# the server rejects them with HTTP 422.  They are never enabled by default.
+CORE_METRIC_TAGS = {
+    "design",
+    "hotspot_conditioning",
+    "rasa_conditioning",
+    "centroid_conditioning",
+    "interchain_interactions",
+    "3d_coordinate_conditioning",
+    "internal_coordinate_conditioning",
+    "unindexed",
+    "partial_diffusion",
+    "small_molecule_only",
+    "no_ligand",
+    "cms",
+    "cath",
+    "structure_prediction",
 }
+
+ORACLE_METRIC_TAGS = {
+    "antibody",
+    "developability",
+    "unconditional_refolding",
+    "ppi_refolding",
+    "motif_scaffold_refolding",
+    "internal_coordinate_motif_scaffold_refolding",
+    "sm_binder_refolding",
+    "dna_refolding",
+    "apo_refolding",
+    "ame_refolding",
+    "ame_no_ligand_refolding",
+    "disco_refolding",
+}
+
+METRIC_TAGS = CORE_METRIC_TAGS | ORACLE_METRIC_TAGS
+
+# The hosted NIM only guarantees the ``design`` tag (that is what NVIDIA's own
+# examples request).  Extra conditioning tags are opt-in via --metrics-tags.
+DEFAULT_METRIC_TAGS = ["design"]
 
 MAX_REQUEST_BYTES = 32 * 1024 * 1024
 MAX_TOKENS = 1024
+MAX_NUM_STEPS = 200
 
 
 @dataclass
@@ -288,6 +320,12 @@ def _validate_tags(tags: list[str]) -> list[str]:
                 f"Unknown metric tag {tag!r}. Valid tags: "
                 f"{', '.join(sorted(METRIC_TAGS))}."
             )
+        if tag in ORACLE_METRIC_TAGS:
+            warn(
+                f"Metric tag {tag!r} needs an optional runtime (PyRosetta or the "
+                "structure-prediction oracle). The hosted NIM will reject it with "
+                "HTTP 422 unless the deployment ships that runtime."
+            )
         if tag not in cleaned:
             cleaned.append(tag)
     return cleaned
@@ -301,12 +339,20 @@ def build_run(
     out_dir.mkdir(parents=True, exist_ok=True)
     require(cfg.mode in ("vhh", "fab"), "--mode must be vhh or fab")
     require(cfg.num_designs >= 1, "--num-designs must be >= 1")
+    if cfg.num_designs > 32:
+        warn(
+            f"--num-designs {cfg.num_designs} is large; the NIM batches replicates "
+            "into one forward pass and GPU memory grows with the batch size."
+        )
     require(
         cfg.recycle in ("thinking_low", "thinking_medium", "thinking_high"),
         "--recycle must be thinking_low, thinking_medium or thinking_high",
     )
     if cfg.num_steps is not None:
-        require(1 <= cfg.num_steps <= 1000, "--num-steps must be between 1 and 1000")
+        require(
+            1 <= cfg.num_steps <= MAX_NUM_STEPS,
+            f"--num-steps must be between 1 and {MAX_NUM_STEPS} (server limit).",
+        )
     require(cfg.offset >= 0, "--offset must be >= 0")
     if cfg.complex_structure and cfg.target_structure:
         raise PipelineError(
@@ -412,6 +458,7 @@ def build_run(
         chain = antibody_chains[role_to_source[role]]
         positions = expand_ranges(ranges)
         mapped = map_sequence_positions(sequences[role], chain, positions)
+        debug(f"{role}: CDR sequence positions {positions} -> structure {mapped}")
         free_by_source.setdefault(chain.id, set()).update(mapped)
 
     # Hotspots on the target.
@@ -503,7 +550,7 @@ def build_run(
 
     tags = cfg.metrics_tags
     if not tags:
-        tags = ["design", "antibody", "developability"]
+        tags = list(DEFAULT_METRIC_TAGS)
         if hotspots_by_source:
             tags.append("hotspot_conditioning")
         if case in ("complex", "docking"):
@@ -511,6 +558,7 @@ def build_run(
         if case != "complex":
             tags.append("internal_coordinate_conditioning")
     tags = _validate_tags(tags)
+    debug(f"metric tags: {tags}")
 
     request: dict = {
         "task": "antibody_design",

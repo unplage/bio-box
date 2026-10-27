@@ -248,6 +248,11 @@ python run.py --vhh-seq examples/vhh_sequence.fasta \
   --target-structure 8UCD --target-chains A --cdrs all --num-designs 8
 ```
 
+> 2026-10 实测：托管端点（`health.api.nvidia.com`）目前对所有设计请求返回
+> `HTTP 500`（`AcceleratorError: CUDA error: an illegal memory access`），包括 NVIDIA
+> 官方文档的 Example 1；这是服务端 GPU 运行时故障。自托管 NIM
+> （`nvcr.io/nim/ipd/rfd4-proteina:1.0.0`）不受影响。
+
 详见 [`pipeline/README.md`](pipeline/README.md)。
 
 ## 🔗 参考链接
