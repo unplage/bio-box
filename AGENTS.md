@@ -55,3 +55,4 @@ python -m pytest tests
 ## Git
 
 - Do not commit secrets (PATs have been pasted in chat before — rotate, never write into files/remotes you commit).
+- **Committer identity: use `user.name = unplage` for every commit made through opencode** (global git config is set; don't override it per-repo). Email stays `jiemiaoxing@users.noreply.github.com`.
