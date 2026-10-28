@@ -55,3 +55,4 @@ python -m pytest tests
 ## Git
 
 - Do not commit secrets (PATs have been pasted in chat before — rotate, never write into files/remotes you commit).
+- **Never `git commit` / `git push` / sync to GitHub on your own initiative** — only when the user explicitly asks in that turn. Finish the code changes, run the checks, report the diff and wait for the instruction.

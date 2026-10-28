@@ -18,6 +18,7 @@ def test_complex_case(complex_pdb, tmp_path):
         cdrs="all",
         num_designs=2,
         epitope="5-10",
+        cdr_encoding="residues",
     )
     run = build_run(cfg, api_key=None, out_dir=tmp_path / "run")
     assert run.case == "complex"
@@ -52,6 +53,7 @@ def test_docking_case(split_pdbs, tmp_path):
         target_structure=str(target),
         target_chains="T",
         cdrs="CDR3",
+        cdr_encoding="residues",
     )
     run = build_run(cfg, api_key=None, out_dir=tmp_path / "run")
     assert run.case == "docking"
@@ -75,6 +77,7 @@ def test_fab_case(fab_pdb, tmp_path):
         antibody_chains="H,L",
         target_chains="T",
         cdrs="HCDR3,LCDR1",
+        cdr_encoding="residues",
     )
     run = build_run(cfg, api_key=None, out_dir=tmp_path / "run")
     assert run.role_to_chain == {"H": "H", "L": "L"}
@@ -94,6 +97,7 @@ def test_missing_cdr_selection_is_an_error(complex_pdb, tmp_path):
         antibody_chains="A",
         target_chains="T",
         cdr_ranges="A:999-1000",
+        cdr_encoding="residues",
     )
     with pytest.raises(PipelineError):
         build_run(cfg, api_key=None, out_dir=tmp_path / "run")
@@ -106,6 +110,7 @@ def test_apo_case(split_pdbs, tmp_path):
         antibody_structure=str(ab),
         antibody_chains="A",
         cdrs="CDR3",
+        cdr_encoding="residues",
     )
     run = build_run(cfg, api_key=None, out_dir=tmp_path / "run")
     assert run.case == "apo"

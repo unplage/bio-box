@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 
 from . import __version__
-from .nim import load_replay, run_design
+from .nim import is_hosted, load_replay, run_design
 from .report import write_outputs
 from .spec import RunConfig, build_run
 from .util import (
@@ -73,6 +73,16 @@ def build_parser() -> argparse.ArgumentParser:
     cdr.add_argument(
         "--cdr-ranges",
         help="手动指定序列坐标，如 H:99-109,L:89-97（覆盖自动识别）",
+    )
+    cdr.add_argument(
+        "--cdr-encoding",
+        choices=["expand", "residues"],
+        default="expand",
+        help="CDR 表达方式：expand=官方 expandable segments（可变长）；residues=原位重设计（固定长）",
+    )
+    cdr.add_argument(
+        "--cdr-length-range",
+        help="每个 CDR 允许的长度范围，如 HCDR3:12-21,LCDR3:9-12,*:+4（默认固定原生长度）",
     )
     cdr.add_argument(
         "--epitope",
@@ -146,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
         cdrs=args.cdrs,
         cdr_scheme=args.cdr_scheme,
         cdr_ranges=args.cdr_ranges,
+        cdr_encoding=args.cdr_encoding,
+        cdr_length_range=args.cdr_length_range,
         epitope=args.epitope,
         fold=args.fold,
         offset=args.offset,
@@ -185,10 +197,11 @@ def main(argv: list[str] | None = None) -> int:
             response = load_replay(Path(args.replay))
             write_json(out_dir / "response.json", response)
         else:
-            if not api_key:
+            if not api_key and is_hosted(args.base_url):
                 raise PipelineError(
                     "NVIDIA_API_KEY is required to call the hosted NIM. "
-                    "Use --dry-run to only build the request, or --replay with a saved response."
+                    "Use --dry-run to only build the request, --replay with a saved "
+                    "response, or --base-url for a self-hosted NIM."
                 )
             response = run_design(
                 run_result.request,

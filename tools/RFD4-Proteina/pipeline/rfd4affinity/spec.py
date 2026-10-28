@@ -6,8 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .annotate import ChainPlan, write_annotated_mmcif
-from .cdr import expand_ranges, is_immunoglobulin, resolve_cdr_specs
+from .annotate import ChainPlan, LoopSegment, write_annotated_mmcif
+from .cdr import expand_ranges, is_immunoglobulin, merge_ranges, resolve_cdr_specs
 from .fold import describe_chains, fold_vhh, load_target
 from .structio import (
     Chain,
@@ -102,6 +102,8 @@ class RunConfig:
     metrics_tags: list[str] | None = None
     example_id: str | None = None
     base_url: str = "https://health.api.nvidia.com/v1"
+    cdr_encoding: str = "expand"
+    cdr_length_range: str | None = None
 
 
 @dataclass
@@ -120,6 +122,10 @@ class RunResult:
     sequences: dict[str, str]
     warnings: list[str] = field(default_factory=list)
     chain_table: list[dict] = field(default_factory=list)
+    # CDR runs per role, in *sequence* coordinates of the parent, with the
+    # length bounds that were handed to the model.
+    cdr_segments: dict[str, list[dict]] = field(default_factory=dict)
+    cdr_encoding: str = "expand"
 
 
 def _split_chains(raw: str | None) -> list[str]:
@@ -127,6 +133,136 @@ def _split_chains(raw: str | None) -> list[str]:
         return []
     tokens = [t.strip() for t in raw.replace(",", " ").split() if t.strip()]
     return tokens
+
+
+def _parse_length_overrides(raw: str | None) -> dict[str, tuple[str, int, int]]:
+    """Parse ``--cdr-length-range`` into ``{selector: (kind, lo, hi)}``.
+
+    Accepted selectors: ``CDR3`` (any chain), ``HCDR3`` / ``LCDR3`` (one
+    chain) and ``*`` (every CDR).  Accepted values: ``min-max`` (absolute
+    lengths) or ``+n`` (keep the native length, allow up to ``n`` residues
+    more).
+    """
+    if not raw:
+        return {}
+    overrides: dict[str, tuple[str, int, int]] = {}
+    for token in raw.replace(";", ",").split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if ":" not in token:
+            raise PipelineError(
+                f"Invalid --cdr-length-range entry {token!r}; expected e.g. "
+                "'HCDR3:12-21' or '*:+4'."
+            )
+        selector, value = token.split(":", 1)
+        selector = selector.strip().upper()
+        value = value.strip()
+        if not selector:
+            raise PipelineError(f"Invalid --cdr-length-range entry {token!r}: empty selector.")
+        if value.startswith("+"):
+            try:
+                delta = int(value[1:])
+            except ValueError:
+                raise PipelineError(
+                    f"Invalid --cdr-length-range entry {token!r}; expected '+n' or 'min-max'."
+                ) from None
+            if delta < 0:
+                raise PipelineError(
+                    f"Invalid --cdr-length-range entry {token!r}; the delta cannot be negative."
+                )
+            overrides[selector] = ("rel", 0, delta)
+            continue
+        if "-" not in value:
+            raise PipelineError(
+                f"Invalid --cdr-length-range entry {token!r}; expected 'min-max' or '+n'."
+            )
+        low_s, high_s = value.split("-", 1)
+        try:
+            low, high = int(low_s), int(high_s)
+        except ValueError:
+            raise PipelineError(
+                f"Invalid --cdr-length-range entry {token!r}; the bounds must be integers."
+            ) from None
+        if low < 1 or high < low:
+            raise PipelineError(f"Invalid --cdr-length-range entry {token!r}: {low}-{high}.")
+        overrides[selector] = ("abs", low, high)
+    return overrides
+
+
+def _length_bounds(
+    name: str,
+    native: int,
+    overrides: dict[str, tuple[str, int, int]],
+) -> tuple[int, int]:
+    """Resolve the length bounds for one CDR."""
+    candidates = []
+    if name:
+        candidates.append(name.upper())
+        generic = "CDR" + "".join(ch for ch in name.upper() if ch.isdigit())
+        if generic and generic not in candidates:
+            candidates.append(generic)
+    candidates.append("*")
+    for selector in candidates:
+        if selector not in overrides:
+            continue
+        kind, low, high = overrides[selector]
+        if kind == "rel":
+            return native, native + high
+        return low, high
+    return native, native
+
+
+def _build_cdr_segments(
+    sequences: dict[str, str],
+    cdr_ranges: dict[str, list[tuple[int, int]]],
+    cdr_metadata: list[dict],
+    overrides: dict[str, tuple[str, int, int]],
+) -> dict[str, list[dict]]:
+    """Turn the selected CDR ranges into contiguous, length-bounded segments."""
+    segments: dict[str, list[dict]] = {}
+    for role, ranges in cdr_ranges.items():
+        sequence = sequences[role]
+        role_meta = [m for m in cdr_metadata if m.get("role") == role]
+        out: list[dict] = []
+        for start, end in merge_ranges(ranges):
+            members = [m for m in role_meta if m["start"] <= end and m["end"] >= start]
+            names = sorted({str(m.get("name") or "CDR?") for m in members})
+            native = end - start + 1
+            min_len, max_len = native, native
+            has_absolute = False
+            for member in members:
+                low, high = _length_bounds(str(member.get("name") or ""), native, overrides)
+                # Detect whether this member had an absolute override
+                name = str(member.get("name") or "")
+                is_absolute = False
+                for selector in (name.upper(), "CDR" + "".join(ch for ch in name.upper() if ch.isdigit()), "*"):
+                    if selector in overrides and overrides[selector][0] == "abs":
+                        is_absolute = True
+                        break
+                if is_absolute:
+                    if not has_absolute:
+                        min_len, max_len = low, high
+                        has_absolute = True
+                    else:
+                        min_len, max_len = min(min_len, low), max(max_len, high)
+                else:
+                    if not has_absolute:
+                        min_len = min(min_len, low)
+                        max_len = max(max_len, high)
+            out.append(
+                {
+                    "name": "+".join(names) if names else "CDR?",
+                    "start": start,
+                    "end": end,
+                    "native_length": native,
+                    "min_len": min_len,
+                    "max_len": max_len,
+                    "sequence": sequence[start - 1:end],
+                }
+            )
+        segments[role] = out
+    return segments
 
 
 def centroid(chains: dict[str, Chain]) -> tuple[float, float, float]:
@@ -461,6 +597,19 @@ def build_run(
         debug(f"{role}: CDR sequence positions {positions} -> structure {mapped}")
         free_by_source.setdefault(chain.id, set()).update(mapped)
 
+    # CDR runs with the length bounds handed to the model.
+    length_overrides = _parse_length_overrides(cfg.cdr_length_range)
+    cdr_segments = _build_cdr_segments(
+        sequences, cdr_ranges, cdr_metadata, length_overrides
+    )
+    for role, segments in cdr_segments.items():
+        for segment in segments:
+            debug(
+                f"{role} {segment['name']}: sequence {segment['start']}-{segment['end']} "
+                f"({segment['native_length']} aa), model length "
+                f"{segment['min_len']}-{segment['max_len']}"
+            )
+
     # Hotspots on the target.
     hotspots_by_source: dict[str, set[int]] = {}
     if cfg.epitope:
@@ -499,6 +648,27 @@ def build_run(
     )
 
     plans: dict[str, ChainPlan] = {}
+    expand_encoding = cfg.cdr_encoding == "expand"
+    loop_segments_by_source: dict[str, list[LoopSegment]] = {}
+    for role, segments in cdr_segments.items():
+        source_id = role_to_source[role]
+        chain = antibody_chains[source_id]
+        built: list[LoopSegment] = []
+        for segment in segments:
+            mapped = map_sequence_positions(
+                sequences[role], chain, [segment["start"], segment["end"]]
+            )
+            built.append(
+                LoopSegment(
+                    start=mapped[0],
+                    end=mapped[-1],
+                    min_len=segment["min_len"],
+                    max_len=segment["max_len"],
+                    name=segment["name"],
+                )
+            )
+        loop_segments_by_source[source_id] = built
+
     for old, new in antibody_map.items():
         plans[new] = ChainPlan(
             chain_id=new,
@@ -506,6 +676,7 @@ def build_run(
             free_residues=set(free_by_source.get(old, set())),
             hotspot_residues=set(),
             token_group=0 if case == "complex" else 1,
+            loop_segments=loop_segments_by_source.get(old, []) if expand_encoding else [],
         )
     for old, new in target_map.items():
         plans[new] = ChainPlan(
@@ -518,7 +689,25 @@ def build_run(
 
     # Sanity checks.
     total_residues = sum(len(chain.residues) for chain in combined.values())
-    if total_residues > MAX_TOKENS:
+    input_residues = total_residues
+    if expand_encoding:
+        # The CDR residues are replaced by one expandable segment each.
+        for segments in cdr_segments.values():
+            for segment in segments:
+                input_residues -= segment["native_length"]
+        input_residues += sum(len(segments) for segments in cdr_segments.values())
+        max_residues = input_residues + sum(
+            segment["max_len"] - 1
+            for segments in cdr_segments.values()
+            for segment in segments
+        )
+        if max_residues > MAX_TOKENS:
+            raise PipelineError(
+                f"The design can reach {max_residues} residues but the hosted NIM "
+                f"accepts at most {MAX_TOKENS} tokens. Trim the target or shorten "
+                "the allowed CDR lengths."
+            )
+    elif total_residues > MAX_TOKENS:
         raise PipelineError(
             f"The design has {total_residues} residues but the hosted NIM accepts "
             f"at most {MAX_TOKENS} tokens. Trim the target (use a domain, not the "
@@ -597,10 +786,19 @@ def build_run(
         target_name=cfg.target_name,
         sequences=sequences,
         chain_table=chain_table(combined),
+        cdr_segments=cdr_segments,
+        cdr_encoding=cfg.cdr_encoding,
     )
     log(
         f"Case {case}: antibody {result.role_to_chain}, target {result.target_chain_ids or 'none'}; "
         f"{designed} CDR residues free; {total_residues} residues total"
     )
+    if expand_encoding:
+        bounds = "; ".join(
+            f"{role} {segment['name']} {segment['min_len']}-{segment['max_len']}"
+            for role, segments in cdr_segments.items()
+            for segment in segments
+        )
+        log(f"CDRs are expandable segments (lengths: {bounds})")
     log(f"Input chains: {describe_chains(combined)}")
     return result

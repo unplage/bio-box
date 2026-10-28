@@ -27,6 +27,22 @@ The default recipe: the target is held all-atom (absolute), the antibody
 framework backbone is held (absolute for a complex, internal-coordinate group
 for docking/apo) while its sidechains repack, and the selected CDRs are free in
 both sequence and structure.
+
+Two ways of expressing "this CDR is to be designed":
+
+``residues`` (legacy)
+    The CDR residues stay in the file with ``mask_sequence_1_residue=False``.
+    The model redesigns the residues in place, so the CDR keeps its length.
+
+``expand`` (what NVIDIA's own antibody examples do)
+    The CDR residues are *not in the input at all*.  Each CDR is replaced by a
+    single ``HETATM UNK`` pseudo-residue whose ``label_comp_id`` is
+    ``"<min>-<max>"`` and whose ``annotation_expsegmin/max`` columns carry the
+    allowed length bounds.  The model then re-generates the loop and may pick
+    a different length for every candidate - this is what the official VHH
+    tutorial describes ("the CDRs are not in the input at all. They are
+    expandable segments: stretches of the chain whose length the model chooses
+    within the bounds recorded in the input").
 """
 
 from __future__ import annotations
@@ -34,7 +50,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .structio import Chain, _element, chain_label_ids
+from .structio import Chain, _element
 from .util import cif_data_name
 
 BACKBONE_ATOMS = {"N", "CA", "C", "O", "OXT"}
@@ -77,15 +93,38 @@ COLUMNS = [
 
 
 @dataclass
+class LoopSegment:
+    """A CDR that is handed to the model as an expandable segment.
+
+    ``start``/``end`` are the residue numbers of the CDR in the parent
+    structure; ``min_len``/``max_len`` are the length bounds written into the
+    annotated mmCIF.
+    """
+
+    start: int
+    end: int
+    min_len: int
+    max_len: int
+    name: str = ""
+
+
+@dataclass
 class ChainPlan:
     chain_id: str
     role: str                       # 'antibody' | 'target'
     free_residues: set[int] = field(default_factory=set)
     hotspot_residues: set[int] = field(default_factory=set)
     token_group: int = 1
+    loop_segments: list[LoopSegment] = field(default_factory=list)
 
     def is_free(self, resseq: int) -> bool:
         return resseq in self.free_residues
+
+    def loop_for(self, resseq: int) -> LoopSegment | None:
+        for segment in self.loop_segments:
+            if segment.start <= resseq <= segment.end:
+                return segment
+        return None
 
 
 def _atom_annotations(
@@ -124,6 +163,58 @@ def _atom_annotations(
     return False, -1, False, True, hotspot
 
 
+def _loop_row(
+    chain_id: str,
+    entity_id: int,
+    label_seq_id: int,
+    segment: LoopSegment,
+    atom_id: int,
+    token_group: int,
+) -> list[str]:
+    """Build the ``HETATM UNK`` row that replaces a CDR in the input.
+
+    The row mirrors the official antibody examples: ``label_comp_id`` is the
+    ``"<min>-<max>"`` length range, the coordinates are ``nan`` and the
+    expseg columns carry the bounds.
+    """
+    comp_id = f"{segment.min_len}-{segment.max_len}"
+    return [
+        "HETATM",
+        "X",
+        "UNK",
+        ".",
+        comp_id,
+        chain_id,
+        str(entity_id),
+        str(label_seq_id),
+        ".",
+        str(segment.start),
+        comp_id,
+        chain_id,
+        "UNK",
+        str(atom_id),
+        "nan",
+        "0.0",
+        "?",
+        "True",
+        "False",
+        "False",
+        "False",
+        str(token_group),
+        "-1",
+        "False",
+        str(segment.max_len),
+        "True",
+        "True",
+        str(segment.min_len),
+        str(atom_id - 1),
+        "nan",
+        "nan",
+        "nan",
+        "1",
+    ]
+
+
 def write_annotated_mmcif(
     chains: dict[str, Chain],
     plans: dict[str, ChainPlan],
@@ -142,8 +233,29 @@ def write_annotated_mmcif(
         plan = plans.get(chain_id)
         if plan is None:
             raise ValueError(f"No annotation plan for chain {chain_id}")
-        label_ids = chain_label_ids(chain)
-        for label_seq_id, residue in zip(label_ids, chain.residues):
+        label_seq_id = 0
+        for residue in chain.residues:
+            segment = plan.loop_for(residue.resseq)
+            if segment is not None:
+                if residue.resseq != segment.start:
+                    # The CDR is not part of the input any more.
+                    continue
+                label_seq_id += 1
+                atom_id += 1
+                lines.append(
+                    " ".join(
+                        _loop_row(
+                            chain_id,
+                            entity_id,
+                            label_seq_id,
+                            segment,
+                            atom_id,
+                            plan.token_group,
+                        )
+                    )
+                )
+                continue
+            label_seq_id += 1
             for atom_name, (x, y, z) in residue.atoms.items():
                 atom_id += 1
                 mask_coord, group, internal, mask_seq, hotspot = _atom_annotations(

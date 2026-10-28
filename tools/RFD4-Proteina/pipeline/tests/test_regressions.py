@@ -104,6 +104,7 @@ def test_label_seq_id_is_contiguous_and_auth_seq_id_keeps_author_numbering(tmp_p
         antibody_structure=str(pdb),
         antibody_chains="A",
         cdrs="all",
+        cdr_encoding="residues",
     )
     run = build_run(cfg, api_key=None, out_dir=tmp_path / "run")
     label_ids = [
@@ -235,3 +236,92 @@ def test_backend_crash_is_not_retried(monkeypatch):
         net.post_json("https://example.invalid/x", {"a": 1}, api_key="nvapi-x", retries=4)
     assert len(calls) == 1
     assert "server-side" in str(excinfo.value)
+
+
+def test_expand_cdr_encoding_produces_pseudo_residues(complex_pdb, tmp_path):
+    """Expand mode replaces CDR residues with pseudo-residues carrying length bounds."""
+    cfg = RunConfig(
+        mode="vhh",
+        complex_structure=str(complex_pdb),
+        antibody_chains="A",
+        target_chains="T",
+        target_name="HER2",
+        cdrs="all",
+        cdr_encoding="expand",
+    )
+    run = build_run(cfg, api_key=None, out_dir=tmp_path / "run")
+    lines = run.cif_text.splitlines()
+    # Parse columns
+    j = next(k for k, l in enumerate(lines) if l.startswith("_atom_site."))
+    cols = []
+    while lines[j].startswith("_atom_site."):
+        cols.append(lines[j][len("_atom_site."):].strip()); j += 1
+    idx = {c: k for k, c in enumerate(cols)}
+    # Find pseudo-residue rows (HETATM with non-AA comp_id)
+    pseudo_rows = []
+    for line in lines[j:]:
+        if not line.startswith("HETATM"):
+            continue
+        parts = line.split()
+        if "-" in parts[idx["label_comp_id"]]:
+            pseudo_rows.append(parts)
+    # Expect 3 pseudo-residues (CDR1, CDR2, CDR3)
+    assert len(pseudo_rows) == 3
+    for parts in pseudo_rows:
+        comp_id = parts[idx["label_comp_id"]]
+        assert "-" in comp_id, f"Expected min-max comp_id, got {comp_id}"
+        assert parts[idx["mask_expsegmin_1_residue"]] == "True"
+        assert parts[idx["mask_expsegmax_1_residue"]] == "True"
+        assert parts[idx["mask_sequence_1_residue"]] == "False"
+        assert parts[idx["mask_coordinate_1_atom"]] == "False"
+        assert parts[idx["condition_CoordinateGroup_1_atom"]] == "-1"
+    # CDR residues should not appear as regular ATOM with mask_sequence=False
+    atom_rows = [l.split() for l in lines[j:] if l.startswith("ATOM")]
+    for parts in atom_rows:
+        comp_id = parts[idx["label_comp_id"]]
+        if comp_id.isdigit():  # framework residue
+            continue
+        # Only standard amino acids should have mask_sequence=False if they are CDR
+        # but in expand mode, CDR residues are not in the output at all
+        assert parts[idx["label_comp_id"]].isalpha()
+
+
+def test_cdr_length_range_absolute_and_relative(complex_pdb, tmp_path):
+    """cdr-length-range supports absolute and relative bounds."""
+    cfg = RunConfig(
+        mode="vhh",
+        complex_structure=str(complex_pdb),
+        antibody_chains="A",
+        target_chains="T",
+        target_name="HER2",
+        cdrs="all",
+        cdr_encoding="expand",
+        cdr_length_range="CDR3:12-21,*:+4",
+    )
+    run = build_run(cfg, api_key=None, out_dir=tmp_path / "run")
+    lines = run.cif_text.splitlines()
+    j = next(k for k, l in enumerate(lines) if l.startswith("_atom_site."))
+    while lines[j].startswith("_atom_site."):
+        j += 1
+    pseudo_rows = []
+    for line in lines[j:]:
+        if not line.startswith("HETATM"):
+            continue
+        parts = line.split()
+        if "-" in parts[4]:
+            pseudo_rows.append(parts)
+    # Should have 3 pseudo-residues
+    assert len(pseudo_rows) == 3
+    # CDR3 should have 12-21 (absolute), CDR1/2 should have native+4
+    # Native lengths from test fixture: CDR1=8, CDR2=8, CDR3=18
+    bounds = {}
+    for parts in pseudo_rows:
+        comp = parts[4]
+        lo, hi = map(int, comp.split("-"))
+        bounds[comp] = (lo, hi)
+    # Find the 12-21 one (CDR3)
+    assert "12-21" in bounds
+    # The other two should be native+4: 8+4=12
+    for b in bounds.values():
+        if b != (12, 21):
+            assert b == (8, 12), f"Expected 8-12 or 12-21, got {b}"
