@@ -7,6 +7,7 @@
 | 工具 | 路径 | 描述 |
 |:---|:---|:---|
 | 🎯 靶点调研报告生成器 | `tools/target-info/target.html` | PWA Web 应用，多数据源整合，AI 智能分析，一键生成报告 |
+| 🧬 蛋白质分析工具集 | `tools/protein-analyse/index.html` | PWA：分子量/pI/KD 疏水性/A280 浓度/摩尔换算 + 参考手册 + 密码子优化（7 物种 CAI、酶切位点排除），离线计算 |
 | 🧹 精准数据清理工具 | `clear.html` | Web 应用，数据清理与标准化 |
 | 🧬 BsaI 酶切位点重复分析 | `tools/maturation/bsaitest.html` | 4-mer 在 BsaI 位点数据库中的出现频率分析 |
 | 🧪 NNK 引物生成器 | `tools/maturation/NNKprimer.html` | 输入编码区序列，生成 NNK 突变引物组合 |

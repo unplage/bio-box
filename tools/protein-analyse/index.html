@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a73e8">
+<meta name="description" content="蛋白质分析工具集：分子量、等电点、KD疏水性、A280消光系数与浓度计算">
+<title>Protein-Analyse 蛋白质分析工具集</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AC%3C/text%3E%3C/svg%3E">
+<style>
+    :root {
+        --primary: #1a73e8;
+        --primary-dark: #1557b0;
+        --primary-light: #e8f0fe;
+        --accent: #7c3aed;
+        --green: #0d9488;
+        --orange: #ea580c;
+        --red: #dc2626;
+        --bg: #f4f6f9;
+        --card: #ffffff;
+        --text: #1f2937;
+        --text-2: #6b7280;
+        --border: #e5e7eb;
+        --radius: 14px;
+        --shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.05);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        padding-bottom: 3rem;
+    }
+    .header {
+        background: linear-gradient(135deg, #1a73e8 0%, #7c3aed 100%);
+        color: #fff;
+        padding: 1.8rem 1rem 2.6rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .header::after {
+        content: "";
+        position: absolute;
+        left: 0; right: 0; bottom: -1px;
+        height: 28px;
+        background: var(--bg);
+        border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    }
+    .header h1 { font-size: 1.55rem; font-weight: 700; letter-spacing: .02em; }
+    .header p { opacity: .85; font-size: .86rem; margin-top: .35rem; }
+    .container { max-width: 1080px; margin: -1.1rem auto 0; padding: 0 1rem; position: relative; z-index: 1; }
+
+    /* ── 输入卡片 ── */
+    .card {
+        background: var(--card);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 1.2rem 1.3rem;
+        margin-bottom: 1.1rem;
+    }
+    .card h2 {
+        font-size: .95rem;
+        color: var(--text);
+        margin-bottom: .7rem;
+        display: flex; align-items: center; gap: .45rem;
+    }
+    .card h2 .ico { font-size: 1.05rem; }
+    textarea {
+        width: 100%; min-height: 110px; padding: .7rem .8rem;
+        font-family: "SF Mono", Consolas, Menlo, monospace;
+        font-size: .86rem; line-height: 1.55;
+        border: 1.5px solid var(--border); border-radius: 9px;
+        resize: vertical; background: #fafbfc; color: var(--text);
+        transition: border-color .15s, box-shadow .15s;
+    }
+    textarea:focus {
+        outline: none; border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(26,115,232,.13);
+        background: #fff;
+    }
+    .hint { font-size: .74rem; color: var(--text-2); margin-top: .4rem; line-height: 1.5; }
+    .row { display: flex; gap: .55rem; align-items: center; flex-wrap: wrap; margin-top: .65rem; }
+
+    .btn {
+        padding: .55rem 1.3rem; border: none; border-radius: 8px;
+        font-size: .9rem; font-weight: 600; cursor: pointer;
+        color: #fff; background: var(--primary);
+        transition: .15s; display: inline-flex; align-items: center; gap: .35rem;
+    }
+    .btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-ghost { background: #eef1f6; color: var(--text); }
+    .btn-ghost:hover { background: #e2e7ef; }
+    .btn-green { background: var(--green); }
+    .btn-green:hover { background: #0f766e; }
+    .btn-sm { padding: .38rem .85rem; font-size: .8rem; border-radius: 7px; }
+
+    /* ── 标签页 ── */
+    .tabs {
+        display: flex; gap: .35rem; margin-bottom: 1.1rem;
+        background: var(--card); border-radius: var(--radius);
+        padding: .4rem; box-shadow: var(--shadow);
+        overflow-x: auto;
+    }
+    .tab {
+        flex: 1; min-width: max-content;
+        padding: .62rem .7rem; border-radius: 9px;
+        font-size: .85rem; font-weight: 600; cursor: pointer;
+        color: var(--text-2); background: transparent;
+        border: none; transition: .15s; text-align: center;
+        display: flex; align-items: center; justify-content: center; gap: .35rem;
+        white-space: nowrap;
+    }
+    .tab:hover { background: var(--primary-light); color: var(--primary); }
+    .tab.active { background: var(--primary); color: #fff; box-shadow: 0 2px 8px rgba(26,115,232,.3); }
+    .panel { display: none; }
+    .panel.active { display: block; animation: fadeIn .25s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* ── 结果统计 ── */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .65rem; margin-top: .9rem; }
+    .stat {
+        background: linear-gradient(160deg, #f8fafc, #f1f5f9);
+        border: 1px solid var(--border); border-radius: 11px;
+        padding: .75rem .6rem; text-align: center;
+    }
+    .stat b { display: block; font-size: 1.32rem; color: var(--primary); font-variant-numeric: tabular-nums; line-height: 1.25; word-break: break-all; }
+    .stat span { font-size: .74rem; color: var(--text-2); display: block; margin-top: .15rem; }
+    .stat.green b { color: var(--green); }
+    .stat.orange b { color: var(--orange); }
+    .stat.purple b { color: var(--accent); }
+
+    table { width: 100%; border-collapse: collapse; font-size: .84rem; margin-top: .8rem; }
+    th, td { border: 1px solid var(--border); padding: .48rem .6rem; text-align: left; }
+    th { background: var(--primary); color: #fff; font-weight: 600; white-space: nowrap; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    td.num { font-variant-numeric: tabular-nums; text-align: right; }
+    .empty { color: var(--text-2); font-style: italic; text-align: center; padding: 1.5rem 0; }
+    .error {
+        background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+        padding: .7rem 1rem; border-radius: 9px; margin-top: .8rem; font-size: .87rem;
+        display: none;
+    }
+    .error.show { display: block; }
+
+    /* ── 表单 ── */
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .8rem; margin-top: .7rem; }
+    .field label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-2); margin-bottom: .32rem; }
+    .field input, .field select {
+        width: 100%; padding: .58rem .7rem; font-size: .9rem;
+        border: 1.5px solid var(--border); border-radius: 8px;
+        background: #fafbfc; color: var(--text); font-family: inherit;
+    }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,115,232,.13); background: #fff; }
+    .field .unit { font-size: .72rem; color: var(--text-2); margin-top: .25rem; }
+
+    /* ── 疏水性热图 ── */
+    .hydro-wrap { overflow-x: auto; margin-top: .9rem; }
+    .hydro-strip { display: flex; gap: 1px; min-height: 26px; }
+    .hydro-cell {
+        flex: 1; min-width: 9px; border-radius: 3px; position: relative;
+        display: flex; align-items: center; justify-content: center;
+        font-size: .58rem; font-weight: 700; cursor: default; color: #fff;
+        text-shadow: 0 1px 2px rgba(0,0,0,.45);
+    }
+    .hydro-legend { display: flex; align-items: center; gap: .5rem; margin-top: .55rem; font-size: .72rem; color: var(--text-2); flex-wrap: wrap; }
+    .legend-bar { width: 140px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #2563eb, #f8fafc, #dc2626); }
+    .win-chart { margin-top: 1rem; }
+    .win-chart svg { width: 100%; height: 200px; display: block; }
+    .axis-label { font-size: 10px; fill: var(--text-2); }
+
+    .formula {
+        background: #f8fafc; border: 1px solid var(--border); border-left: 3px solid var(--primary);
+        border-radius: 0 8px 8px 0; padding: .65rem .85rem; margin-top: .75rem;
+        font-size: .8rem; color: var(--text-2); line-height: 1.65;
+    }
+    .formula code { font-family: "SF Mono", Consolas, monospace; color: var(--primary-dark); background: #eef2f7; padding: .05rem .3rem; border-radius: 4px; font-size: .95em; }
+    .result-line {
+        display: flex; justify-content: space-between; align-items: baseline;
+        padding: .62rem .85rem; border-radius: 9px; margin-top: .55rem;
+        background: var(--primary-light); border: 1px solid #c9dcfb;
+        font-size: .88rem;
+    }
+    .result-line b { font-size: 1.15rem; color: var(--primary-dark); font-variant-numeric: tabular-nums; }
+    .footer { text-align: center; font-size: .75rem; color: var(--text-2); margin-top: 1.6rem; }
+    .footer a { color: var(--primary); text-decoration: none; }
+    /* ── 参考手册 ── */
+    .ref-search {
+        width: 100%; padding: .65rem .9rem; font-size: .9rem;
+        border: 1.5px solid var(--border); border-radius: 9px;
+        background: #fafbfc; margin-bottom: .9rem;
+    }
+    .ref-search:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,115,232,.13); background: #fff; }
+    .ref-filters { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
+    .chip {
+        padding: .32rem .8rem; border-radius: 20px; border: 1px solid var(--border);
+        background: #f8fafc; font-size: .78rem; color: var(--text-2); cursor: pointer;
+    }
+    .chip:hover { background: #eef1f6; }
+    .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .ref-table { width: 100%; border-collapse: collapse; font-size: .84rem; margin-top: .5rem; background: var(--card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    .ref-table th, .ref-table td { border: 1px solid var(--border); padding: .5rem .65rem; text-align: left; }
+    .ref-table th { background: #eef2f7; color: var(--text); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+    .ref-table tr:nth-child(even) td { background: #f8fafc; }
+    .ref-table tr:hover td { background: #f1f5f9; }
+    .codon-block { margin-top: .7rem; }
+    .codon-block-title { font-size: .78rem; font-weight: 700; color: var(--text-2); margin-bottom: .3rem; }
+    .codon-scroll { overflow-x: auto; padding-bottom: .3rem; }
+    .codon-grid { display: grid; grid-template-columns: repeat(16, minmax(52px, 1fr)); gap: 3px; min-width: 680px; }
+    .codon-grid .sec-head {
+        grid-column: span 4; text-align: center; font-size: .7rem; font-weight: 700;
+        color: var(--text-2); background: #eef2f7; border-radius: 6px; padding: .22rem 0;
+    }
+    .codon-cell {
+        padding: .5rem .2rem; border-radius: 8px; font-size: .82rem; font-weight: 700;
+        text-align: center; cursor: default; user-select: none; position: relative;
+    }
+    .codon-cell .tri { font-size: 1.12rem; letter-spacing: .06em; display:block; line-height:1; }
+    .codon-cell .aa { font-size: .66rem; opacity: .9; display:block; margin-top:.12rem; font-weight: 600; line-height:1; }
+    .codon-cell.stop { background: #fecaca; color: #991b1b; }
+    .codon-cell.meta { background: #e2e8f0; color: #475569; }
+    .codon-legend { display:flex; gap:.8rem; flex-wrap:wrap; margin-top:.7rem; font-size: .72rem; color: var(--text-2); }
+    .legend-swatch { width: 16px; height: 16px; border-radius: 4px; display:inline-block; margin-right:.5rem; vertical-align: middle; border: 1px solid rgba(0,0,0,.1); }
+    .ref-subtabs { display:flex; gap:.35rem; margin-bottom:.9rem; overflow-x:auto; }
+    .ref-subtab {
+        padding: .5rem .8rem; border-radius: 8px; border: 1px solid var(--border);
+        background: #f8fafc; font-size: .82rem; color: var(--text-2); cursor: pointer;
+    }
+    .ref-subtab:hover { background: var(--primary-light); color: var(--primary); }
+    .ref-subtab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .ref-subpanel { animation: fadeIn .25s ease; }
+    .co-enzymes { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .co-enzymes .chip { font-family: inherit; }
+    .co-enzymes .chip span { font-family: "SF Mono", Consolas, monospace; opacity: .8; font-size: .72rem; }
+    .co-enzymes .chip.active { background: var(--green); border-color: var(--green); color: #fff; }
+    .co-ok { color: var(--green); font-weight: 600; }
+    .co-bad { color: var(--red); font-weight: 600; }
+    .co-vlist { font-size: .82rem; color: var(--text-2); margin-top: .4rem; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🧬 Protein-Analyse 蛋白质分析工具集</h1>
+    <p>分子量 · 等电点 · KD 疏水性 · A280 消光系数与浓度 · 摩尔换算 —— 全部本地离线计算</p>
+</div>
+
+<div class="container">
+
+    <!-- 输入 -->
+    <div class="card">
+        <h2><span class="ico">📝</span>氨基酸序列输入</h2>
+        <textarea id="seqInput" spellcheck="false" placeholder="支持 FASTA（&gt;header）或纯序列，自动忽略空格/换行/数字。&#10;例：>example&#10;MALWMRLLPLLALLALWGPDPAAAFVNQHLCGSHLVEALYLVCGERGFFYTPKT"></textarea>
+        <div class="hint">仅识别 20 种标准氨基酸字母（ACDEFGHIKLMNPQRSTVWY），其余字符自动过滤；<code>*</code>（终止符）不计入序列。</div>
+        <div class="row">
+            <button class="btn btn-ghost btn-sm" onclick="loadExample()">✨ 加载示例（人胰岛素原前体）</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearSeq()">清空</button>
+            <span class="hint" id="seqInfo" style="margin:0"></span>
+        </div>
+    </div>
+
+    <!-- 标签页 -->
+    <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="basic" role="tab">⚖️ 分子量 / pI</button>
+        <button class="tab" data-tab="kd" role="tab">🌡️ KD 疏水性</button>
+        <button class="tab" data-tab="a280" role="tab">🔬 A280 浓度</button>
+        <button class="tab" data-tab="molar" role="tab">🧪 摩尔换算</button>
+        <button class="tab" data-tab="ref" role="tab">📚 参考手册</button>
+        <button class="tab" data-tab="codon" role="tab">🧬 密码子优化</button>
+    </div>
+
+    <div id="errorArea" class="error"></div>
+
+    <!-- ═══ 面板 1：分子量 / pI ═══ -->
+    <div class="panel active" id="panel-basic">
+        <div class="card">
+            <h2><span class="ico">⚖️</span>分子量与等电点（pI）</h2>
+            <div class="row">
+                <button class="btn" onclick="calcBasic()">⚡ 计算</button>
+                <button class="btn btn-ghost btn-sm" onclick="copyStats()">复制结果</button>
+            </div>
+            <div class="stats" id="basicStats" style="display:none"></div>
+            <div class="formula">
+                <b>分子量</b>：MW = Σ(残基平均质量) + 18.0153（水），残基质量取 ExPASy 平均同位素质量。<br>
+                <b>pI</b>：二分法求净电荷 = 0 的 pH，pKa 采用 Bjellqvist et al. (1993/1994) / ExPASy ProtParam 值：
+                <code>N 端 7.50</code> <code>C 端 3.55</code> <code>C 9.0</code> <code>D 4.05</code>
+                <code>E 4.45</code> <code>H 5.98</code> <code>K 10.0</code> <code>R 12.0</code> <code>Y 10.0</code>，
+                且 N/C 末端 pKa 按首/末残基修正（如 N 端 M→7.0、C 端 D→4.55）。
+            </div>
+            <div id="basicAA" style="display:none">
+                <div class="section" style="margin-top:1rem">
+                    <h2 style="font-size:.9rem"><span class="ico">📊</span>氨基酸组成</h2>
+                    <table id="aaTable"></table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ 面板 2：KD 疏水性 ═══ -->
+    <div class="panel" id="panel-kd">
+        <div class="card">
+            <h2><span class="ico">🌡️</span>Kyte-Doolittle 疏水性分析</h2>
+            <div class="form-grid">
+                <div class="field">
+                    <label>滑动窗口大小（奇数）</label>
+                    <input type="number" id="kdWindow" value="9" min="1" max="99" step="2">
+                    <div class="unit">常用 7 / 9 / 19；窗口越大越平滑</div>
+                </div>
+            </div>
+            <div class="row">
+                <button class="btn" onclick="calcKD()">⚡ 计算疏水性</button>
+            </div>
+            <div class="stats" id="kdStats" style="display:none"></div>
+            <div class="hint" style="margin-top:.6rem">Kyte &amp; Doolittle (1982) J Mol Biol：正值为疏水，负值为亲水。窗口平均 &gt; 0 的区段倾向埋藏于蛋白内部。</div>
+            <div class="hydro-wrap" id="hydroWrap" style="display:none">
+                <div class="hydro-strip" id="hydroStrip" title="悬停查看每个残基的 KD 值"></div>
+                <div class="hydro-legend">
+                    <span>亲水 −4.5</span><span class="legend-bar"></span><span>疏水 +4.5</span>
+                </div>
+            </div>
+            <div class="win-chart" id="winChart" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- ═══ 面板 3：A280 浓度 ═══ -->
+    <div class="panel" id="panel-a280">
+        <div class="card">
+            <h2><span class="ico">🔬</span>A280 消光系数与浓度计算</h2>
+            <div class="form-grid">
+                <div class="field">
+                    <label>A280 吸光度（OD280）</label>
+                    <input type="number" id="a280Val" value="1.0" step="0.01" min="0">
+                    <div class="unit">分光光度计读数，无量纲</div>
+                </div>
+                <div class="field">
+                    <label>光程长度 (cm)</label>
+                    <input type="number" id="pathLen" value="1.0" step="0.1" min="0.01">
+                    <div class="unit">比色皿厚度，标准 1.0 cm</div>
+                </div>
+                <div class="field">
+                    <label>二硫键假设</label>
+                    <select id="ssMode">
+                        <option value="all" selected>全部成对（氧化，Cystine ×125）</option>
+                        <option value="none">全部游离（还原，不计 Cystine）</option>
+                    </select>
+                    <div class="unit">影响 ε 中 Cystine 贡献项</div>
+                </div>
+            </div>
+            <div class="row">
+                <button class="btn" onclick="calcA280()">⚡ 计算消光系数与浓度</button>
+            </div>
+            <div class="formula">
+                <b>摩尔消光系数（Pace et al. 1995）</b>：
+                <code>ε280 = 5500·n(W) + 1490·n(Y) + 125·n(Cystine)</code>（M⁻¹·cm⁻¹）<br>
+                <b>Beer-Lambert 定律</b>：<code>A = ε · c · l</code> ⟹ <code>c(mol/L) = A / (ε · l)</code><br>
+                <b>质量浓度</b>：<code>c(mg/mL) = A · MW / (ε · l)</code>（因 1 g/L ≡ 1 mg/mL）
+            </div>
+            <div class="stats" id="a280Stats" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- ═══ 面板 4：摩尔换算 ═══ -->
+    <div class="panel" id="panel-molar">
+        <div class="card">
+            <h2><span class="ico">🧪</span>摩尔浓度 / 分子的量计算</h2>
+            <div class="form-grid">
+                <div class="field">
+                    <label>质量 (g)</label>
+                    <input type="number" id="massG" value="0.001" step="any" min="0">
+                    <div class="unit">或按下方模式换算</div>
+                </div>
+                <div class="field">
+                    <label>分子量 MW (Da)</label>
+                    <input type="number" id="mwInput" placeholder="留空则自动取序列 MW">
+                    <div class="unit">默认使用上方输入序列的计算值</div>
+                </div>
+                <div class="field">
+                    <label>溶液体积 (mL)</label>
+                    <input type="number" id="volMl" value="1.0" step="any" min="0">
+                    <div class="unit">用于浓度换算</div>
+                </div>
+                <div class="field">
+                    <label>或直接输入质量浓度 (mg/mL)</label>
+                    <input type="number" id="concMgMl" placeholder="如 1.0">
+                    <div class="unit">与「质量」二选一优先使用本项</div>
+                </div>
+            </div>
+            <div class="row">
+                <button class="btn" onclick="calcMolar()">⚡ 计算</button>
+            </div>
+            <div class="formula">
+                <b>分子的量</b>：<code>n(mol) = m(g) / MW(g/mol)</code><br>
+                <b>摩尔浓度</b>：<code>c(mol/L) = n / V(L)</code>；<code>c(μM) = c(mol/L) × 10⁶</code><br>
+                <b>反向</b>：<code>m(g) = c(mol/L) × V(L) × MW</code>
+            </div>
+            <div class="stats" id="molarStats" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- ═══ 面板 5：参考手册 ═══ -->
+    <div class="panel" id="panel-ref">
+        <div class="card">
+            <h2><span class="ico">📚</span>生物参考手册（查询与学习）</h2>
+            <input type="text" id="refSearch" class="ref-search" placeholder="搜索氨基酸、密码子或简并碱基……支持中文/英文/简写/符号">
+            <div class="ref-filters">
+                <button class="chip active" data-filter="all">全部</button>
+                <button class="chip" data-filter="nonpolar">非极性 / 疏水</button>
+                <button class="chip" data-filter="polar">极性非带电</button>
+                <button class="chip" data-filter="acidic">酸性</button>
+                <button class="chip" data-filter="basic">碱性</button>
+            </div>
+            <div class="ref-subtabs">
+                <button class="ref-subtab active" data-sub="codon">🧬 标准遗传密码子表</button>
+                <button class="ref-subtab" data-sub="aa">🧪 20 种氨基酸性质表</button>
+                <button class="ref-subtab" data-sub="degen">🔠 简并碱基符号表</button>
+            </div>
+
+            <div id="ref-codon" class="ref-subpanel active"></div>
+            <div id="ref-aa" class="ref-subpanel" style="display:none"></div>
+            <div id="ref-degen" class="ref-subpanel" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- ═══ 面板 6：密码子优化 ═══ -->
+    <div class="panel" id="panel-codon">
+        <div class="card">
+            <h2><span class="ico">🧬</span>密码子优化（Codon Optimization）</h2>
+            <div class="hint" style="margin-top:0">读取上方输入的氨基酸序列，按目标物种密码子使用偏好生成基因编码序列；可排除限制性内切酶位点、控制 GC 窗口与聚聚体。</div>
+            <div class="form-grid">
+                <div class="field">
+                    <label>目标物种（密码子使用偏好）</label>
+                    <select id="coSpecies">
+                        <option value="ecoli" selected>大肠杆菌 E. coli（8087 CDS）</option>
+                        <option value="human">人 Homo sapiens（93487 CDS）</option>
+                        <option value="mouse">小鼠 Mus musculus（53036 CDS）</option>
+                        <option value="yeast">酿酒酵母 S. cerevisiae（14411 CDS）</option>
+                        <option value="bsub">枯草芽孢杆菌 B. subtilis（2529 CDS）</option>
+                        <option value="cho">中国仓鼠 CHO / C. griseus（331 CDS）</option>
+                        <option value="ppast">毕赤酵母 P. pastoris（137 CDS）</option>
+                    </select>
+                    <div class="unit">数据源：Kazusa Codon Usage Database（GenBank R160，单位：每千密码子）</div>
+                </div>
+                <div class="field">
+                    <label>追加终止密码子</label>
+                    <select id="coStop">
+                        <option value="auto" selected>自动（该物种最常用终止子）</option>
+                        <option value="TAA">TAA</option>
+                        <option value="TAG">TAG</option>
+                        <option value="TGA">TGA</option>
+                        <option value="none">不追加</option>
+                    </select>
+                    <div class="unit">终止子作为最后一步参与位点/聚聚体约束</div>
+                </div>
+            </div>
+
+            <div style="margin-top:.9rem">
+                <div style="font-size:.8rem;font-weight:600;color:var(--text-2);margin-bottom:.4rem">排除的限制性内切酶位点（点选，可多选；自动同时排除反向互补链）</div>
+                <div class="row" style="margin-top:0;margin-bottom:.45rem">
+                    <button class="btn btn-ghost btn-sm" onclick="coPickCommon()">常用克隆酶(14)</button>
+                    <button class="btn btn-ghost btn-sm" onclick="coPickAll()">全选</button>
+                    <button class="btn btn-ghost btn-sm" onclick="coPickNone()">清空</button>
+                </div>
+                <div class="co-enzymes" id="coEnzymes"></div>
+                <div class="row" style="margin-top:.5rem">
+                    <input type="text" id="coCustomSites" placeholder="自定义位点，逗号分隔（如 GAATTC,GGTCTC,GAGACC）" style="flex:1;min-width:260px;padding:.55rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-family:monospace;font-size:.85rem;background:#fafbfc">
+                </div>
+            </div>
+
+            <div class="form-grid" style="margin-top:.9rem">
+                <div class="field">
+                    <label>GC 窗口下限 (%)</label>
+                    <input type="number" id="coGcMin" value="30" min="0" max="99">
+                </div>
+                <div class="field">
+                    <label>GC 窗口上限 (%)</label>
+                    <input type="number" id="coGcMax" value="70" min="1" max="100">
+                </div>
+                <div class="field">
+                    <label>窗口长度 (nt)</label>
+                    <input type="number" id="coGcWin" value="50" min="20" max="200">
+                </div>
+            </div>
+            <div class="ref-filters" style="margin-top:.7rem;margin-bottom:0">
+                <button class="chip active" id="coHomoChip">避免 ≥5 聚聚体（同碱基连续）</button>
+                <button class="chip" id="coCpGChip">避免 CpG 二核苷酸</button>
+            </div>
+
+            <div class="row" style="margin-top:.9rem">
+                <button class="btn" id="coRunBtn" onclick="runCodonOpt()">⚡ 开始优化</button>
+                <button class="btn btn-green" id="coDlBtn" style="display:none" onclick="downloadOpt()">📥 下载 FASTA</button>
+                <button class="btn btn-ghost btn-sm" onclick="copyOpt()">复制序列</button>
+            </div>
+        </div>
+
+        <div class="card" id="coResultCard" style="display:none">
+            <h2><span class="ico">✅</span>优化结果</h2>
+            <div class="stats" id="coStats"></div>
+            <div id="coValidate" style="margin-top:.8rem"></div>
+            <div style="margin-top:.9rem">
+                <div style="font-size:.8rem;font-weight:600;color:var(--text-2);margin-bottom:.35rem">编码序列（FASTA）</div>
+                <textarea id="coOut" readonly spellcheck="false" style="min-height:130px;font-family:monospace"></textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="ico">📐</span>算法说明（力求主流、可复现）</h2>
+            <div class="formula">
+                <b>目标函数</b>（逐密码子最大化）：<code>score = Σ ln w(cᵢ) − P_位点 − P_聚聚体 − P_GC窗口 − P_CpG</code><br>
+                <b>相对适应度</b>（Sharp &amp; Li 1987 CAI）：<code>w(c) = f(c) / max f(同义密码子)</code>，f 为物种每千密码子频率<br>
+                <b>CAI</b>：<code>exp( mean ln w )</code>，不含终止密码子（值越接近 1 越贴近高表达基因偏好）<br>
+                <b>聚聚体</b>：同一碱基连续 ≥5，每超出 1 个罚 4（自然对数单位）；<b>GC 窗口</b>：滑窗超出 [下限,上限] 罚 <code>200×偏差²</code>，偏离物种编码区 GC 罚 <code>20×偏差²</code>；<b>CpG</b>（可选）每个罚 2<br>
+                <b>搜索</b>：beam search（宽度 60）逐密码子扩展同义候选并按累计得分剪枝；酶切位点为硬约束（当步禁止生成，含反向互补）；结束后对残余位点/聚聚体/GC 违规做局部同义替换修复<br>
+                <b>数据</b>：Kazusa Codon Usage Database（Nakamura et al. <i>NAR</i> 2003），GenBank R160 汇总
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Protein-Analyse · 纯前端离线 PWA · 算法参考 ExPASy ProtParam / Pace 1995 / Kyte-Doolittle 1982 ·
+        浓度公式对照 <a href="https://www.novopro.cn/tools/protein-extinction-coefficient.html" target="_blank" rel="noopener">NovoPro A280 工具</a>
+    </div>
+</div>
+
+<script>
+"use strict";
+
+/* ═══════════════════════════════════════════════════════════
+   常量表 —— 核心算法数据
+   ═══════════════════════════════════════════════════════════ */
+
+// 氨基酸残基平均质量（Da，已扣除一分子水），来源：ExPASy / IUPAC 平均同位素质量
+const AA_MASS = {
+    A: 71.0788,  R: 156.1875, N: 114.1038, D: 115.0886, C: 103.1388,
+    E: 129.1155, Q: 128.1307, G: 57.0519,  H: 137.1411, I: 113.1594,
+    L: 113.1594, K: 128.1741, M: 131.1926, F: 147.1766, P: 97.1167,
+    S: 87.0782,  T: 101.1051, W: 186.2132, Y: 163.1760, V: 99.1326
+};
+const WATER = 18.01528; // H2O 平均质量
+
+// 可电离基团 pKa（Bjellqvist et al. 1993/1994，与 ExPASy ProtParam / Biopython 同源）
+const PKA = {
+    Nterm: 7.5, Cterm: 3.55,
+    C: 9.0, D: 4.05, E: 4.45, H: 5.98,
+    K: 10.0, R: 12.0, Y: 10.0
+};
+// 末端残基依赖的 N 端 / C 端 pKa 覆盖表
+const PKA_NTERM = { A: 7.59, M: 7.0, S: 6.93, P: 8.36, T: 6.82, V: 7.44, E: 7.7 };
+const PKA_CTERM = { D: 4.55, E: 4.75 };
+
+// Kyte-Doolittle 疏水性指数（1982）
+const KD = {
+    A: 1.8,  R: -4.5, N: -3.5, D: -3.5, C: 2.5,
+    Q: -3.5, E: -3.5, G: -0.4, H: -3.2, I: 4.5,
+    L: 3.8,  K: -3.9, M: 1.9,  F: 2.8,  P: -1.6,
+    S: -0.8, T: -0.7, W: -0.9, Y: -1.3, V: 4.2
+};
+
+const AA3 = {
+    A:"Ala",R:"Arg",N:"Asn",D:"Asp",C:"Cys",E:"Glu",Q:"Gln",G:"Gly",
+    H:"His",I:"Ile",L:"Leu",K:"Lys",M:"Met",F:"Phe",P:"Pro",S:"Ser",
+    T:"Thr",W:"Trp",Y:"Tyr",V:"Val"
+};
+
+/* ═══════════════════════════════════════════════════════════
+   序列解析
+   ═══════════════════════════════════════════════════════════ */
+
+function parseSeq(raw) {
+    let lines = String(raw || "").split(/\r?\n/);
+    lines = lines.filter(l => !l.trim().startsWith(">") && !l.trim().startsWith(";") && !l.trim().startsWith("#"));
+    let s = lines.join("").toUpperCase().replace(/[\s\d\-\*\.]/g, "");
+    // 过滤非法字符
+    const bad = s.replace(/[ACDEFGHIKLMNPQRSTVWY]/g, "");
+    s = s.replace(/[^ACDEFGHIKLMNPQRSTVWY]/g, "");
+    return { seq: s, bad };
+}
+
+function getSeq() {
+    const { seq, bad } = parseSeq(document.getElementById("seqInput").value);
+    const err = document.getElementById("errorArea");
+    if (!seq) {
+        err.textContent = "请输入有效的氨基酸序列（至少 1 个残基）。";
+        err.classList.add("show");
+        return null;
+    }
+    if (bad) {
+        err.textContent = "已忽略 " + bad.length + " 个非标准字符：" + [...new Set(bad)].join(" ");
+        err.classList.add("show");
+    } else {
+        err.classList.remove("show");
+    }
+    return seq;
+}
+
+function updateSeqInfo() {
+    const { seq } = parseSeq(document.getElementById("seqInput").value);
+    document.getElementById("seqInfo").textContent = seq ? "长度 " + seq.length + " aa" : "";
+}
+
+/* ═══════════════════════════════════════════════════════════
+   1. 分子量 + pI + 组成
+   ═══════════════════════════════════════════════════════════ */
+
+function molecularWeight(seq) {
+    let mw = WATER; // N 端 H + C 端 OH = H2O
+    for (const aa of seq) mw += AA_MASS[aa] || 0;
+    return mw;
+}
+
+// 净电荷（Henderson-Hasselbalch，末端 pKa 按首/末残基取覆盖值）
+function netCharge(seq, pH) {
+    const pKn = PKA_NTERM[seq[0]] !== undefined ? PKA_NTERM[seq[0]] : PKA.Nterm;
+    const pKc = PKA_CTERM[seq[seq.length - 1]] !== undefined ? PKA_CTERM[seq[seq.length - 1]] : PKA.Cterm;
+    let pos = 0, neg = 0;
+    // 正电荷基团：质子化分数 = 1 / (1 + 10^(pH - pKa))
+    pos += 1 / (1 + Math.pow(10, pH - pKn));
+    let cnt = {};
+    for (const aa of seq) cnt[aa] = (cnt[aa] || 0) + 1;
+    pos += (cnt.H || 0) / (1 + Math.pow(10, pH - PKA.H));
+    pos += (cnt.K || 0) / (1 + Math.pow(10, pH - PKA.K));
+    pos += (cnt.R || 0) / (1 + Math.pow(10, pH - PKA.R));
+    // 负电荷基团：去质子化分数 = 1 / (1 + 10^(pKa - pH))
+    neg += 1 / (1 + Math.pow(10, pKc - pH));
+    neg += (cnt.C || 0) / (1 + Math.pow(10, PKA.C - pH));
+    neg += (cnt.D || 0) / (1 + Math.pow(10, PKA.D - pH));
+    neg += (cnt.E || 0) / (1 + Math.pow(10, PKA.E - pH));
+    neg += (cnt.Y || 0) / (1 + Math.pow(10, PKA.Y - pH));
+    return pos - neg;
+}
+
+// 二分法求 pI（电荷 = 0）
+function isoelectricPoint(seq) {
+    let lo = 0, hi = 14;
+    for (let i = 0; i < 80; i++) {
+        const mid = (lo + hi) / 2;
+        if (netCharge(seq, mid) > 0) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
+
+let lastBasic = null;
+
+function calcBasic() {
+    const seq = getSeq();
+    if (!seq) return;
+    const mw = molecularWeight(seq);
+    const pI = isoelectricPoint(seq);
+    const cnt = {};
+    for (const aa of seq) cnt[aa] = (cnt[aa] || 0) + 1;
+    lastBasic = { seq, mw, pI, cnt };
+
+    const stats = document.getElementById("basicStats");
+    stats.style.display = "grid";
+    stats.innerHTML =
+        '<div class="stat"><b>' + seq.length + '</b><span>氨基酸数 (aa)</span></div>' +
+        '<div class="stat green"><b>' + mw.toFixed(2) + '</b><span>分子量 MW (Da)</span></div>' +
+        '<div class="stat orange"><b>' + pI.toFixed(3) + '</b><span>等电点 pI</span></div>' +
+        '<div class="stat purple"><b>' + (mw / 1000).toFixed(2) + '</b><span>MW (kDa)</span></div>';
+
+    // 组成表
+    const order = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b));
+    let html = '<thead><tr><th>氨基酸</th><th>三字母</th><th>数量</th><th>占比 (%)</th><th>残基质量 (Da)</th><th>贡献 (Da)</th></tr></thead><tbody>';
+    for (const aa of order) {
+        const p = cnt[aa] / seq.length * 100;
+        html += '<tr><td><b>' + aa + '</b></td><td>' + AA3[aa] + '</td><td class="num">' + cnt[aa] +
+            '</td><td class="num">' + p.toFixed(1) + '</td><td class="num">' + AA_MASS[aa].toFixed(4) +
+            '</td><td class="num">' + (AA_MASS[aa] * cnt[aa]).toFixed(2) + '</td></tr>';
+    }
+    html += '</tbody>';
+    document.getElementById("aaTable").innerHTML = html;
+    document.getElementById("basicAA").style.display = "block";
+}
+
+function copyStats() {
+    if (!lastBasic) return;
+    const txt = "序列长度: " + lastBasic.seq.length + " aa\n分子量: " +
+        lastBasic.mw.toFixed(2) + " Da (" + (lastBasic.mw / 1000).toFixed(2) + " kDa)\npI: " +
+        lastBasic.pI.toFixed(3);
+    navigator.clipboard.writeText(txt).then(() => alert("已复制"));
+}
+
+/* ═══════════════════════════════════════════════════════════
+   2. KD 疏水性
+   ═══════════════════════════════════════════════════════════ */
+
+function kdColor(v) {
+    // −4.5(蓝) → 0(白) → +4.5(红)
+    const t = Math.max(-1, Math.min(1, v / 4.5));
+    if (t >= 0) {
+        const a = t;
+        return "rgb(" + Math.round(248 + (220 - 248) * a) + "," +
+            Math.round(250 + (38 - 250) * a) + "," +
+            Math.round(252 + (38 - 252) * a) + ")";
+    } else {
+        const a = -t;
+        return "rgb(" + Math.round(248 + (37 - 248) * a) + "," +
+            Math.round(250 + (99 - 250) * a) + "," +
+            Math.round(252 + (235 - 252) * a) + ")";
+    }
+}
+
+function calcKD() {
+    const seq = getSeq();
+    if (!seq) return;
+    let w = parseInt(document.getElementById("kdWindow").value, 10) || 9;
+    if (w < 1) w = 1;
+    if (w % 2 === 0) w += 1; // 强制奇数
+    if (w > seq.length) w = seq.length % 2 === 1 ? seq.length : Math.max(1, seq.length - 1);
+    document.getElementById("kdWindow").value = w;
+
+    // 逐残基 KD
+    const per = [...seq].map(a => KD[a] || 0);
+    const avg = per.reduce((s, v) => s + v, 0) / per.length;
+    const max = Math.max(...per), min = Math.min(...per);
+
+    // 窗口平均
+    const win = [];
+    const half = Math.floor(w / 2);
+    for (let i = 0; i < per.length; i++) {
+        let s = 0, n = 0;
+        for (let j = Math.max(0, i - half); j <= Math.min(per.length - 1, i + half); j++) {
+            s += per[j]; n++;
+        }
+        win.push(s / n);
+    }
+    const winMax = Math.max(...win), winMin = Math.min(...win);
+    const hydrophobicFrac = per.filter(v => v > 0).length / per.length * 100;
+
+    const stats = document.getElementById("kdStats");
+    stats.style.display = "grid";
+    stats.innerHTML =
+        '<div class="stat"><b>' + avg.toFixed(3) + '</b><span>平均 KD（全序列）</span></div>' +
+        '<div class="stat green"><b>' + winMax.toFixed(3) + '</b><span>窗口峰值（窗口=' + w + '）</span></div>' +
+        '<div class="stat orange"><b>' + winMin.toFixed(3) + '</b><span>窗口谷值</span></div>' +
+        '<div class="stat purple"><b>' + hydrophobicFrac.toFixed(1) + '%</b><span>疏水残基占比 (KD&gt;0)</span></div>';
+
+    // 热图条
+    const strip = document.getElementById("hydroStrip");
+    strip.innerHTML = "";
+    const step = seq.length > 300 ? Math.ceil(seq.length / 300) : 1; // 超长序列抽样
+    for (let i = 0; i < seq.length; i += step) {
+        const v = per[i];
+        const cell = document.createElement("div");
+        cell.className = "hydro-cell";
+        cell.style.background = kdColor(v);
+        cell.title = "pos " + (i + 1) + " " + seq[i] + " (" + AA3[seq[i]] + ") KD=" + v.toFixed(1);
+        if (step === 1 && seq.length <= 120) cell.textContent = seq[i];
+        strip.appendChild(cell);
+    }
+    document.getElementById("hydroWrap").style.display = "block";
+
+    // 窗口折线图（SVG）
+    drawWinChart(win, w, seq.length, winMax, winMin);
+    document.getElementById("winChart").style.display = "block";
+}
+
+function drawWinChart(win, w, len, winMax, winMin) {
+    const W = 900, H = 200, padL = 46, padR = 12, padT = 14, padB = 28;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const lo = Math.min(winMin, 0), hi = Math.max(winMax, 0);
+    const range = (hi - lo) || 1;
+    const x = i => padL + (len <= 1 ? iw / 2 : i / (len - 1) * iw);
+    const y = v => padT + ih - (v - lo) / range * ih;
+    let path = "";
+    win.forEach((v, i) => { path += (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1) + " "; });
+    // 零线
+    const y0 = y(0);
+    // 刻度
+    let ticks = "";
+    const nT = 4;
+    for (let t = 0; t <= nT; t++) {
+        const v = lo + range * t / nT;
+        const yy = y(v);
+        ticks += '<line x1="' + padL + '" y1="' + yy + '" x2="' + (W - padR) + '" y2="' + yy +
+            '" stroke="#eef1f5" stroke-width="1"/>' +
+            '<text class="axis-label" x="' + (padL - 6) + '" y="' + (yy + 3) + '" text-anchor="end">' + v.toFixed(1) + '</text>';
+    }
+    let xticks = "";
+    const stepX = Math.max(1, Math.floor(len / 8));
+    for (let i = 0; i < len; i += stepX) {
+        xticks += '<text class="axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + (i + 1) + '</text>';
+    }
+    document.getElementById("winChart").innerHTML =
+        '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+        ticks + xticks +
+        '<line x1="' + padL + '" y1="' + y0 + '" x2="' + (W - padR) + '" y2="' + y0 +
+        '" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="4 3"/>' +
+        '<path d="' + path + '" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linejoin="round"/>' +
+        '<text class="axis-label" x="' + (W / 2) + '" y="' + (H - 1) + '" text-anchor="middle">残基位置</text>' +
+        '</svg>' +
+        '<div class="hint" style="text-align:center">窗口 = ' + w + ' 的 KD 平均疏水性剖面（虚线 = KD 0）</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   3. A280 消光系数 / 浓度
+   ═══════════════════════════════════════════════════════════ */
+
+function extinctionCoefficient(seq, ssMode) {
+    let nW = 0, nY = 0, nC = 0;
+    for (const aa of seq) {
+        if (aa === "W") nW++;
+        else if (aa === "Y") nY++;
+        else if (aa === "C") nC++;
+    }
+    // Cystine = 形成的二硫键对数
+    const nCystine = ssMode === "all" ? Math.floor(nC / 2) : 0;
+    const eps = nW * 5500 + nY * 1490 + nCystine * 125;
+    return { eps, nW, nY, nC, nCystine };
+}
+
+let lastA280 = null;
+
+function calcA280() {
+    const seq = getSeq();
+    if (!seq) return;
+    const A = parseFloat(document.getElementById("a280Val").value);
+    const l = parseFloat(document.getElementById("pathLen").value);
+    const ssMode = document.getElementById("ssMode").value;
+    const err = document.getElementById("errorArea");
+    if (!(A >= 0) || !(l > 0)) {
+        err.textContent = "A280 必须 ≥ 0，光程必须 > 0。";
+        err.classList.add("show");
+        return;
+    }
+    err.classList.remove("show");
+
+    const mw = molecularWeight(seq);
+    const { eps, nW, nY, nC, nCystine } = extinctionCoefficient(seq, ssMode);
+    const cMol = A / (eps * l);           // mol/L
+    const cMgMl = A * mw / (eps * l);     // mg/mL（= g/L）
+    const cUgUul = cMgMl;                // mg/mL ≡ μg/μL 数值相同
+    const abs1mg = eps / mw;              // A280 of 1 mg/mL, 1 cm
+    lastA280 = { eps, mw, cMol, cMgMl };
+
+    const stats = document.getElementById("a280Stats");
+    stats.style.display = "grid";
+    stats.innerHTML =
+        '<div class="stat"><b>' + eps.toLocaleString() + '</b><span>ε₂₈₀ (M⁻¹cm⁻¹)</span></div>' +
+        '<div class="stat green"><b>' + cMgMl.toFixed(4) + '</b><span>浓度 (mg/mL)</span></div>' +
+        '<div class="stat orange"><b>' + (cMol * 1e3).toFixed(4) + '</b><span>浓度 (mM)</span></div>' +
+        '<div class="stat purple"><b>' + (cMol * 1e6).toFixed(2) + '</b><span>浓度 (μM)</span></div>' +
+        '<div class="stat"><b>' + abs1mg.toFixed(4) + '</b><span>A280 (1 mg/mL)</span></div>' +
+        '<div class="stat green"><b>' + nW + ' / ' + nY + ' / ' + nCystine + '</b><span>Trp / Tyr / Cystine</span></div>' +
+        '<div class="stat orange"><b>' + cUgUul.toFixed(4) + '</b><span>μg/μL</span></div>' +
+        '<div class="stat purple"><b>' + (cMgMl * l).toFixed(4) + '</b><span>A₂₈₀·l 校正 (mg·cm/mL)</span></div>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   4. 摩尔换算
+   ═══════════════════════════════════════════════════════════ */
+
+function calcMolar() {
+    const err = document.getElementById("errorArea");
+    const mwIn = parseFloat(document.getElementById("mwInput").value);
+    const seq = parseSeq(document.getElementById("seqInput").value).seq;
+    let mw = mwIn > 0 ? mwIn : (seq ? molecularWeight(seq) : 0);
+    if (!mw || mw <= 0) {
+        err.textContent = "请提供分子量（输入序列自动计算，或手动填写 MW）。";
+        err.classList.add("show");
+        return;
+    }
+    err.classList.remove("show");
+
+    const volMl = parseFloat(document.getElementById("volMl").value) || 0;
+    const concIn = parseFloat(document.getElementById("concMgMl").value);
+    const massIn = parseFloat(document.getElementById("massG").value);
+
+    let massG, concMgMl;
+    if (concIn > 0) {
+        // 由质量浓度反推质量
+        concMgMl = concIn;
+        massG = concMgMl * volMl; // mg/mL × mL = mg → /1000 g
+        massG = massG / 1000;
+    } else if (massIn >= 0) {
+        massG = massIn;
+        concMgMl = volMl > 0 ? (massG * 1000) / volMl : 0; // g→mg / mL
+    } else {
+        err.textContent = "请填写质量或质量浓度。";
+        err.classList.add("show");
+        return;
+    }
+
+    const nMol = massG / mw;                 // mol
+    const volL = volMl / 1000;               // L
+    const cMolL = volL > 0 ? nMol / volL : 0;
+    const cUgMl = concMgMl * 1000;           // μg/mL
+    const nMolecules = nMol * 6.02214076e23; // Avogadro
+
+    const stats = document.getElementById("molarStats");
+    stats.style.display = "grid";
+    stats.innerHTML =
+        '<div class="stat"><b>' + (nMol * 1e9).toFixed(4) + '</b><span>分子的量 (nmol)</span></div>' +
+        '<div class="stat green"><b>' + (nMol * 1e12).toFixed(4) + '</b><span>分子的量 (pmol)</span></div>' +
+        '<div class="stat orange"><b>' + (cMolL * 1e3).toFixed(5) + '</b><span>摩尔浓度 (mM)</span></div>' +
+        '<div class="stat purple"><b>' + (cMolL * 1e6).toFixed(3) + '</b><span>摩尔浓度 (μM)</span></div>' +
+        '<div class="stat"><b>' + massG.toExponential(4) + '</b><span>质量 (g)</span></div>' +
+        '<div class="stat green"><b>' + (massG * 1e6).toFixed(2) + '</b><span>质量 (μg)</span></div>' +
+        '<div class="stat orange"><b>' + concMgMl.toFixed(4) + '</b><span>质量浓度 (mg/mL)</span></div>' +
+        '<div class="stat purple"><b>' + cUgMl.toFixed(4) + '</b><span>质量浓度 (μg/mL)</span></div>' +
+        '<div class="stat"><b>' + nMolecules.toExponential(3) + '</b><span>分子数 (个)</span></div>' +
+        '<div class="stat green"><b>' + mw.toFixed(2) + '</b><span>使用的 MW (Da)</span></div>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UI
+   ═══════════════════════════════════════════════════════════ */
+
+document.querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+    });
+});
+
+function loadExample() {
+    document.getElementById("seqInput").value =
+        ">human_preproinsulin\n" +
+        "MALWMRLLPLLALLALWGPDPAAAFVNQHLCGSHLVEALYLVCGERGFFYTPKT\n" +
+        "RREAEDLQVGQVELGGGPGAGSLQPLALEGSLQKRGIVEQCCTSICSLYQLENYCN";
+    updateSeqInfo();
+}
+
+function clearSeq() {
+    document.getElementById("seqInput").value = "";
+    updateSeqInfo();
+    document.getElementById("errorArea").classList.remove("show");
+    ["basicStats", "kdStats", "a280Stats", "molarStats"].forEach(id => {
+        document.getElementById(id).style.display = "none";
+    });
+    document.getElementById("basicAA").style.display = "none";
+    document.getElementById("hydroWrap").style.display = "none";
+    document.getElementById("winChart").style.display = "none";
+}
+
+document.getElementById("seqInput").addEventListener("input", updateSeqInfo);
+
+// 自动计算（输入后按需触发）
+["a280Val", "pathLen", "ssMode"].forEach(id => {
+    document.getElementById(id).addEventListener("change", () => {
+        if (parseSeq(document.getElementById("seqInput").value).seq) calcA280();
+    });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   5. 参考手册（遗传密码子 / 氨基酸性质 / 简并碱基）
+   ═══════════════════════════════════════════════════════════ */
+
+// 标准遗传密码（NCBI transl_table=1），UAA/UAG/UGA 为终止
+const CODON_MAP = {
+    UUU:"F", UUC:"F", UUA:"L", UUG:"L",
+    UCU:"S", UCC:"S", UCA:"S", UCG:"S",
+    UAU:"Y", UAC:"Y", UAA:"*", UAG:"*",
+    UGU:"C", UGC:"C", UGA:"*", UGG:"W",
+    CUU:"L", CUC:"L", CUA:"L", CUG:"L",
+    CCU:"P", CCC:"P", CCA:"P", CCG:"P",
+    CAU:"H", CAC:"H", CAA:"Q", CAG:"Q",
+    CGU:"R", CGC:"R", CGA:"R", CGG:"R",
+    AUU:"I", AUC:"I", AUA:"I", AUG:"M",
+    ACU:"T", ACC:"T", ACA:"T", ACG:"T",
+    AAU:"N", AAC:"N", AAA:"K", AAG:"K",
+    AGU:"S", AGC:"S", AGA:"R", AGG:"R",
+    GUU:"V", GUC:"V", GUA:"V", GUG:"V",
+    GCU:"A", GCC:"A", GCA:"A", GCG:"A",
+    GAU:"D", GAC:"D", GAA:"E", GAG:"E",
+    GGU:"G", GGC:"G", GGA:"G", GGG:"G"
+};
+
+// 20 种氨基酸完整性质（分子式为游离氨基酸形式）
+const AA_DATA = {
+    A: {name:"Alanine",      zh:"丙氨酸",   three:"Ala", formula:"C3H7NO2",    type:"nonpolar", desc:"非极性，小侧链"},
+    R: {name:"Arginine",     zh:"精氨酸",   three:"Arg", formula:"C6H14N4O2",  type:"basic",    desc:"碱性，胍基带正电"},
+    N: {name:"Asparagine",   zh:"天冬酰胺", three:"Asn", formula:"C4H8N2O3",   type:"polar",    desc:"极性非带电，酰胺"},
+    D: {name:"Aspartate",    zh:"天冬氨酸", three:"Asp", formula:"C4H7NO4",    type:"acidic",   desc:"酸性，羧基带负电"},
+    C: {name:"Cysteine",     zh:"半胱氨酸", three:"Cys", formula:"C3H7NO2S",   type:"polar",    desc:"极性，巯基可形成二硫键"},
+    E: {name:"Glutamate",    zh:"谷氨酸",   three:"Glu", formula:"C5H9NO4",    type:"acidic",   desc:"酸性，羧基带负电"},
+    Q: {name:"Glutamine",    zh:"谷氨酰胺", three:"Gln", formula:"C5H10N2O3",  type:"polar",    desc:"极性非带电，酰胺"},
+    G: {name:"Glycine",      zh:"甘氨酸",   three:"Gly", formula:"C2H5NO2",    type:"nonpolar", desc:"非极性，最小侧链(H)"},
+    H: {name:"Histidine",    zh:"组氨酸",   three:"His", formula:"C6H9N3O2",   type:"basic",    desc:"碱性，咪唑基，pKa≈6，近中性可质子化"},
+    I: {name:"Isoleucine",   zh:"异亮氨酸", three:"Ile", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链"},
+    L: {name:"Leucine",      zh:"亮氨酸",   three:"Leu", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链"},
+    K: {name:"Lysine",       zh:"赖氨酸",   three:"Lys", formula:"C6H14N2O2",  type:"basic",    desc:"碱性，氨基带正电"},
+    M: {name:"Methionine",   zh:"甲硫氨酸", three:"Met", formula:"C5H11NO2S",  type:"nonpolar", desc:"非极性，含硫；起始密码子 AUG 对应"},
+    F: {name:"Phenylalanine",zh:"苯丙氨酸", three:"Phe", formula:"C9H11NO2",   type:"nonpolar", desc:"非极性，芳香族"},
+    P: {name:"Proline",      zh:"脯氨酸",   three:"Pro", formula:"C5H9NO2",    type:"nonpolar", desc:"非极性，亚氨基酸，破坏α螺旋"},
+    S: {name:"Serine",       zh:"丝氨酸",   three:"Ser", formula:"C3H7NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化"},
+    T: {name:"Threonine",    zh:"苏氨酸",   three:"Thr", formula:"C4H9NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化"},
+    W: {name:"Tryptophan",   zh:"色氨酸",   three:"Trp", formula:"C11H12N2O2", type:"nonpolar", desc:"非极性，芳香族，最大侧链，A280 贡献最大"},
+    Y: {name:"Tyrosine",     zh:"酪氨酸",   three:"Tyr", formula:"C9H11NO3",   type:"polar",    desc:"极性弱，酚羟基，可磷酸化，A280 有贡献"},
+    V: {name:"Valine",       zh:"缬氨酸",   three:"Val", formula:"C5H11NO2",   type:"nonpolar", desc:"非极性，支链"}
+};
+
+const TYPE_LABEL = { nonpolar:"非极性 / 疏水", polar:"极性非带电", acidic:"酸性", basic:"碱性" };
+
+// 氨基酸颜色（密码子表着色）
+const AA_COLOR = {
+    A:"#8b5cf6", R:"#16a34a", N:"#14b8a6", D:"#dc2626", C:"#0891b2",
+    E:"#ef4444", Q:"#0d9488", G:"#64748b", H:"#f59e0b", I:"#22c55e",
+    L:"#7c3aed", K:"#15803d", M:"#6366f1", F:"#a855f7", P:"#06b6d4",
+    S:"#f59e0b", T:"#84cc16", W:"#4f46e5", Y:"#eab308", V:"#10b981",
+    "*":"#94a3b8"
+};
+
+// IUPAC 简并碱基符号（DNA；RNA 中 T→U）
+const DEGEN = [
+    {sym:"A", bases:"A",   zh:"腺嘌呤",  note:"A"},
+    {sym:"C", bases:"C",   zh:"胞嘧啶",  note:"C"},
+    {sym:"G", bases:"G",   zh:"鸟嘌呤",  note:"G"},
+    {sym:"T", bases:"T",   zh:"胸腺嘧啶", note:"DNA 中 T；RNA 中为 U"},
+    {sym:"U", bases:"U",   zh:"尿嘧啶",  note:"RNA 中 U；DNA 中为 T"},
+    {sym:"R", bases:"A/G", zh:"嘌呤",    note:"A 或 G（purine）"},
+    {sym:"Y", bases:"C/T", zh:"嘧啶",    note:"C 或 T（pyrimidine）"},
+    {sym:"S", bases:"G/C", zh:"强碱基",  note:"G 或 C（3 个氢键，Strong）"},
+    {sym:"W", bases:"A/T", zh:"弱碱基",  note:"A 或 T（2 个氢键，Weak）"},
+    {sym:"K", bases:"G/T", zh:"酮基",    note:"G 或 T（Keto）"},
+    {sym:"M", bases:"A/C", zh:"氨基",    note:"A 或 C（amino）"},
+    {sym:"B", bases:"C/G/T", zh:"非 A",  note:"除 A 外的任一（not A）"},
+    {sym:"D", bases:"A/G/T", zh:"非 C",  note:"除 C 外的任一（not C）"},
+    {sym:"H", bases:"A/C/T", zh:"非 G",  note:"除 G 外的任一（not G）"},
+    {sym:"V", bases:"A/C/G", zh:"非 T",  note:"除 T/U 外的任一（not T）"},
+    {sym:"N", bases:"A/C/G/T", zh:"任意", note:"任一碱基（any）"}
+];
+
+function renderCodon(query) {
+    const q = (query || "").toUpperCase();
+    const B = ["U", "C", "A", "G"];
+    let blocks = "";
+    for (const x of B) {
+        // 该行编码的氨基酸集合（用于标题提示）
+        const aas = [];
+        for (const y of B) for (const z of B) {
+            const aa = CODON_MAP[x + y + z];
+            const name = aa === "*" ? "终止" : (AA_DATA[aa] ? AA_DATA[aa].three + " " + AA_DATA[aa].zh : aa);
+            if (!aas.includes(name)) aas.push(name);
+        }
+        let cells = '<div class="sec-head">第 2 位 →</div>';
+        for (const y of B) cells += '<div class="sec-head">' + y + "</div>";
+        for (const y of B) for (const z of B) {
+            const c = x + y + z;
+            const aa = CODON_MAP[c];
+            const color = AA_COLOR[aa] || "#94a3b8";
+            const isStop = aa === "*";
+            const isStart = c === "AUG";
+            const d = AA_DATA[aa];
+            const hit = q && (c.includes(q) || aa === q ||
+                (d && (d.three.toUpperCase().includes(q) || d.zh.includes(q) || d.name.toUpperCase().includes(q))));
+            const dim = q && !hit ? "opacity:.15;" : "";
+            const title = c + " → " + (isStop ? "终止密码子" : aa + (d ? "（" + d.three + " " + d.zh + "）" : "")) +
+                (isStart ? "；起始密码子" : "");
+            cells += '<div class="codon-cell' + (isStop ? " stop" : "") + '" style="background:' + color + ';' + dim + '" title="' + title + '">' +
+                '<span class="tri">' + c + '</span>' +
+                '<span class="aa">' + (isStop ? "Stop" : aa) + (isStart ? "★" : "") + '</span></div>';
+        }
+        blocks += '<div class="codon-block">' +
+            '<div class="codon-block-title">第 1 位 = <b style="color:var(--primary)">' + x + '</b>　编码：' + aas.join("、") + '</div>' +
+            '<div class="codon-scroll"><div class="codon-grid">' + cells + '</div></div></div>';
+    }
+    document.getElementById("ref-codon").innerHTML =
+        '<div class="hint" style="margin-top:0">共 64 个密码子：20 种氨基酸 + 3 个终止（UAA/UAG/UGA）；<b>★AUG</b> 为起始密码子（甲硫氨酸）。搜索时非匹配项淡显。</div>' +
+        blocks +
+        '<div class="codon-legend">' + Object.keys(AA_COLOR).map(aa => {
+            const name = aa === "*" ? "终止" : (AA_DATA[aa] ? aa + " " + AA_DATA[aa].three + " " + AA_DATA[aa].zh : aa);
+            return '<span><span class="legend-swatch" style="background:' + AA_COLOR[aa] + '"></span>' + name + '</span>';
+        }).join("") + '</div>';
+}
+
+function renderAA(query, filter) {
+    const q = (query || "").toLowerCase();
+    const order = ["G","A","V","L","I","M","F","W","P","S","T","C","Y","N","Q","D","E","K","R","H"];
+    let rows = "";
+    for (const aa of order) {
+        const d = AA_DATA[aa];
+        if (filter && filter !== "all" && d.type !== filter) continue;
+        const text = (aa + " " + d.three + " " + d.zh + " " + d.name + " " + d.formula + " " + d.desc).toLowerCase();
+        if (q && !text.includes(q)) continue;
+        const color = AA_COLOR[aa];
+        rows += '<tr>' +
+            '<td><span style="display:inline-block;width:22px;height:22px;border-radius:6px;background:' + color + ';color:#fff;text-align:center;line-height:22px;font-weight:700">' + aa + '</span></td>' +
+            '<td style="font-family:monospace;font-weight:600">' + d.three + '</td>' +
+            '<td><b>' + d.zh + '</b></td>' +
+            '<td>' + d.name + '</td>' +
+            '<td style="font-family:monospace">' + d.formula + '</td>' +
+            '<td>' + TYPE_LABEL[d.type] + '</td>' +
+            '<td style="font-size:.78rem;color:var(--text-2)">' + d.desc + '</td>' +
+            '</tr>';
+    }
+    document.getElementById("ref-aa").innerHTML =
+        '<div class="hint" style="margin-top:0">分子式为游离氨基酸形式（肽链中脱水成残基）。分组顺序：非极性 → 极性非带电 → 酸性 → 碱性。' +
+        (rows ? "" : '<b style="color:var(--red)">无匹配项</b>') + '</div>' +
+        '<table class="ref-table"><thead><tr><th>1 字母</th><th>3 字母</th><th>中文名</th><th>英文名</th><th>分子式</th><th>极性 / 酸碱</th><th>性质说明</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function renderDegen(query) {
+    const q = (query || "").toUpperCase();
+    let rows = "";
+    for (const d of DEGEN) {
+        const text = (d.sym + " " + d.bases + " " + d.zh + " " + d.note).toUpperCase();
+        if (q && !text.includes(q)) continue;
+        rows += '<tr>' +
+            '<td style="font-size:1.1rem;font-weight:700;font-family:monospace">' + d.sym + '</td>' +
+            '<td style="font-family:monospace;font-weight:600">' + d.bases + '</td>' +
+            '<td><b>' + d.zh + '</b></td>' +
+            '<td style="font-size:.8rem">' + d.note + '</td>' +
+            '</tr>';
+    }
+    // 举例：用简并碱基翻译
+    document.getElementById("ref-degen").innerHTML =
+        '<div class="hint" style="margin-top:0">IUPAC 碱基歧义代码。示例：引物 <code>ATGAA(N)NNNTGG</code> 中 N 表示任意碱基；<code>GGN</code> 可编码所有甘氨酸密码子。</div>' +
+        '<table class="ref-table"><thead><tr><th>符号</th><th>所含碱基</th><th>中文名</th><th>含义 / 备注</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<div class="hint">提示：两两简并可组合，如 <code>BN</code> = 非 A 且第二位任意；设计引物时简并度 = 各位点碱基数之积。</div>';
+}
+
+function refreshRef() {
+    const q = document.getElementById("refSearch").value.trim();
+    const filterEl = document.querySelector(".ref-filters .chip.active");
+    const filter = filterEl ? filterEl.dataset.filter : "all";
+    const sub = document.querySelector(".ref-subtab.active");
+    const cur = sub ? sub.dataset.sub : "codon";
+    if (cur === "codon") renderCodon(q);
+    else if (cur === "aa") renderAA(q, filter);
+    else renderDegen(q);
+}
+
+/* ── 参考手册交互 ── */
+document.querySelectorAll(".ref-subtab").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".ref-subtab").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".ref-subpanel").forEach(p => { p.style.display = "none"; p.classList.remove("active"); });
+        btn.classList.add("active");
+        const el = document.getElementById("ref-" + btn.dataset.sub);
+        el.style.display = "block";
+        el.classList.add("active");
+        refreshRef();
+    });
+});
+document.querySelectorAll(".ref-filters .chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".ref-filters .chip").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        refreshRef();
+    });
+});
+document.getElementById("refSearch").addEventListener("input", refreshRef);
+
+// 初始渲染
+renderCodon("");
+renderAA("", "all");
+renderDegen("");
+
+/* ═══════════════════════════════════════════════════════════
+   6. 密码子优化
+   数据源：Kazusa Codon Usage Database（GenBank R160，每千密码子频率）
+   ═══════════════════════════════════════════════════════════ */
+
+const SPECIES = {
+    ecoli: { label: "E. coli", cds: 8087, gc: 47.30, freq: {
+        UUU:24.4,UCU:13.1,UAU:21.6,UGU:5.9, UUC:13.9,UCC:9.7, UAC:11.7,UGC:5.5,
+        UUA:17.4,UCA:13.1,UAA:2.0,UGA:1.1, UUG:12.9,UCG:8.2, UAG:0.3, UGG:13.4,
+        CUU:14.5,CCU:9.5, CAU:12.4,CGU:15.9, CUC:9.5, CCC:6.2, CAC:7.3, CGC:14.0,
+        CUA:5.6, CCA:9.1, CAA:14.4,CGA:4.8, CUG:37.4,CCG:14.5,CAG:26.7,CGG:7.9,
+        AUU:29.6,ACU:13.1,AAU:29.3,AGU:13.2, AUC:19.4,ACC:18.9,AAC:20.3,AGC:14.3,
+        AUA:13.3,ACA:15.1,AAA:37.2,AGA:7.1, AUG:23.7,ACG:13.6,AAG:15.3,AGG:4.0,
+        GUU:21.6,GCU:18.9,GAU:33.7,GGU:23.7, GUC:13.1,GCC:21.6,GAC:17.9,GGC:20.6,
+        GUA:13.1,GCA:23.0,GAA:35.1,GGA:13.6, GUG:19.9,GCG:21.1,GAG:19.4,GGG:12.3 }},
+    human: { label: "H. sapiens", cds: 93487, gc: 52.27, freq: {
+        UUU:17.6,UCU:15.2,UAU:12.2,UGU:10.6, UUC:20.3,UCC:17.7,UAC:15.3,UGC:12.6,
+        UUA:7.7, UCA:12.2,UAA:1.0,UGA:1.6, UUG:12.9,UCG:4.4, UAG:0.8, UGG:13.2,
+        CUU:13.2,CCU:17.5,CAU:10.9,CGU:4.5, CUC:19.6,CCC:19.8,CAC:15.1,CGC:10.4,
+        CUA:7.2, CCA:16.9,CAA:12.3,CGA:6.2, CUG:39.6,CCG:6.9, CAG:34.2,CGG:11.4,
+        AUU:16.0,ACU:13.1,AAU:17.0,AGU:12.1, AUC:20.8,ACC:18.9,AAC:19.1,AGC:19.5,
+        AUA:7.5, ACA:15.1,AAA:24.4,AGA:12.2, AUG:22.0,ACG:6.1, AAG:31.9,AGG:12.0,
+        GUU:11.0,GCU:18.4,GAU:21.8,GGU:10.8, GUC:14.5,GCC:27.7,GAC:25.1,GGC:22.2,
+        GUA:7.1, GCA:15.8,GAA:29.0,GGA:16.5, GUG:28.1,GCG:7.4, GAG:39.6,GGG:16.5 }},
+    mouse: { label: "M. musculus", cds: 53036, gc: 52.03, freq: {
+        UUU:17.2,UCU:16.2,UAU:12.2,UGU:11.4, UUC:21.8,UCC:18.1,UAC:16.1,UGC:12.3,
+        UUA:6.7, UCA:11.8,UAA:1.0,UGA:1.6, UUG:13.4,UCG:4.2, UAG:0.8, UGG:12.5,
+        CUU:13.4,CCU:18.4,CAU:10.6,CGU:4.7, CUC:20.2,CCC:18.2,CAC:15.3,CGC:9.4,
+        CUA:8.1, CCA:17.3,CAA:12.0,CGA:6.6, CUG:39.5,CCG:6.2, CAG:34.1,CGG:10.2,
+        AUU:15.4,ACU:13.7,AAU:15.6,AGU:12.7, AUC:22.5,ACC:19.0,AAC:20.3,AGC:19.7,
+        AUA:7.4, ACA:16.0,AAA:21.9,AGA:12.1, AUG:22.8,ACG:5.6, AAG:33.6,AGG:12.2,
+        GUU:10.7,GCU:20.0,GAU:21.0,GGU:11.4, GUC:15.4,GCC:26.0,GAC:26.0,GGC:21.2,
+        GUA:7.4, GCA:15.8,GAA:27.0,GGA:16.8, GUG:28.4,GCG:6.4, GAG:39.4,GGG:15.2 }},
+    yeast: { label: "S. cerevisiae", cds: 14411, gc: 39.77, freq: {
+        UUU:26.1,UCU:23.5,UAU:18.8,UGU:8.1, UUC:18.4,UCC:14.2,UAC:14.8,UGC:4.8,
+        UUA:26.2,UCA:18.7,UAA:1.1,UGA:0.7, UUG:27.2,UCG:8.6, UAG:0.5, UGG:10.4,
+        CUU:12.3,CCU:13.5,CAU:13.6,CGU:6.4, CUC:5.4, CCC:6.8, CAC:7.8, CGC:2.6,
+        CUA:13.4,CCA:18.3,CAA:27.3,CGA:3.0, CUG:10.5,CCG:5.3, CAG:12.1,CGG:1.7,
+        AUU:30.1,ACU:20.3,AAU:35.7,AGU:14.2, AUC:17.2,ACC:12.7,AAC:24.8,AGC:9.8,
+        AUA:17.8,ACA:17.8,AAA:41.9,AGA:21.3, AUG:20.9,ACG:8.0, AAG:30.8,AGG:9.2,
+        GUU:22.1,GCU:21.2,GAU:37.6,GGU:23.9, GUC:11.8,GCC:12.6,GAC:20.2,GGC:9.8,
+        GUA:11.8,GCA:16.2,GAA:45.6,GGA:10.9, GUG:10.8,GCG:6.2, GAG:19.2,GGG:6.0 }},
+    bsub: { label: "B. subtilis", cds: 2529, gc: 44.36, freq: {
+        UUU:30.0,UCU:12.7,UAU:23.3,UGU:3.6, UUC:14.3,UCC:8.3, UAC:12.6,UGC:4.3,
+        UUA:19.8,UCA:14.6,UAA:1.9,UGA:0.8, UUG:15.8,UCG:6.5, UAG:0.5, UGG:10.7,
+        CUU:21.8,CCU:10.6,CAU:15.7,CGU:7.2, CUC:10.7,CCC:3.5, CAC:7.5, CGC:8.2,
+        CUA:4.9, CCA:7.1, CAA:20.4,CGA:4.3, CUG:23.0,CCG:16.3,CAG:18.5,CGG:6.9,
+        AUU:36.2,ACU:8.7, AAU:22.9,AGU:6.8, AUC:27.2,ACC:9.0, AAC:17.8,AGC:14.4,
+        AUA:9.8, ACA:21.6,AAA:48.4,AGA:10.5, AUG:26.3,ACG:14.9,AAG:20.8,AGG:4.1,
+        GUU:18.6,GCU:18.6,GAU:33.2,GGU:13.0, GUC:17.3,GCC:16.5,GAC:19.0,GGC:23.3,
+        GUA:13.0,GCA:21.1,GAA:48.1,GGA:21.8, GUG:17.3,GCG:19.8,GAG:22.6,GGG:11.2 }},
+    cho: { label: "C. griseus (CHO)", cds: 331, gc: 51.07, freq: {
+        UUU:19.6,UCU:16.0,UAU:13.1,UGU:9.1, UUC:22.0,UCC:16.5,UAC:16.4,UGC:10.3,
+        UUA:6.4, UCA:10.3,UAA:0.6,UGA:1.2, UUG:14.1,UCG:3.4, UAG:0.5, UGG:13.1,
+        CUU:13.2,CCU:16.7,CAU:10.2,CGU:5.6, CUC:18.4,CCC:17.0,CAC:12.9,CGC:9.3,
+        CUA:7.6, CCA:15.6,CAA:10.3,CGA:7.2, CUG:38.8,CCG:4.3, CAG:33.4,CGG:10.1,
+        AUU:17.4,ACU:14.1,AAU:17.4,AGU:11.4, AUC:24.8,ACC:20.3,AAC:21.2,AGC:16.4,
+        AUA:6.9, ACA:15.7,AAA:24.6,AGA:10.1, AUG:23.0,ACG:4.5, AAG:38.4,AGG:10.2,
+        GUU:11.6,GCU:22.4,GAU:24.6,GGU:12.8, GUC:15.7,GCC:25.9,GAC:28.1,GGC:21.3,
+        GUA:7.8, GCA:16.3,GAA:28.4,GGA:15.8, GUG:30.1,GCG:5.0, GAG:41.1,GGG:13.4 }},
+    ppast: { label: "P. pastoris", cds: 137, gc: 42.73, freq: {
+        UUU:24.1,UCU:24.4,UAU:16.0,UGU:7.7, UUC:20.6,UCC:16.5,UAC:18.1,UGC:4.4,
+        UUA:15.6,UCA:15.2,UAA:0.8,UGA:0.3, UUG:31.5,UCG:7.4, UAG:0.5, UGG:10.3,
+        CUU:15.9,CCU:15.8,CAU:11.8,CGU:6.9, CUC:7.6, CCC:6.8, CAC:9.1, CGC:2.2,
+        CUA:10.7,CCA:18.9,CAA:25.4,CGA:4.2, CUG:14.9,CCG:3.9, CAG:16.3,CGG:1.9,
+        AUU:31.1,ACU:22.4,AAU:25.1,AGU:12.5, AUC:19.4,ACC:14.5,AAC:26.7,AGC:7.6,
+        AUA:11.1,ACA:13.8,AAA:29.9,AGA:20.1, AUG:18.7,ACG:6.0, AAG:33.8,AGG:6.6,
+        GUU:26.9,GCU:28.9,GAU:35.7,GGU:25.5, GUC:14.9,GCC:16.6,GAC:25.9,GGC:8.1,
+        GUA:9.9, GCA:15.1,GAA:37.4,GGA:19.1, GUG:12.3,GCG:3.9, GAG:29.0,GGG:5.8 }}
+};
+
+// 常用限制性内切酶（识别位点，5'→3'，均按双链含反向互补一并排除）
+const RESTRICT_ENZYMES = [
+    { n:"EcoRI",  s:"GAATTC" },   { n:"BamHI",  s:"GGATCC" },
+    { n:"HindIII",s:"AAGCTT" },   { n:"XhoI",   s:"CTCGAG" },
+    { n:"NdeI",   s:"CATATG" },   { n:"NcoI",   s:"CCATGG" },
+    { n:"EcoRV",  s:"GATATC" },   { n:"SpeI",   s:"ACTAGT" },
+    { n:"XbaI",   s:"TCTAGA" },   { n:"SacI",   s:"GAGCTC" },
+    { n:"KpnI",   s:"GGTACC" },   { n:"SalI",   s:"GTCGAC" },
+    { n:"PstI",   s:"CTGCAG" },   { n:"SmaI",   s:"CCCGGG" },
+    { n:"ApaI",   s:"GGGCCC" },   { n:"NotI",   s:"GCGGCCGC" },
+    { n:"AscI",   s:"GGCGCGCC" }, { n:"AgeI",   s:"ACCGGT" },
+    { n:"MluI",   s:"ACGCGT" },   { n:"SnaBI",  s:"TACGTA" },
+    { n:"PvuII",  s:"CAGCTG" },   { n:"ClaI",   s:"ATCGAT" },
+    { n:"HpaI",   s:"GTTAAC" },   { n:"AvrII",  s:"CCTAGG" },
+    { n:"SacII",  s:"CCGCGG" },   { n:"SphI",   s:"GCATGC" },
+    { n:"AflII",  s:"CTTAAG" },   { n:"AatII",  s:"GACGTC" },
+    { n:"BspEI",  s:"TCCGGA" },   { n:"PmeI",   s:"GTTTAAAC" },
+    { n:"PacI",   s:"TTAAATTA" }, { n:"SwaI",   s:"ATTTAAAT" },
+    { n:"SbfI",   s:"CCTGCAGG" }, { n:"BsaI",   s:"GGTCTC" },
+    { n:"BbsI",   s:"GAAGAC" },   { n:"BsmBI",  s:"CGTCTC" }
+];
+const CO_COMMON = ["EcoRI","BamHI","HindIII","XhoI","NdeI","NcoI","EcoRV","SpeI","XbaI","SacI","KpnI","SalI","PstI","NotI"];
+
+// 优化参数（自然对数得分单位）
+const CO_P = { K: 60, LH: 4, LG: 200, LT: 20, LC: 2, HOMO: 5 };
+
+// 同义密码子表（由标准遗传密码构建，U 表示）
+const CO_SYNONYMS = (() => {
+    const syn = {};
+    for (const aa of Object.keys(AA_DATA)) syn[aa] = [];
+    for (const c of Object.keys(CODON_MAP)) {
+        const aa = CODON_MAP[c];
+        if (aa !== "*") syn[aa].push(c);
+    }
+    return syn;
+})();
+
+function coRevcomp(s) {
+    const comp = { A:"T", T:"A", G:"C", C:"G" };
+    return s.split("").reverse().map(b => comp[b]).join("");
+}
+function coToT(u) { return u.replace(/U/g, "T"); }
+function coToU(t) { return t.replace(/T/g, "U"); }
+
+// 相对适应度 w(c) = f(c) / max f(同义)，频率下限 0.05 防 ln(0)
+function coWTable(freq) {
+    const w = {};
+    for (const aa of Object.keys(CO_SYNONYMS)) {
+        const list = CO_SYNONYMS[aa];
+        let mx = 0;
+        for (const c of list) mx = Math.max(mx, freq[c] || 0);
+        for (const c of list) w[c] = Math.max(freq[c] || 0, 0.05) / Math.max(mx, 0.05);
+    }
+    return w;
+}
+
+function coMaxRun(dna) {
+    let m = 1, c = 1;
+    for (let i = 1; i < dna.length; i++) {
+        c = dna[i] === dna[i - 1] ? c + 1 : 1;
+        if (c > m) m = c;
+    }
+    return dna.length ? m : 0;
+}
+
+function coFindSites(dna, patterns) {
+    const hits = [];
+    for (const p of patterns) {
+        let i = dna.indexOf(p);
+        while (i !== -1) { hits.push({ p, i }); i = dna.indexOf(p, i + 1); }
+    }
+    hits.sort((a, b) => a.i - b.i);
+    return hits;
+}
+
+function coWindowGCs(dna, win) {
+    // 返回所有长度 win 的窗口 GC 数组（不足 win 返回空）
+    const out = [];
+    if (dna.length < win) return out;
+    let gc = 0;
+    for (let i = 0; i < win; i++) if (dna[i] === "G" || dna[i] === "C") gc++;
+    out.push(gc);
+    for (let i = win; i < dna.length; i++) {
+        const outB = dna[i - win], inB = dna[i];
+        if (outB === "G" || outB === "C") gc--;
+        if (inB === "G" || inB === "C") gc++;
+        out.push(gc);
+    }
+    return out;
+}
+
+function coCalcCAI(dna, freq) {
+    const w = coWTable(freq);
+    let sum = 0, n = 0;
+    for (let i = 0; i + 3 <= dna.length; i += 3) {
+        const u = coToU(dna.slice(i, i + 3));
+        if (u === "UAA" || u === "UAG" || u === "UGA") continue;
+        sum += Math.log(w[u] || 0.05);
+        n++;
+    }
+    return n ? Math.exp(sum / n) : 0;
+}
+
+function coTranslate(dnaT) {
+    let out = "";
+    for (let i = 0; i + 3 <= dnaT.length; i += 3) {
+        out += CODON_MAP[coToU(dnaT.slice(i, i + 3))] || "?";
+    }
+    return out;
+}
+
+/* ── beam search 主体 ── */
+function coExpand(st, codon, ctx) {
+    // 返回新状态；位点硬约束命中返回 null
+    const parentLen = st.s.length;
+    const ns = {
+        s: st.s + codon,
+        sc: st.sc + Math.log(ctx.w[codon] || 0.05),
+        tb: st.tb, tr: st.tr,
+        ring: st.ring, // 由调用方复制后传入（见 coStep）
+        rc: st.rc
+    };
+    // 聚聚体（逐碱基增量）
+    let tb = st.tb, tr = st.tr;
+    for (const b of codon) {
+        if (b === tb) {
+            const prevEx = Math.max(0, tr - (CO_P.HOMO - 1));
+            tr++;
+            const newEx = Math.max(0, tr - (CO_P.HOMO - 1));
+            ns.sc += CO_P.LH * (newEx - prevEx);
+        } else { tb = b; tr = 1; }
+    }
+    ns.tb = tb; ns.tr = tr;
+    // GC 滑窗（每新碱基完成一个新窗口）
+    let len = parentLen;
+    for (const b of codon) {
+        if (len >= ctx.gwin) ns.rc -= ns.ring[len % ctx.gwin];
+        const g = (b === "G" || b === "C") ? 1 : 0;
+        ns.ring[len % ctx.gwin] = g;
+        ns.rc += g;
+        len++;
+        if (len >= ctx.gwin) {
+            const gc = ns.rc / ctx.gwin;
+            ns.sc -= CO_P.LG * (Math.max(0, ctx.gmin - gc) ** 2 + Math.max(0, gc - ctx.gmax) ** 2);
+            ns.sc -= CO_P.LT * (gc - ctx.target) ** 2;
+        }
+    }
+    // 位点：只检查与新密码子重叠的新增命中（硬约束）
+    const start = Math.max(0, parentLen - ctx.maxL + 1);
+    const region = ns.s.slice(start);
+    for (const p of ctx.patterns) {
+        let idx = region.indexOf(p);
+        while (idx !== -1) {
+            if (start + idx + p.length > parentLen) return null; // 命中 → 该候选禁止
+            idx = region.indexOf(p, idx + 1);
+        }
+    }
+    // CpG（与新密码子重叠的二核苷酸）
+    if (ctx.cpg) {
+        for (let i = parentLen; i <= parentLen + 2 && i < ns.s.length; i++) {
+            if (i >= 1 && ns.s[i - 1] === "C" && ns.s[i] === "G") ns.sc -= CO_P.LC;
+        }
+    }
+    return ns;
+}
+
+function coStep(states, cands, ctx) {
+    const next = [];
+    for (const st of states) {
+        for (const c of cands) {
+            const ring = st.ring.slice();
+            const ns = coExpand({ ...st, ring }, c, ctx);
+            if (ns) next.push(ns);
+        }
+    }
+    if (next.length === 0) {
+        // 全部候选被位点约束拒绝 → 降级：允许命中并重罚，保证可进行
+        for (const st of states) {
+            for (const c of cands) {
+                const ring = st.ring.slice();
+                const ns = coExpandSoft({ ...st, ring }, c, ctx);
+                next.push(ns);
+            }
+        }
+    }
+    next.sort((a, b) => b.sc - a.sc);
+    return next.slice(0, CO_P.K);
+}
+
+function coExpandSoft(st, codon, ctx) {
+    // 与 coExpand 相同，但位点命中改为计罚而非拒绝
+    const parentLen = st.s.length;
+    const ns = { s: st.s + codon, sc: st.sc + Math.log(ctx.w[codon] || 0.05), tb: st.tb, tr: st.tr, ring: st.ring, rc: st.rc };
+    let tb = st.tb, tr = st.tr;
+    for (const b of codon) {
+        if (b === tb) {
+            const prevEx = Math.max(0, tr - (CO_P.HOMO - 1));
+            tr++;
+            ns.sc += CO_P.LH * (Math.max(0, tr - (CO_P.HOMO - 1)) - prevEx);
+        } else { tb = b; tr = 1; }
+    }
+    ns.tb = tb; ns.tr = tr;
+    let len = parentLen;
+    for (const b of codon) {
+        if (len >= ctx.gwin) ns.rc -= ns.ring[len % ctx.gwin];
+        const g = (b === "G" || b === "C") ? 1 : 0;
+        ns.ring[len % ctx.gwin] = g;
+        ns.rc += g;
+        len++;
+        if (len >= ctx.gwin) {
+            const gc = ns.rc / ctx.gwin;
+            ns.sc -= CO_P.LG * (Math.max(0, ctx.gmin - gc) ** 2 + Math.max(0, gc - ctx.gmax) ** 2);
+            ns.sc -= CO_P.LT * (gc - ctx.target) ** 2;
+        }
+    }
+    const start = Math.max(0, parentLen - ctx.maxL + 1);
+    const region = ns.s.slice(start);
+    for (const p of ctx.patterns) {
+        let idx = region.indexOf(p);
+        while (idx !== -1) {
+            if (start + idx + p.length > parentLen) ns.sc -= 300;
+            idx = region.indexOf(p, idx + 1);
+        }
+    }
+    if (ctx.cpg) {
+        for (let i = parentLen; i <= parentLen + 2 && i < ns.s.length; i++) {
+            if (i >= 1 && ns.s[i - 1] === "C" && ns.s[i] === "G") ns.sc -= CO_P.LC;
+        }
+    }
+    return ns;
+}
+
+/* ── 后修复 ── */
+function coRepairSites(dna, ctx, freq) {
+    for (let round = 0; round < 8; round++) {
+        const hits = coFindSites(dna, ctx.patterns);
+        if (!hits.length) return { dna, fixed: true };
+        let progress = false;
+        for (const h of hits) {
+            const L = h.p.length;
+            // 仅改动与该位点重叠的密码子（外扩 1 个密码子作缓冲）
+            let from = Math.max(0, Math.floor(h.i / 3) - 1);
+            let to = Math.min(dna.length / 3 - 1, Math.floor((h.i + L - 1) / 3) + 1);
+            const idxs = [];
+            for (let ci = from; ci <= to; ci++) idxs.push(ci);
+            const options = idxs.map(ci => {
+                const u = coToU(dna.slice(ci * 3, ci * 3 + 3));
+                const aa = CODON_MAP[u];
+                return (CO_SYNONYMS[aa] || [u]).map(coToT);
+            });
+            const best = coBestCombo(dna, idxs, options, ctx, freq, "site");
+            if (best) { dna = best; progress = true; break; }
+        }
+        if (!progress) return { dna, fixed: false };
+    }
+    return { dna, fixed: coFindSites(dna, ctx.patterns).length === 0 };
+}
+
+function coRepairHomo(dna, ctx, freq) {
+    for (let round = 0; round < 8; round++) {
+        // 找第一个长度 ≥ HOMO 的同碱基串
+        let runStart = -1, runLen = 0;
+        for (let i = 0; i < dna.length; i++) {
+            if (i === 0 || dna[i] !== dna[i - 1]) {
+                if (runLen >= CO_P.HOMO) break;
+                runStart = i; runLen = 1;
+            } else runLen++;
+        }
+        if (runLen < CO_P.HOMO || runStart < 0) return { dna, fixed: true };
+        const from = Math.max(0, Math.floor(runStart / 3) - 1);
+        const to = Math.min(dna.length / 3 - 1, Math.floor((runStart + runLen - 1) / 3) + 1);
+        const idxs = [];
+        for (let ci = from; ci <= to; ci++) idxs.push(ci);
+        const options = idxs.map(ci => {
+            const u = coToU(dna.slice(ci * 3, ci * 3 + 3));
+            const aa = CODON_MAP[u];
+            return (CO_SYNONYMS[aa] || [u]).map(coToT);
+        });
+        const best = coBestCombo(dna, idxs, options, ctx, freq, "homo");
+        if (!best) return { dna, fixed: false };
+        dna = best;
+    }
+    return { dna, fixed: coMaxRun(dna) < CO_P.HOMO };
+}
+
+// 枚举局部同义组合，返回满足约束且 CAI 项最优的新序列；无解返回 null
+function coBestCombo(dna, idxs, options, ctx, freq, mode) {
+    const w = ctx.w;
+    const n = idxs.length;
+    const combo = new Array(n);
+    let best = null, bestCai = -Infinity;
+    const regionLo = idxs[0] * 3, regionHi = idxs[n - 1] * 3 + 3;
+    const searchLo = Math.max(0, regionLo - ctx.maxL + 1);
+    const segEnd = () => Math.min(dna.length, regionHi + ctx.maxL);
+    // 区域内是否残留 ≥HOMO 的同碱基串（跨边界也算）
+    const runOverlaps = (nd) => {
+        let i = 0;
+        while (i < nd.length) {
+            let j = i;
+            while (j < nd.length && nd[j] === nd[i]) j++;
+            if (j - i >= CO_P.HOMO && i < regionHi && j > regionLo) return true;
+            i = j;
+        }
+        return false;
+    };
+    const counters = new Array(n).fill(0);
+    let done = false;
+    while (!done) {
+        for (let i = 0; i < n; i++) combo[i] = options[i][counters[i]];
+        let nd = dna;
+        for (let i = 0; i < n; i++) nd = nd.slice(0, idxs[i] * 3) + combo[i] + nd.slice(idxs[i] * 3 + 3);
+        let ok = true;
+        // 两种模式都不得在改动区域引入位点
+        const seg = nd.slice(searchLo, segEnd());
+        for (const p of ctx.patterns) if (seg.indexOf(p) !== -1) { ok = false; break; }
+        if (ok && mode === "homo" && runOverlaps(nd)) ok = false;
+        if (ok) {
+            let cai = 0;
+            for (let i = 0; i < n; i++) cai += Math.log(w[coToU(combo[i])] || 0.05);
+            if (cai > bestCai) { bestCai = cai; best = nd; }
+        }
+        let k = n - 1;
+        while (k >= 0) {
+            counters[k]++;
+            if (counters[k] < options[k].length) break;
+            counters[k] = 0; k--;
+        }
+        if (k < 0) done = true;
+    }
+    return best;
+}
+
+function coGcViolationEnergy(dna, ctx) {
+    // Σ 窗口越界平方偏差（不含 target 项，用于修复比较）
+    const gcs = coWindowGCs(dna, ctx.gwin);
+    let e = 0;
+    for (const gc0 of gcs) {
+        const gc = gc0 / ctx.gwin;
+        e += Math.max(0, ctx.gmin - gc) ** 2 + Math.max(0, gc - ctx.gmax) ** 2;
+    }
+    return e;
+}
+
+function coRepairGC(dna, ctx, freq) {
+    const w = ctx.w;
+    for (let round = 0; round < 12; round++) {
+        if (coGcViolationEnergy(dna, ctx) <= 1e-12) return { dna, fixed: true };
+        const gcs = coWindowGCs(dna, ctx.gwin);
+        let progress = false;
+        for (let wi = 0; wi < gcs.length && !progress; wi++) {
+            const gc = gcs[wi] / ctx.gwin;
+            if (gc >= ctx.gmin && gc <= ctx.gmax) continue;
+            const winLo = wi, winHi = wi + ctx.gwin - 1; // 碱基下标
+            const from = Math.max(0, Math.floor(winLo / 3));
+            const to = Math.min(dna.length / 3 - 1, Math.floor(winHi / 3));
+            const baseEnergy = coGcViolationEnergy(dna, ctx);
+            for (let ci = from; ci <= to && !progress; ci++) {
+                const u = coToU(dna.slice(ci * 3, ci * 3 + 3));
+                const aa = CODON_MAP[u];
+                for (const alt of (CO_SYNONYMS[aa] || [u])) {
+                    const t = coToT(alt);
+                    if (t === dna.slice(ci * 3, ci * 3 + 3)) continue;
+                    const nd = dna.slice(0, ci * 3) + t + dna.slice(ci * 3 + 3);
+                    if (coFindSites(nd, ctx.patterns).length) continue;
+                    if (coMaxRun(nd) >= CO_P.HOMO) continue;
+                    if (coGcViolationEnergy(nd, ctx) < baseEnergy - 1e-12) {
+                        dna = nd; progress = true; break;
+                    }
+                }
+            }
+        }
+        if (!progress) return { dna, fixed: coGcViolationEnergy(dna, ctx) <= 1e-12 };
+    }
+    return { dna, fixed: coGcViolationEnergy(dna, ctx) <= 1e-12 };
+}
+
+/* ── 主入口 ── */
+function optimizeCodon(aaSeq, speciesKey, siteList, opts) {
+    const species = SPECIES[speciesKey];
+    if (!species) return { error: "未知物种" };
+    const freq = species.freq;
+    const patterns = [];
+    for (const s of siteList) {
+        if (!s) continue;
+        patterns.push(s);
+        const r = coRevcomp(s);
+        if (r !== s) patterns.push(r);
+    }
+    const maxL = patterns.reduce((m, p) => Math.max(m, p.length), 0);
+    let gmin = Math.min(opts.gcMin, opts.gcMax) / 100;
+    let gmax = Math.max(opts.gcMin, opts.gcMax) / 100;
+    const gwin = Math.max(20, Math.min(200, opts.gcWin | 0 || 50));
+    const ctx = {
+        w: coWTable(freq), patterns, maxL,
+        gmin, gmax, gwin,
+        target: species.gc / 100,
+        cpg: !!opts.cpg
+    };
+
+    // 终止密码子
+    let stop = null;
+    if (opts.stop === "auto") {
+        const stops = ["TAA", "TAG", "TGA"];
+        stop = stops.reduce((a, b) => (freq[coToU(a)] || 0) >= (freq[coToU(b)] || 0) ? a : b);
+    } else if (opts.stop && opts.stop !== "none") stop = opts.stop;
+
+    // 各步候选（按频率降序，保证确定性）
+    const steps = [];
+    for (const aa of aaSeq) {
+        const cands = (CO_SYNONYMS[aa] || []).slice();
+        if (!cands.length) return { error: "序列含非标准氨基酸：" + aa };
+        cands.sort((a, b) => (freq[b] || 0) - (freq[a] || 0));
+        steps.push(cands.map(coToT));
+    }
+    if (stop) steps.push([stop]);
+
+    let states = [{ s: "", sc: 0, tb: "", tr: 0, ring: new Array(gwin).fill(0), rc: 0 }];
+    for (const cands of steps) states = coStep(states, cands, ctx);
+
+    let dna = states[0].s;
+
+    // 修复
+    const r1 = coRepairSites(dna, ctx, freq); dna = r1.dna;
+    const r2 = coRepairHomo(dna, ctx, freq); dna = r2.dna;
+    const r3 = coRepairGC(dna, ctx, freq); dna = r3.dna;
+    // GC 修复可能引入位点 → 再清一次
+    const r4 = coRepairSites(dna, ctx, freq); dna = r4.dna;
+    const r5 = coRepairHomo(dna, ctx, freq); dna = r5.dna;
+
+    // 统计与校验
+    const siteHits = coFindSites(dna, patterns);
+    const maxRun = coMaxRun(dna);
+    const gcs = coWindowGCs(dna, gwin);
+    let gcMin = 1, gcMax = 0;
+    for (const g of gcs) { const x = g / gwin; if (x < gcMin) gcMin = x; if (x > gcMax) gcMax = x; }
+    if (!gcs.length) { gcMin = gcMax = 0; }
+    let gcCount = 0;
+    for (const b of dna) if (b === "G" || b === "C") gcCount++;
+    const gcOverall = dna.length ? gcCount / dna.length : 0;
+    const cai = coCalcCAI(dna, freq);
+    const translated = coTranslate(dna);
+    const expect = aaSeq + (stop ? "*" : "");
+    const roundTrip = translated === expect;
+
+    return {
+        dna, cai, gcOverall, gcMin, gcMax, gwin,
+        maxRun, siteHits, roundTrip, stop,
+        len: dna.length, species,
+        homoOk: maxRun < CO_P.HOMO,
+        gcOk: gcs.length === 0 || (gcMin >= gmin - 1e-9 && gcMax <= gmax + 1e-9),
+        siteOk: siteHits.length === 0
+    };
+}
+
+/* ── UI ── */
+let coLastDna = "";
+
+function coRenderEnzymes() {
+    document.getElementById("coEnzymes").innerHTML = RESTRICT_ENZYMES.map(e =>
+        '<button class="chip" data-site="' + e.s + '" data-name="' + e.n + '">' +
+        e.n + ' <span>' + e.s + '</span></button>'
+    ).join("");
+    document.querySelectorAll("#coEnzymes .chip").forEach(ch => {
+        ch.addEventListener("click", () => ch.classList.toggle("active"));
+    });
+}
+function coPickSet(names) {
+    document.querySelectorAll("#coEnzymes .chip").forEach(ch => {
+        ch.classList.toggle("active", names.includes(ch.dataset.name));
+    });
+}
+function coPickCommon() { coPickSet(CO_COMMON); }
+function coPickAll() { coPickSet(RESTRICT_ENZYMES.map(e => e.n)); }
+function coPickNone() { coPickSet([]); }
+
+function coCollectSites() {
+    const sites = [];
+    document.querySelectorAll("#coEnzymes .chip.active").forEach(ch => sites.push(ch.dataset.site));
+    const custom = document.getElementById("coCustomSites").value
+        .split(/[,;\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    for (const c of custom) {
+        if (!/^[ACGT]+$/.test(c)) return { error: "自定义位点含非法字符：" + c };
+        if (c.length < 4) return { error: "位点过短（<4 bp）：" + c };
+        if (!sites.includes(c)) sites.push(c);
+    }
+    return { sites };
+}
+
+function runCodonOpt() {
+    const seq = getSeq();
+    if (!seq) return;
+    const err = document.getElementById("errorArea");
+    const sc = coCollectSites();
+    if (sc.error) { err.textContent = sc.error; err.classList.add("show"); return; }
+    const opts = {
+        stop: document.getElementById("coStop").value,
+        gcMin: parseFloat(document.getElementById("coGcMin").value) || 30,
+        gcMax: parseFloat(document.getElementById("coGcMax").value) || 70,
+        gcWin: parseInt(document.getElementById("coGcWin").value, 10) || 50,
+        cpg: document.getElementById("coCpGChip").classList.contains("active")
+    };
+    const btn = document.getElementById("coRunBtn");
+    btn.disabled = true; btn.textContent = "⏳ 计算中…";
+    // 让 UI 先刷新再计算
+    setTimeout(() => {
+        const res = optimizeCodon(seq, document.getElementById("coSpecies").value, sc.sites, opts);
+        btn.disabled = false; btn.textContent = "⚡ 开始优化";
+        if (res.error) { err.textContent = res.error; err.classList.add("show"); return; }
+        err.classList.remove("show");
+        coRenderResult(res, seq);
+    }, 30);
+}
+
+function coRenderResult(res, aaSeq) {
+    coLastDna = res.dna;
+    document.getElementById("coResultCard").style.display = "block";
+    document.getElementById("coStats").innerHTML =
+        '<div class="stat"><b>' + res.cai.toFixed(3) + '</b><span>CAI（' + res.species.label + '）</span></div>' +
+        '<div class="stat green"><b>' + (res.gcOverall * 100).toFixed(1) + '%</b><span>整体 GC</span></div>' +
+        '<div class="stat orange"><b>' + (res.gcMin * 100).toFixed(0) + '–' + (res.gcMax * 100).toFixed(0) + '%</b><span>窗口 GC 范围（w=' + res.gwin + '）</span></div>' +
+        '<div class="stat purple"><b>' + res.len + '</b><span>长度 (nt)</span></div>' +
+        '<div class="stat"><b>' + res.maxRun + '</b><span>最长聚聚体</span></div>' +
+        '<div class="stat green"><b>' + (res.stop || "—") + '</b><span>终止密码子</span></div>';
+
+    const checks = [];
+    checks.push({ ok: res.roundTrip, t: "翻译校验：输出序列翻译回原文一致" + (res.stop ? "（含终止子 *）" : "") });
+    checks.push({ ok: res.siteOk, t: res.siteOk
+        ? "限制性内切酶位点：未检出目标位点（含反向互补）"
+        : "限制性内切酶位点：仍存在 " + res.siteHits.length + " 处（" +
+          res.siteHits.slice(0, 5).map(h => h.p + "@" + (h.i + 1)).join(", ") + "）——该位点可能受氨基酸序列强制，无法完全避免" });
+    checks.push({ ok: res.homoOk, t: res.homoOk
+        ? "聚聚体：无 ≥" + CO_P.HOMO + " 连续相同碱基"
+        : "聚聚体：仍有 " + res.maxRun + " 连连续碱基（受序列限制）" });
+    checks.push({ ok: res.gcOk, t: res.gcOk
+        ? "GC 窗口：全部落在 [" + Math.round(opts_gcMinPct()) + "%, " + Math.round(opts_gcMaxPct()) + "%]"
+        : "GC 窗口：存在越界（" + Math.round(res.gcMin * 100) + "%–" + Math.round(res.gcMax * 100) + "%），已尽量优化" });
+    document.getElementById("coValidate").innerHTML =
+        '<div class="co-vlist">' + checks.map(c =>
+            '<div>' + (c.ok ? '<span class="co-ok">✓</span>' : '<span class="co-bad">✗</span>') + " " + c.t + "</div>"
+        ).join("") + "</div>";
+
+    const header = ">codon_opt_" + res.species.label.replace(/[^A-Za-z0-9]/g, "") +
+        "_" + res.len + "nt_GC" + Math.round(res.gcOverall * 100) + "_CAI" + res.cai.toFixed(3);
+    document.getElementById("coOut").value = header + "\n" + res.dna;
+    document.getElementById("coDlBtn").style.display = "inline-block";
+    document.getElementById("coResultCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+// 结果渲染时读取当前 GC 输入（供文案展示）
+function opts_gcMinPct() { return parseFloat(document.getElementById("coGcMin").value) || 30; }
+function opts_gcMaxPct() { return parseFloat(document.getElementById("coGcMax").value) || 70; }
+
+function copyOpt() {
+    if (!coLastDna) return alert("请先运行优化");
+    navigator.clipboard.writeText(coLastDna).then(() => alert("已复制编码序列"));
+}
+function downloadOpt() {
+    if (!coLastDna) return;
+    const content = document.getElementById("coOut").value + "\n";
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "codon_optimized.fasta";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// 芯片开关（聚聚体 / CpG）
+document.getElementById("coHomoChip").addEventListener("click", function () { this.classList.toggle("active"); });
+document.getElementById("coCpGChip").addEventListener("click", function () { this.classList.toggle("active"); });
+coRenderEnzymes();
+
+/* ── Service Worker（PWA 离线） ── */
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+}
+</script>
+</body>
+</html>
