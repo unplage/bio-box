@@ -457,7 +457,7 @@
             </div>
 
             <div style="margin-top:.9rem">
-                <div style="font-size:.8rem;font-weight:600;color:var(--text-2);margin-bottom:.4rem">排除的限制性内切酶位点（点选，可多选；自动同时排除反向互补链）</div>
+                <div style="font-size:.8rem;font-weight:600;color:var(--text-2);margin-bottom:.4rem">排除的限制性内切酶位点（点选，可多选；自动同时排除反向互补链；<b>支持 N/IUPAC 简并位点</b>，如 SfiI <code>GGCCNNNNNGGCC</code> 的全部 4⁵ 种变体）</div>
                 <div class="row" style="margin-top:0;margin-bottom:.45rem">
                     <button class="btn btn-ghost btn-sm" onclick="coPickCommon()">常用克隆酶(14)</button>
                     <button class="btn btn-ghost btn-sm" onclick="coPickAll()">全选</button>
@@ -465,7 +465,7 @@
                 </div>
                 <div class="co-enzymes" id="coEnzymes"></div>
                 <div class="row" style="margin-top:.5rem">
-                    <input type="text" id="coCustomSites" placeholder="自定义位点，逗号分隔（如 GAATTC,GGTCTC,GAGACC）" style="flex:1;min-width:260px;padding:.55rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-family:monospace;font-size:.85rem;background:#fafbfc">
+                    <input type="text" id="coCustomSites" placeholder="自定义位点，逗号分隔，支持 N/IUPAC（如 GAATTC,GGCCNNNNNGGCC,GANTC）" style="flex:1;min-width:260px;padding:.55rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-family:monospace;font-size:.85rem;background:#fafbfc">
                 </div>
             </div>
 
@@ -512,7 +512,7 @@
                 <b>相对适应度</b>（Sharp &amp; Li 1987 CAI）：<code>w(c) = f(c) / max f(同义密码子)</code>，f 为物种每千密码子频率<br>
                 <b>CAI</b>：<code>exp( mean ln w )</code>，不含终止密码子（值越接近 1 越贴近高表达基因偏好）<br>
                 <b>聚聚体</b>：同一碱基连续 ≥5，每超出 1 个罚 4（自然对数单位）；<b>GC 窗口</b>：滑窗超出 [下限,上限] 罚 <code>200×偏差²</code>，偏离物种编码区 GC 罚 <code>20×偏差²</code>；<b>CpG</b>（可选）每个罚 2<br>
-                <b>搜索</b>：beam search（宽度 60）逐密码子扩展同义候选并按累计得分剪枝；酶切位点为硬约束（当步禁止生成，含反向互补）；结束后对残余位点/聚聚体/GC 违规做局部同义替换修复<br>
+                <b>搜索</b>：beam search（宽度 60）逐密码子扩展同义候选并按累计得分剪枝；酶切位点为硬约束（当步禁止生成，含反向互补；<b>位点按 IUPAC 正则匹配，N/R/Y 等简并碱基展开为字符类</b>，如 SfiI 同时排除 <code>GGCCNNNNNGGCC</code> 及其全部中间可变变体）；结束后对残余位点/聚聚体/GC 违规做局部同义替换修复<br>
                 <b>数据</b>：Kazusa Codon Usage Database（Nakamura et al. <i>NAR</i> 2003），GenBank R160 汇总
             </div>
         </div>
@@ -1241,7 +1241,14 @@ const RESTRICT_ENZYMES = [
     { n:"BspEI",  s:"TCCGGA" },   { n:"PmeI",   s:"GTTTAAAC" },
     { n:"PacI",   s:"TTAAATTA" }, { n:"SwaI",   s:"ATTTAAAT" },
     { n:"SbfI",   s:"CCTGCAGG" }, { n:"BsaI",   s:"GGTCTC" },
-    { n:"BbsI",   s:"GAAGAC" },   { n:"BsmBI",  s:"CGTCTC" }
+    { n:"BbsI",   s:"GAAGAC" },   { n:"BsmBI",  s:"CGTCTC" },
+    // 含简并碱基（N/IUPAC）的位点：正则匹配全部变体
+    { n:"SfiI",   s:"GGCCNNNNNGGCC" }, // GGCCNNNN^NGGCC，13 bp
+    { n:"XmnI",   s:"GAANNNNTTC" },    // GAANN^NTTC
+    { n:"BglI",   s:"GCCNNNNNGGC" },   // GCCNNNN^NGGC
+    { n:"BstEII", s:"GGTNACC" },       // GGTN^ACC
+    { n:"HinfI",  s:"GANTC" },         // G^ANTC
+    { n:"DdeI",   s:"CTNAG" }          // C^TNAG
 ];
 const CO_COMMON = ["EcoRI","BamHI","HindIII","XhoI","NdeI","NcoI","EcoRV","SpeI","XbaI","SacI","KpnI","SalI","PstI","NotI"];
 
@@ -1259,9 +1266,42 @@ const CO_SYNONYMS = (() => {
     return syn;
 })();
 
+// IUPAC 互补表（含简并碱基：N/R/Y/S/W/K/M/B/D/H/V）
+const IUPAC_COMP = { A:"T", T:"A", G:"C", C:"G", R:"Y", Y:"R", S:"S", W:"W",
+    K:"M", M:"K", B:"V", V:"B", D:"H", H:"D", N:"N" };
+// IUPAC → 正则字符类（用于含 N 等简并碱基的位点匹配）
+const IUPAC_RE = { A:"A", C:"C", G:"G", T:"T", R:"[AG]", Y:"[CT]", S:"[GC]", W:"[AT]",
+    K:"[GT]", M:"[AC]", B:"[CGT]", D:"[AGT]", H:"[ACT]", V:"[ACG]", N:"[ACGT]" };
+
 function coRevcomp(s) {
-    const comp = { A:"T", T:"A", G:"C", C:"G" };
-    return s.split("").reverse().map(b => comp[b]).join("");
+    return s.split("").reverse().map(b => IUPAC_COMP[b] || b).join("");
+}
+// 位点字符串 → 全局正则（每个字符恰匹配 1 bp，含简并碱基）
+function coPatternToRe(p) {
+    let src = "";
+    for (const ch of p) {
+        const cls = IUPAC_RE[ch];
+        if (!cls) return null;
+        src += cls;
+    }
+    return new RegExp(src, "g");
+}
+// 位点列表 → [{s, re}]，自动去重并追加反向互补链
+function coBuildPats(siteList) {
+    const pats = [], seen = new Set();
+    const add = (s) => {
+        if (!s || seen.has(s)) return;
+        const re = coPatternToRe(s);
+        if (!re) return;
+        seen.add(s);
+        pats.push({ s, re });
+    };
+    for (const s of siteList) {
+        if (!s) continue;
+        add(s);
+        add(coRevcomp(s));
+    }
+    return pats;
 }
 function coToT(u) { return u.replace(/U/g, "T"); }
 function coToU(t) { return t.replace(/T/g, "U"); }
@@ -1287,11 +1327,15 @@ function coMaxRun(dna) {
     return dna.length ? m : 0;
 }
 
-function coFindSites(dna, patterns) {
+function coFindSites(dna, pats) {
     const hits = [];
-    for (const p of patterns) {
-        let i = dna.indexOf(p);
-        while (i !== -1) { hits.push({ p, i }); i = dna.indexOf(p, i + 1); }
+    for (const pat of pats) {
+        pat.re.lastIndex = 0;
+        let m;
+        while ((m = pat.re.exec(dna)) !== null) {
+            hits.push({ p: pat.s, i: m.index, len: m[0].length });
+            pat.re.lastIndex = m.index + 1; // 允许重叠检出
+        }
     }
     hits.sort((a, b) => a.i - b.i);
     return hits;
@@ -1369,14 +1413,15 @@ function coExpand(st, codon, ctx) {
             ns.sc -= CO_P.LT * (gc - ctx.target) ** 2;
         }
     }
-    // 位点：只检查与新密码子重叠的新增命中（硬约束）
+    // 位点：只检查与新密码子重叠的新增命中（硬约束，正则匹配支持 N/IUPAC 简并）
     const start = Math.max(0, parentLen - ctx.maxL + 1);
     const region = ns.s.slice(start);
-    for (const p of ctx.patterns) {
-        let idx = region.indexOf(p);
-        while (idx !== -1) {
-            if (start + idx + p.length > parentLen) return null; // 命中 → 该候选禁止
-            idx = region.indexOf(p, idx + 1);
+    for (const pat of ctx.pats) {
+        pat.re.lastIndex = 0;
+        let m;
+        while ((m = pat.re.exec(region)) !== null) {
+            if (start + m.index + m[0].length > parentLen) return null; // 命中 → 该候选禁止
+            pat.re.lastIndex = m.index + 1;
         }
     }
     // CpG（与新密码子重叠的二核苷酸）
@@ -1439,11 +1484,12 @@ function coExpandSoft(st, codon, ctx) {
     }
     const start = Math.max(0, parentLen - ctx.maxL + 1);
     const region = ns.s.slice(start);
-    for (const p of ctx.patterns) {
-        let idx = region.indexOf(p);
-        while (idx !== -1) {
-            if (start + idx + p.length > parentLen) ns.sc -= 300;
-            idx = region.indexOf(p, idx + 1);
+    for (const pat of ctx.pats) {
+        pat.re.lastIndex = 0;
+        let m;
+        while ((m = pat.re.exec(region)) !== null) {
+            if (start + m.index + m[0].length > parentLen) ns.sc -= 300;
+            pat.re.lastIndex = m.index + 1;
         }
     }
     if (ctx.cpg) {
@@ -1457,7 +1503,7 @@ function coExpandSoft(st, codon, ctx) {
 /* ── 后修复 ── */
 function coRepairSites(dna, ctx, freq) {
     for (let round = 0; round < 8; round++) {
-        const hits = coFindSites(dna, ctx.patterns);
+        const hits = coFindSites(dna, ctx.pats);
         if (!hits.length) return { dna, fixed: true };
         let progress = false;
         for (const h of hits) {
@@ -1477,7 +1523,7 @@ function coRepairSites(dna, ctx, freq) {
         }
         if (!progress) return { dna, fixed: false };
     }
-    return { dna, fixed: coFindSites(dna, ctx.patterns).length === 0 };
+    return { dna, fixed: coFindSites(dna, ctx.pats).length === 0 };
 }
 
 function coRepairHomo(dna, ctx, freq) {
@@ -1534,9 +1580,12 @@ function coBestCombo(dna, idxs, options, ctx, freq, mode) {
         let nd = dna;
         for (let i = 0; i < n; i++) nd = nd.slice(0, idxs[i] * 3) + combo[i] + nd.slice(idxs[i] * 3 + 3);
         let ok = true;
-        // 两种模式都不得在改动区域引入位点
+        // 两种模式都不得在改动区域引入位点（正则匹配，支持简并碱基）
         const seg = nd.slice(searchLo, segEnd());
-        for (const p of ctx.patterns) if (seg.indexOf(p) !== -1) { ok = false; break; }
+        for (const pat of ctx.pats) {
+            pat.re.lastIndex = 0;
+            if (pat.re.test(seg)) { ok = false; break; }
+        }
         if (ok && mode === "homo" && runOverlaps(nd)) ok = false;
         if (ok) {
             let cai = 0;
@@ -1585,7 +1634,7 @@ function coRepairGC(dna, ctx, freq) {
                     const t = coToT(alt);
                     if (t === dna.slice(ci * 3, ci * 3 + 3)) continue;
                     const nd = dna.slice(0, ci * 3) + t + dna.slice(ci * 3 + 3);
-                    if (coFindSites(nd, ctx.patterns).length) continue;
+                    if (coFindSites(nd, ctx.pats).length) continue;
                     if (coMaxRun(nd) >= CO_P.HOMO) continue;
                     if (coGcViolationEnergy(nd, ctx) < baseEnergy - 1e-12) {
                         dna = nd; progress = true; break;
@@ -1603,19 +1652,13 @@ function optimizeCodon(aaSeq, speciesKey, siteList, opts) {
     const species = SPECIES[speciesKey];
     if (!species) return { error: "未知物种" };
     const freq = species.freq;
-    const patterns = [];
-    for (const s of siteList) {
-        if (!s) continue;
-        patterns.push(s);
-        const r = coRevcomp(s);
-        if (r !== s) patterns.push(r);
-    }
-    const maxL = patterns.reduce((m, p) => Math.max(m, p.length), 0);
+    const pats = coBuildPats(siteList); // 含反向互补与简并碱基正则
+    const maxL = pats.reduce((m, p) => Math.max(m, p.s.length), 0);
     let gmin = Math.min(opts.gcMin, opts.gcMax) / 100;
     let gmax = Math.max(opts.gcMin, opts.gcMax) / 100;
     const gwin = Math.max(20, Math.min(200, opts.gcWin | 0 || 50));
     const ctx = {
-        w: coWTable(freq), patterns, maxL,
+        w: coWTable(freq), pats, maxL,
         gmin, gmax, gwin,
         target: species.gc / 100,
         cpg: !!opts.cpg
@@ -1652,7 +1695,7 @@ function optimizeCodon(aaSeq, speciesKey, siteList, opts) {
     const r5 = coRepairHomo(dna, ctx, freq); dna = r5.dna;
 
     // 统计与校验
-    const siteHits = coFindSites(dna, patterns);
+    const siteHits = coFindSites(dna, pats);
     const maxRun = coMaxRun(dna);
     const gcs = coWindowGCs(dna, gwin);
     let gcMin = 1, gcMax = 0;
@@ -1680,10 +1723,12 @@ function optimizeCodon(aaSeq, speciesKey, siteList, opts) {
 let coLastDna = "";
 
 function coRenderEnzymes() {
-    document.getElementById("coEnzymes").innerHTML = RESTRICT_ENZYMES.map(e =>
-        '<button class="chip" data-site="' + e.s + '" data-name="' + e.n + '">' +
-        e.n + ' <span>' + e.s + '</span></button>'
-    ).join("");
+    document.getElementById("coEnzymes").innerHTML = RESTRICT_ENZYMES.map(e => {
+        const degen = /[^ACGT]/.test(e.s);
+        return '<button class="chip" data-site="' + e.s + '" data-name="' + e.n + '"' +
+            (degen ? ' title="识别序列含简并碱基，排除其全部变体"' : '') + '>' +
+            e.n + (degen ? "✦" : "") + ' <span>' + e.s + '</span></button>';
+    }).join("");
     document.querySelectorAll("#coEnzymes .chip").forEach(ch => {
         ch.addEventListener("click", () => ch.classList.toggle("active"));
     });
@@ -1703,7 +1748,7 @@ function coCollectSites() {
     const custom = document.getElementById("coCustomSites").value
         .split(/[,;\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
     for (const c of custom) {
-        if (!/^[ACGT]+$/.test(c)) return { error: "自定义位点含非法字符：" + c };
+        if (!/^[ACGTRYSWKMBDHVN]+$/.test(c)) return { error: "自定义位点含非法字符（仅允许 ACGT 与 IUPAC 简并码 RYSWKMBDHVN）：" + c };
         if (c.length < 4) return { error: "位点过短（<4 bp）：" + c };
         if (!sites.includes(c)) sites.push(c);
     }
