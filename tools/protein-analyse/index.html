@@ -195,6 +195,7 @@
     }
     .ref-search:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,115,232,.13); background: #fff; }
     .ref-filters { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.7rem; }
+    .chip-row { display:flex; gap:.4rem; flex-wrap:wrap; }
     .chip {
         padding: .32rem .8rem; border-radius: 20px; border: 1px solid var(--border);
         background: #f8fafc; font-size: .78rem; color: var(--text-2); cursor: pointer;
@@ -202,32 +203,46 @@
     .chip:hover { background: #eef1f6; }
     .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
     .ref-table { width: 100%; border-collapse: collapse; font-size: .84rem; margin-top: .5rem; background: var(--card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
-    .ref-table th, .ref-table td { border: 1px solid var(--border); padding: .5rem .65rem; text-align: left; }
+    .ref-table th, .ref-table td { border: 1px solid var(--border); padding: .5rem .65rem; text-align: left; vertical-align: top; }
+    .ref-table code { font-family: "SF Mono", Consolas, monospace; background: #eef2f7; color: var(--primary-dark); padding: .05rem .3rem; border-radius: 4px; font-size: .92em; }
     .ref-table th { background: #eef2f7; color: var(--text); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
     .ref-table tr:nth-child(even) td { background: #f8fafc; }
     .ref-table tr:hover td { background: #f1f5f9; }
-    .codon-block { margin-top: .7rem; }
-    .codon-block-title { font-size: .78rem; font-weight: 700; color: var(--text-2); margin-bottom: .3rem; }
-    .codon-scroll { overflow-x: auto; padding-bottom: .3rem; }
-    .codon-grid { display: grid; grid-template-columns: repeat(16, minmax(52px, 1fr)); gap: 3px; min-width: 680px; }
-    .codon-grid .sec-head {
-        grid-column: span 4; text-align: center; font-size: .7rem; font-weight: 700;
-        color: var(--text-2); background: #eef2f7; border-radius: 6px; padding: .22rem 0;
+    .ref-h3 { font-size: .82rem; color: var(--text-2); margin: 1rem 0 .15rem; font-weight: 700; }
+    .aa-badge {
+        display: inline-block; width: 22px; height: 22px; border-radius: 6px;
+        color: #fff; text-align: center; line-height: 22px; font-weight: 700;
     }
-    .codon-cell {
-        padding: .5rem .2rem; border-radius: 8px; font-size: .82rem; font-weight: 700;
-        text-align: center; cursor: default; user-select: none; position: relative;
+    .ref-table-wrap { overflow-x: auto; border-radius: 10px; }
+    .codon-table-wrap { overflow-x: auto; margin-top: .55rem; border: 1px solid var(--border); border-radius: 10px; }
+    .codon-table { width: 100%; min-width: 540px; border-collapse: collapse; table-layout: fixed; font-size: .82rem; }
+    .codon-table th, .codon-table td { border: 1px solid var(--border); text-align: center; }
+    .codon-table thead th {
+        background: #eef2f7; color: var(--text); font-size: .75rem; font-weight: 700;
+        padding: .5rem .3rem; letter-spacing: .03em;
     }
-    .codon-cell .tri { font-size: 1.12rem; letter-spacing: .06em; display:block; line-height:1; }
-    .codon-cell .aa { font-size: .66rem; opacity: .9; display:block; margin-top:.12rem; font-weight: 600; line-height:1; }
-    .codon-cell.stop { background: #fecaca; color: #991b1b; }
-    .codon-cell.meta { background: #e2e8f0; color: #475569; }
-    .codon-legend { display:flex; gap:.8rem; flex-wrap:wrap; margin-top:.7rem; font-size: .72rem; color: var(--text-2); }
+    .codon-table thead th .base { display: inline-block; min-width: 1.5em; padding: .1rem .3rem; margin-left: .2rem; border-radius: 4px; background: #fff; color: var(--primary); font-family: "SF Mono", Consolas, monospace; }
+    .codon-table .cb-first {
+        width: 42px; background: #eef2f7; color: var(--primary); font-family: "SF Mono", Consolas, monospace;
+        font-size: 1.05rem; font-weight: 700;
+    }
+    .codon-table .cb-second {
+        width: 46px; background: #f8fafc; color: var(--text-2); font-family: "SF Mono", Consolas, monospace;
+        font-size: .95rem; font-weight: 700;
+    }
+    .codon-table td.codon-cell { padding: .42rem .2rem; cursor: default; user-select: none; }
+    .codon-cell .tri { display: block; font-family: "SF Mono", Consolas, monospace; font-size: 1.02rem; font-weight: 700; letter-spacing: .05em; line-height: 1.12; color: var(--text); }
+    .codon-cell .aa { display: block; font-size: .68rem; font-weight: 600; line-height: 1.2; margin-top: .12rem; color: var(--text-2); }
+    .codon-cell .aa .one { color: var(--text); font-weight: 700; }
+    .codon-cell.stop { background: #fee2e2 !important; box-shadow: inset 3px 0 0 #dc2626 !important; }
+    .codon-cell.stop .tri, .codon-cell.stop .aa, .codon-cell.stop .aa .one { color: #991b1b; }
+    .codon-cell.start { outline: 2px solid #f59e0b; outline-offset: -3px; }
+    .codon-legend { display:flex; gap:.5rem .8rem; flex-wrap:wrap; margin-top:.7rem; font-size: .72rem; color: var(--text-2); }
     .legend-swatch { width: 16px; height: 16px; border-radius: 4px; display:inline-block; margin-right:.5rem; vertical-align: middle; border: 1px solid rgba(0,0,0,.1); }
-    .ref-subtabs { display:flex; gap:.35rem; margin-bottom:.9rem; overflow-x:auto; }
+    .ref-subtabs { display:flex; flex-wrap:nowrap; gap:.35rem; margin-bottom:.9rem; overflow-x:auto; padding-bottom:.15rem; }
     .ref-subtab {
-        padding: .5rem .8rem; border-radius: 8px; border: 1px solid var(--border);
-        background: #f8fafc; font-size: .82rem; color: var(--text-2); cursor: pointer;
+        flex: 0 0 auto; padding: .5rem .8rem; border-radius: 8px; border: 1px solid var(--border);
+        background: #f8fafc; font-size: .82rem; color: var(--text-2); cursor: pointer; white-space: nowrap;
     }
     .ref-subtab:hover { background: var(--primary-light); color: var(--primary); }
     .ref-subtab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
@@ -404,8 +419,8 @@
     <div class="panel" id="panel-ref">
         <div class="card">
             <h2><span class="ico">📚</span>生物参考手册（查询与学习）</h2>
-            <input type="text" id="refSearch" class="ref-search" placeholder="搜索氨基酸、密码子或简并碱基……支持中文/英文/简写/符号">
-            <div class="ref-filters">
+            <input type="text" id="refSearch" class="ref-search" placeholder="搜索氨基酸、密码子、缓冲液、酶切位点、标签、单位或荧光蛋白……支持中文/英文/简写/符号">
+            <div class="ref-filters" id="refFilters" style="display:none">
                 <button class="chip active" data-filter="all">全部</button>
                 <button class="chip" data-filter="nonpolar">非极性 / 疏水</button>
                 <button class="chip" data-filter="polar">极性非带电</button>
@@ -416,11 +431,26 @@
                 <button class="ref-subtab active" data-sub="codon">🧬 标准遗传密码子表</button>
                 <button class="ref-subtab" data-sub="aa">🧪 20 种氨基酸性质表</button>
                 <button class="ref-subtab" data-sub="degen">🔠 简并碱基符号表</button>
+                <button class="ref-subtab" data-sub="nucleic">🧾 核酸与定量换算</button>
+                <button class="ref-subtab" data-sub="buffers">🧫 缓冲液与培养基</button>
+                <button class="ref-subtab" data-sub="reagents">💊 抗生素与母液</button>
+                <button class="ref-subtab" data-sub="tags">🏷️ 蛋白标签与蛋白酶</button>
+                <button class="ref-subtab" data-sub="enzymes">✂️ 限制性内切酶</button>
+                <button class="ref-subtab" data-sub="units">📏 单位换算与实验计算</button>
+                <button class="ref-subtab" data-sub="fluor">🌈 荧光蛋白与报告基因</button>
             </div>
 
             <div id="ref-codon" class="ref-subpanel active"></div>
             <div id="ref-aa" class="ref-subpanel" style="display:none"></div>
             <div id="ref-degen" class="ref-subpanel" style="display:none"></div>
+            <div id="ref-nucleic" class="ref-subpanel" style="display:none"></div>
+            <div id="ref-buffers" class="ref-subpanel" style="display:none"></div>
+            <div id="ref-reagents" class="ref-subpanel" style="display:none"></div>
+            <div id="ref-tags" class="ref-subpanel" style="display:none"></div>
+            <div id="ref-enzymes" class="ref-subpanel" style="display:none"></div>
+            <div id="ref-units" class="ref-subpanel" style="display:none"></div>
+            <div id="ref-fluor" class="ref-subpanel" style="display:none"></div>
+            <div class="hint" style="margin-top:.8rem">本手册为常用实验参数速查，具体配方、酶活性和筛选浓度请以试剂厂商说明书、所在实验室 SOP 或最新文献为准。</div>
         </div>
     </div>
 
@@ -483,7 +513,7 @@
                     <input type="number" id="coGcWin" value="50" min="20" max="200">
                 </div>
             </div>
-            <div class="ref-filters" style="margin-top:.7rem;margin-bottom:0">
+            <div class="chip-row" style="margin-top:.7rem">
                 <button class="chip active" id="coHomoChip">避免 ≥5 聚聚体（同碱基连续）</button>
                 <button class="chip" id="coCpGChip">避免 CpG 二核苷酸</button>
             </div>
@@ -972,26 +1002,160 @@ const CODON_MAP = {
 
 // 20 种氨基酸完整性质（分子式为游离氨基酸形式）
 const AA_DATA = {
-    A: {name:"Alanine",      zh:"丙氨酸",   three:"Ala", formula:"C3H7NO2",    type:"nonpolar", desc:"非极性，小侧链"},
-    R: {name:"Arginine",     zh:"精氨酸",   three:"Arg", formula:"C6H14N4O2",  type:"basic",    desc:"碱性，胍基带正电"},
-    N: {name:"Asparagine",   zh:"天冬酰胺", three:"Asn", formula:"C4H8N2O3",   type:"polar",    desc:"极性非带电，酰胺"},
-    D: {name:"Aspartate",    zh:"天冬氨酸", three:"Asp", formula:"C4H7NO4",    type:"acidic",   desc:"酸性，羧基带负电"},
-    C: {name:"Cysteine",     zh:"半胱氨酸", three:"Cys", formula:"C3H7NO2S",   type:"polar",    desc:"极性，巯基可形成二硫键"},
-    E: {name:"Glutamate",    zh:"谷氨酸",   three:"Glu", formula:"C5H9NO4",    type:"acidic",   desc:"酸性，羧基带负电"},
-    Q: {name:"Glutamine",    zh:"谷氨酰胺", three:"Gln", formula:"C5H10N2O3",  type:"polar",    desc:"极性非带电，酰胺"},
-    G: {name:"Glycine",      zh:"甘氨酸",   three:"Gly", formula:"C2H5NO2",    type:"nonpolar", desc:"非极性，最小侧链(H)"},
-    H: {name:"Histidine",    zh:"组氨酸",   three:"His", formula:"C6H9N3O2",   type:"basic",    desc:"碱性，咪唑基，pKa≈6，近中性可质子化"},
-    I: {name:"Isoleucine",   zh:"异亮氨酸", three:"Ile", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链"},
-    L: {name:"Leucine",      zh:"亮氨酸",   three:"Leu", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链"},
-    K: {name:"Lysine",       zh:"赖氨酸",   three:"Lys", formula:"C6H14N2O2",  type:"basic",    desc:"碱性，氨基带正电"},
-    M: {name:"Methionine",   zh:"甲硫氨酸", three:"Met", formula:"C5H11NO2S",  type:"nonpolar", desc:"非极性，含硫；起始密码子 AUG 对应"},
-    F: {name:"Phenylalanine",zh:"苯丙氨酸", three:"Phe", formula:"C9H11NO2",   type:"nonpolar", desc:"非极性，芳香族"},
-    P: {name:"Proline",      zh:"脯氨酸",   three:"Pro", formula:"C5H9NO2",    type:"nonpolar", desc:"非极性，亚氨基酸，破坏α螺旋"},
-    S: {name:"Serine",       zh:"丝氨酸",   three:"Ser", formula:"C3H7NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化"},
-    T: {name:"Threonine",    zh:"苏氨酸",   three:"Thr", formula:"C4H9NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化"},
-    W: {name:"Tryptophan",   zh:"色氨酸",   three:"Trp", formula:"C11H12N2O2", type:"nonpolar", desc:"非极性，芳香族，最大侧链，A280 贡献最大"},
-    Y: {name:"Tyrosine",     zh:"酪氨酸",   three:"Tyr", formula:"C9H11NO3",   type:"polar",    desc:"极性弱，酚羟基，可磷酸化，A280 有贡献"},
-    V: {name:"Valine",       zh:"缬氨酸",   three:"Val", formula:"C5H11NO2",   type:"nonpolar", desc:"非极性，支链"}
+    A: {name:"Alanine",      zh:"丙氨酸",   three:"Ala", formula:"C3H7NO2",    type:"nonpolar", desc:"非极性，小侧链",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₃`},
+    R: {name:"Arginine",     zh:"精氨酸",   three:"Arg", formula:"C6H14N4O2",  type:"basic",    desc:"碱性，胍基带正电",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─CH₂─CH₂─NH─C(=NH)NH₂`},
+    N: {name:"Asparagine",   zh:"天冬酰胺", three:"Asn", formula:"C4H8N2O3",   type:"polar",    desc:"极性非带电，酰胺",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─C(=O)NH₂`},
+    D: {name:"Aspartate",    zh:"天冬氨酸", three:"Asp", formula:"C4H7NO4",    type:"acidic",   desc:"酸性，羧基带负电",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─COOH`},
+    C: {name:"Cysteine",     zh:"半胱氨酸", three:"Cys", formula:"C3H7NO2S",   type:"polar",    desc:"极性，巯基可形成二硫键",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─SH`},
+    E: {name:"Glutamate",    zh:"谷氨酸",   three:"Glu", formula:"C5H9NO4",    type:"acidic",   desc:"酸性，羧基带负电",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─CH₂─COOH`},
+    Q: {name:"Glutamine",    zh:"谷氨酰胺", three:"Gln", formula:"C5H10N2O3",  type:"polar",    desc:"极性非带电，酰胺",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─CH₂─C(=O)NH₂`},
+    G: {name:"Glycine",      zh:"甘氨酸",   three:"Gly", formula:"C2H5NO2",    type:"nonpolar", desc:"非极性，最小侧链(H)",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    H`},
+    H: {name:"Histidine",    zh:"组氨酸",   three:"His", formula:"C6H9N3O2",   type:"basic",    desc:"碱性，咪唑基，pKa≈6，近中性可质子化",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─┌─CH
+        │  ║
+        N  C─H
+        │  │
+        CH─N`},
+    I: {name:"Isoleucine",   zh:"异亮氨酸", three:"Ile", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH(CH₃)─CH₂─CH₃`},
+    L: {name:"Leucine",      zh:"亮氨酸",   three:"Leu", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─CH(CH₃)₂`},
+    K: {name:"Lysine",       zh:"赖氨酸",   three:"Lys", formula:"C6H14N2O2",  type:"basic",    desc:"碱性，氨基带正电",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─CH₂─CH₂─CH₂─NH₂`},
+    M: {name:"Methionine",   zh:"甲硫氨酸", three:"Met", formula:"C5H11NO2S",  type:"nonpolar", desc:"非极性，含硫；起始密码子 AUG 对应",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─CH₂─S─CH₃`},
+    F: {name:"Phenylalanine",zh:"苯丙氨酸", three:"Phe", formula:"C9H11NO2",   type:"nonpolar", desc:"非极性，芳香族",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─Ph
+    (苯环)`},
+    P: {name:"Proline",      zh:"脯氨酸",   three:"Pro", formula:"C5H9NO2",    type:"nonpolar", desc:"非极性，亚氨基酸，破坏α螺旋",
+        structure:
+`    H
+    │
+    N
+   ╱  ╲
+CH₂  CH₂
+ │    │
+CH₂  COOH
+  ╲  ╱
+   CH₂`},
+    S: {name:"Serine",       zh:"丝氨酸",   three:"Ser", formula:"C3H7NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─OH`},
+    T: {name:"Threonine",    zh:"苏氨酸",   three:"Thr", formula:"C4H9NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH(OH)─CH₃`},
+    W: {name:"Tryptophan",   zh:"色氨酸",   three:"Trp", formula:"C11H12N2O2", type:"nonpolar", desc:"非极性，芳香族，最大侧链，A280 贡献最大",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─┌─CH
+        │  ║
+        NH  C
+        │  ║
+        CH─CH`},
+    Y: {name:"Tyrosine",     zh:"酪氨酸",   three:"Tyr", formula:"C9H11NO3",   type:"polar",    desc:"极性弱，酚羟基，可磷酸化，A280 有贡献",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH₂─Ph─OH
+    (对位)`},
+    V: {name:"Valine",       zh:"缬氨酸",   three:"Val", formula:"C5H11NO2",   type:"nonpolar", desc:"非极性，支链",
+        structure:
+`    H
+    │
+H₂N─C─COOH
+    │
+    CH(CH₃)₂`}
 };
 
 const TYPE_LABEL = { nonpolar:"非极性 / 疏水", polar:"极性非带电", acidic:"酸性", basic:"碱性" };
@@ -1025,48 +1189,268 @@ const DEGEN = [
     {sym:"N", bases:"A/C/G/T", zh:"任意", note:"任一碱基（any）"}
 ];
 
+const NUCLEIC_BASES = [
+    {base:"A", zh:"腺嘌呤", type:"嘌呤", pair:"T（DNA）/ U（RNA）", hbond:"2", note:"ATP、dATP 的碱基"},
+    {base:"T", zh:"胸腺嘧啶", type:"嘧啶", pair:"A", hbond:"2", note:"DNA 特有；RNA 中为 U"},
+    {base:"U", zh:"尿嘧啶", type:"嘧啶", pair:"A", hbond:"2", note:"RNA 特有；DNA 中为 T"},
+    {base:"G", zh:"鸟嘌呤", type:"嘌呤", pair:"C", hbond:"3", note:"GTP、dGTP 的碱基"},
+    {base:"C", zh:"胞嘧啶", type:"嘧啶", pair:"G", hbond:"3", note:"CTP、dCTP 的碱基"}
+];
+
+const BUFFERS = [
+    {name:"50× TAE", recipe:"Tris 242 g<br>冰乙酸 57.1 mL<br>0.5 M EDTA (pH 8.0) 100 mL<br>ddH₂O 至 1 L", use:"琼脂糖凝胶电泳；1× 工作液（1:49 稀释）", note:"缓冲容量较低，长时间电泳建议循环或更换"},
+    {name:"10× TBE", recipe:"Tris 108.8 g<br>硼酸 55.0 g<br>0.5 M EDTA (pH 8.0) 40 mL<br>ddH₂O 至 1 L", use:"琼脂糖/聚丙烯酰胺电泳；1× 工作液（1:9 稀释）", note:"长期存放易产生沉淀，建议室温保存 5× 或 10× 母液"},
+    {name:"10× PBS", recipe:"NaCl 80 g<br>KCl 2 g<br>Na₂HPO₄（无水）14.4 g<br>KH₂PO₄ 2.4 g<br>ddH₂O 至 1 L，pH 7.4", use:"细胞洗涤、免疫实验；1× 工作液（1:9 稀释）", note:"磷酸盐缓冲液，含 Ca²⁺/Mg²⁺ 的版本需另加"},
+    {name:"10× TBS", recipe:"Tris 24.2 g<br>NaCl 87.6 g<br>ddH₂O 至 1 L，pH 7.6", use:"Western blot 洗涤/抗体稀释；1× 工作液（1:9 稀释）", note:"常配成 TBST：1× TBS + 0.05%–0.1% Tween-20"},
+    {name:"TE (1×)", recipe:"10 mM Tris-HCl (pH 8.0)<br>1 mM EDTA (pH 8.0)", use:"DNA/RNA 溶解与保存", note:"EDTA 螯合 Mg²⁺，抑制核酸酶"},
+    {name:"5× Tris-Glycine SDS", recipe:"Tris 15.1 g<br>甘氨酸 94 g<br>SDS 5 g<br>ddH₂O 至 1 L", use:"SDS-PAGE 电泳；1× 工作液（1:4 稀释）", note:"pH 约 8.3，不需调 pH"},
+    {name:"Towbin 转膜液 (1×)", recipe:"Tris 3.03 g<br>甘氨酸 14.4 g<br>甲醇 200 mL<br>ddH₂O 至 1 L", use:"Western blot 湿转；可加 0.1% SDS 改善大蛋白转移", note:"甲醇促进蛋白与膜结合，但可致凝胶收缩"},
+    {name:"6× DNA 上样缓冲液", recipe:"1 M Tris-HCl (pH 7.4) 10 mL<br>100% 甘油 60 mL<br>0.5 M EDTA 12 mL<br>溴酚蓝 0.01 g<br>ddH₂O 至 100 mL", use:"DNA 琼脂糖凝胶上样", note:"溴酚蓝约相当于 300 bp，二甲苯青约相当于 4 kb"},
+    {name:"5× SDS-PAGE 上样缓冲液", recipe:"250 mM Tris-HCl (pH 6.8)<br>10% SDS<br>50% 甘油<br>0.5% 溴酚蓝<br>5% β-巯基乙醇（或 500 mM DTT）", use:"蛋白变性上样；95–100°C 加热 5–10 min", note:"β-巯基乙醇需通风柜操作；还原剂现用现加"},
+    {name:"考马斯亮蓝染色液", recipe:"考马斯亮蓝 R-250 1 g<br>甲醇 400 mL<br>冰乙酸 100 mL<br>ddH₂O 至 1 L", use:"SDS-PAGE 凝胶染色", note:"脱色液：甲醇 400 mL + 冰乙酸 100 mL + ddH₂O 至 1 L"},
+    {name:"0.5 M EDTA (pH 8.0)", recipe:"EDTA·2Na·2H₂O 186.1 g<br>ddH₂O 约 800 mL，NaOH 调 pH 8.0<br>定容至 1 L", use:"核酸酶抑制、螯合金属离子", note:"EDTA 在 pH 接近 8.0 时才完全溶解"},
+    {name:"1 M Tris-HCl (pH 8.0)", recipe:"Tris base 121.1 g<br>ddH₂O 约 800 mL，HCl 调 pH 8.0<br>定容至 1 L", use:"常用缓冲液母液", note:"pH 随温度变化明显，室温校准"},
+    {name:"5 M NaCl", recipe:"NaCl 292.2 g<br>ddH₂O 至 1 L", use:"调节离子强度", note:"可高压灭菌"},
+    {name:"3 M NaOAc (pH 5.2)", recipe:"NaOAc·3H₂O 408.3 g<br>冰乙酸调 pH 5.2<br>ddH₂O 至 1 L", use:"DNA/RNA 乙醇沉淀", note:"低温放置易析出，使用前温热溶解"},
+    {name:"10% SDS", recipe:"SDS 100 g<br>ddH₂O 至 1 L（可加热助溶）", use:"蛋白裂解、电泳", note:"低温会析出，使用前温水浴溶解"}
+];
+
+const MEDIA = [
+    {name:"LB", recipe:"胰蛋白胨 10 g<br>酵母提取物 5 g<br>NaCl 10 g<br>ddH₂O 至 1 L，pH 7.0", use:"常规大肠杆菌培养；固体加琼脂 15 g/L", note:"最常用的细菌培养基"},
+    {name:"2×YT", recipe:"胰蛋白胨 16 g<br>酵母提取物 10 g<br>NaCl 5 g<br>ddH₂O 至 1 L，pH 7.0", use:"大肠杆菌高密度培养、质粒扩增；固体加琼脂 15 g/L", note:"营养比 LB 更丰富，产菌量更高"},
+    {name:"TB", recipe:"胰蛋白胨 12 g<br>酵母提取物 24 g<br>甘油 4 mL<br>10× 磷酸盐缓冲液 100 mL<br>ddH₂O 至 1 L", use:"高密度发酵、蛋白表达", note:"10× 磷酸盐：0.17 M KH₂PO₄ + 0.72 M K₂HPO₄"},
+    {name:"SOC", recipe:"胰蛋白胨 20 g<br>酵母提取物 5 g<br>NaCl 0.5 g<br>1 M KCl 2.5 mL<br>1 M MgCl₂ 10 mL<br>1 M 葡萄糖 20 mL<br>ddH₂O 至 1 L，pH 7.0", use:"感受态细胞热激后恢复培养", note:"葡萄糖和 Mg²⁺ 需过滤除菌后加入"},
+    {name:"M9 基本培养基", recipe:"Na₂HPO₄ 6 g<br>KH₂PO₄ 3 g<br>NaCl 0.5 g<br>NH₄Cl 1 g<br>1 M MgSO₄ 2 mL<br>1 M CaCl₂ 0.1 mL<br>20% 葡萄糖 20 mL<br>ddH₂O 至 1 L", use:"同位素标记、代谢实验", note:"按需补充维生素、氨基酸或抗生素"}
+];
+
+const ANTIBIOTICS = [
+    {name:"氨苄青霉素 Ampicillin (Amp)", stock:"100 mg/mL（水）", working:"E. coli 50–100 µg/mL", storage:"−20°C", note:"β-内酰胺类；易降解，平板现配现用"},
+    {name:"羧苄青霉素 Carbenicillin (Carb)", stock:"50 mg/mL（水）", working:"E. coli 50–100 µg/mL", storage:"−20°C", note:"比 Amp 稳定，适合长期培养"},
+    {name:"卡那霉素 Kanamycin (Kan)", stock:"50 mg/mL（水）", working:"E. coli 30–50 µg/mL", storage:"−20°C", note:"氨基糖苷类；抗性基因 KanR/neo"},
+    {name:"氯霉素 Chloramphenicol (Cm)", stock:"34 mg/mL（乙醇）", working:"E. coli 25–50 µg/mL", storage:"−20°C，避光", note:"抑制 50S 核糖体；有毒，乙醇母液通常无需过滤"},
+    {name:"四环素 Tetracycline (Tet)", stock:"5 mg/mL（乙醇/水）", working:"E. coli 10–15 µg/mL", storage:"−20°C，避光", note:"Mg²⁺ 可拮抗；抗性基因 TetR"},
+    {name:"链霉素 Streptomycin (Str)", stock:"50 mg/mL（水）", working:"E. coli 25–50 µg/mL", storage:"−20°C", note:"氨基糖苷类"},
+    {name:"壮观霉素 Spectinomycin (Spec)", stock:"50 mg/mL（水）", working:"E. coli 50–100 µg/mL", storage:"−20°C", note:"氨基糖苷类；抗性基因 SpecR"},
+    {name:"潮霉素 B Hygromycin B (Hyg)", stock:"50 mg/mL（水）", working:"哺乳动物 50–200 µg/mL；酵母 200–300 µg/mL", storage:"4°C 或 −20°C，避光", note:"抗性基因 HygR"},
+    {name:"嘌呤霉素 Puromycin (Puro)", stock:"1–10 mg/mL（水）", working:"哺乳动物 1–10 µg/mL", storage:"−20°C", note:"作用快，筛选周期短；抗性基因 PuroR"},
+    {name:"G418 / 遗传霉素 (Neo)", stock:"50 mg/mL（水）", working:"哺乳动物 200–500 µg/mL", storage:"−20°C", note:"批次效价差异大，需做杀伤曲线"},
+    {name:"Zeocin (Zeo)", stock:"100 mg/mL（水）", working:"E. coli 25–50 µg/mL；哺乳动物 100–400 µg/mL", storage:"−20°C，避光", note:"光敏感；抗性基因 ZeoR/ble"},
+    {name:"杀稻瘟菌素 Blasticidin (Blast)", stock:"10 mg/mL（水）", working:"哺乳动物 1–10 µg/mL", storage:"−20°C", note:"抗性基因 BlastR"}
+];
+
+const REAGENTS = [
+    {name:"IPTG", stock:"1 M（水）", working:"0.1–1 mM", storage:"−20°C", note:"诱导 lac/T7 启动子；过滤除菌"},
+    {name:"X-gal", stock:"40 mg/mL（DMF）", working:"平板 40 µg/mL", storage:"−20°C，避光", note:"DMF 有毒，戴手套操作"},
+    {name:"DTT", stock:"1 M（水）", working:"1–10 mM", storage:"−20°C", note:"还原剂；不能高压灭菌"},
+    {name:"β-巯基乙醇", stock:"14.3 M 原液", working:"1–5 mM（保护蛋白）", storage:"4°C，避光", note:"SDS-PAGE 上样缓冲液常用 5% (v/v)；通风柜操作"},
+    {name:"PMSF", stock:"100 mM（异丙醇）", working:"0.1–1 mM", storage:"−20°C", note:"剧毒；水溶液不稳定，现用现加"},
+    {name:"EDTA", stock:"0.5 M，pH 8.0", working:"1–10 mM", storage:"室温或 4°C", note:"螯合 Mg²⁺，抑制金属蛋白酶"},
+    {name:"亮抑蛋白酶肽 Leupeptin", stock:"1 mg/mL（水）", working:"1–10 µg/mL", storage:"−20°C", note:"抑制丝氨酸/半胱氨酸蛋白酶"},
+    {name:"胃蛋白酶抑制剂 Pepstatin A", stock:"1 mg/mL（DMSO/甲醇）", working:"1 µg/mL", storage:"−20°C", note:"抑制天冬氨酸蛋白酶"},
+    {name:"抑蛋白酶肽 Aprotinin", stock:"1–10 mg/mL（水）", working:"1–10 µg/mL", storage:"−20°C", note:"抑制丝氨酸蛋白酶"},
+    {name:"RNase A", stock:"10 mg/mL（水）", working:"10–20 µg/mL", storage:"−20°C", note:"100°C 15 min 灭活 DNase"},
+    {name:"DNase I", stock:"1 mg/mL（水）", working:"1–10 µg/mL", storage:"−20°C", note:"需要 Mg²⁺；用于去除 DNA"},
+    {name:"溶菌酶 Lysozyme", stock:"50 mg/mL（水）", working:"0.1–1 mg/mL", storage:"−20°C", note:"裂解细菌细胞壁"},
+    {name:"蛋白酶 K Proteinase K", stock:"20 mg/mL（水）", working:"50–200 µg/mL", storage:"−20°C", note:"在含 SDS/EDTA 的缓冲液中稳定"}
+];
+
+const TAGS = [
+    {tag:"His6", size:"0.8 kDa", pos:"N/C 端", method:"Ni²⁺/Co²⁺ IMAC", elute:"100–500 mM 咪唑或低 pH", note:"最常用；可保留，注意 Ni²⁺ 泄漏与非特异结合"},
+    {tag:"GST", size:"26 kDa", pos:"N 端", method:"谷胱甘肽树脂", elute:"10–20 mM 还原型谷胱甘肽", note:"提高溶解度；形成二聚体，可用 thrombin/PreScission 切除"},
+    {tag:"MBP", size:"40 kDa", pos:"N 端", method:"直链淀粉树脂", elute:"10 mM 麦芽糖", note:"显著提高溶解度；TEV/3C 切除"},
+    {tag:"SUMO", size:"11 kDa", pos:"N 端", method:"His6-SUMO/IMAC", elute:"Ulp1/SENP2 酶切", note:"促进折叠；切除后通常不留额外残基"},
+    {tag:"FLAG", size:"1.0 kDa", pos:"N/C 端", method:"anti-FLAG M2", elute:"100–200 µg/mL FLAG 肽或低 pH", note:"M2 结合依赖 Ca²⁺；可用肠激酶/TEV 切除"},
+    {tag:"HA", size:"1.1 kDa", pos:"N/C 端", method:"anti-HA", elute:"HA 肽", note:"检测和免疫沉淀常用"},
+    {tag:"Myc", size:"1.2 kDa", pos:"N/C 端", method:"anti-Myc 9E10", elute:"Myc 肽", note:"检测和免疫沉淀常用"},
+    {tag:"V5", size:"1.4 kDa", pos:"N/C 端", method:"anti-V5", elute:"V5 肽", note:"检测常用"},
+    {tag:"Strep-tag II", size:"1.0 kDa", pos:"N/C 端", method:"Strep-Tactin", elute:"脱硫生物素", note:"洗脱条件温和"},
+    {tag:"CBP", size:"2.5 kDa", pos:"N/C 端", method:"钙调蛋白树脂", elute:"EGTA", note:"结合依赖 Ca²⁺"},
+    {tag:"GFP", size:"27 kDa", pos:"N/C 端", method:"荧光检测/免疫沉淀", elute:"—", note:"报告基因或定位标记；也可用于纯化"}
+];
+
+const PROTEASES = [
+    {name:"TEV protease", site:"ENLYFQ↓G", cond:"4°C 12–16 h 或室温 2–4 h", buffer:"50 mM Tris-HCl pH 8.0，0.5 mM EDTA，1 mM DTT", note:"特异性高；His-tag 版本便于去除"},
+    {name:"PreScission / 3C", site:"LEVLFQ↓GP", cond:"4°C 12–16 h", buffer:"50 mM Tris-HCl pH 7.0–7.5，150 mM NaCl，1 mM EDTA，1 mM DTT", note:"低温过夜，条件温和"},
+    {name:"Thrombin", site:"LVPR↓GS", cond:"室温 2–16 h", buffer:"20 mM Tris-HCl pH 8.0，150 mM NaCl，2.5 mM CaCl₂", note:"切除后常留下 GS 残基"},
+    {name:"Factor Xa", site:"IEGR↓", cond:"室温 2–16 h", buffer:"20 mM Tris-HCl pH 8.0，100 mM NaCl，1–2 mM CaCl₂", note:"可能产生非特异切割"},
+    {name:"Enterokinase", site:"DDDDK↓", cond:"室温 12–16 h", buffer:"20 mM Tris-HCl pH 8.0，50 mM NaCl，2 mM CaCl₂", note:"识别五肽，特异性较好"},
+    {name:"SUMO protease (Ulp1)", site:"GG↓", cond:"4°C 1–16 h", buffer:"20 mM Tris-HCl pH 8.0，150 mM NaCl，1 mM DTT", note:"切除 SUMO 标签，暴露天然 N 端"}
+];
+
+const ENZYMES = [
+    {name:"EcoRI", site:"G^AATTC", end:"5′ 4 nt", note:"常用 6  cutter"},
+    {name:"BamHI", site:"G^GATCC", end:"5′ 4 nt", note:"与 BglII/BclI 同为 GATC 粘性末端"},
+    {name:"HindIII", site:"A^AGCTT", end:"5′ 4 nt", note:"常用 6  cutter"},
+    {name:"XhoI", site:"C^TCGAG", end:"5′ 4 nt", note:"与 SalI 同为 TCGA 粘性末端"},
+    {name:"SalI", site:"G^TCGAC", end:"5′ 4 nt", note:"与 XhoI 同为 TCGA 粘性末端"},
+    {name:"PstI", site:"CTGCA^G", end:"3′ 4 nt", note:"产生 3′ 突出端"},
+    {name:"KpnI", site:"GGTAC^C", end:"3′ 4 nt", note:"产生 3′ 突出端"},
+    {name:"SacI", site:"GAGCT^C", end:"3′ 4 nt", note:"产生 3′ 突出端"},
+    {name:"SmaI", site:"CCC^GGG", end:"平末端", note:"平末端连接效率较低"},
+    {name:"EcoRV", site:"GAT^ATC", end:"平末端", note:"平末端"},
+    {name:"NdeI", site:"CA^TATG", end:"5′ 4 nt", note:"常用于 N 端 His 标签表达载体"},
+    {name:"NcoI", site:"C^CATGG", end:"5′ 4 nt", note:"可提供起始密码子 ATG"},
+    {name:"NheI", site:"G^CTAGC", end:"5′ 4 nt", note:"与 SpeI/XbaI 同为 CTAG 粘性末端"},
+    {name:"SpeI", site:"A^CTAGT", end:"5′ 4 nt", note:"与 NheI/XbaI 同为 CTAG 粘性末端"},
+    {name:"XbaI", site:"T^CTAGA", end:"5′ 4 nt", note:"与 NheI/SpeI 同为 CTAG 粘性末端"},
+    {name:"BglII", site:"A^GATCT", end:"5′ 4 nt", note:"与 BamHI/BclI 同为 GATC 粘性末端"},
+    {name:"BclI", site:"T^GATCA", end:"5′ 4 nt", note:"Dam 甲基化敏感，需用 dam⁻ 菌株"},
+    {name:"MluI", site:"A^CGCGT", end:"5′ 4 nt", note:"常用 6  cutter"},
+    {name:"NotI", site:"GC^GGCCGC", end:"5′ 4 nt", note:"稀有 cutter；与 EagI 同为 GGCC 粘性末端"},
+    {name:"EagI", site:"C^GGCCG", end:"5′ 4 nt", note:"与 NotI 同为 GGCC 粘性末端"},
+    {name:"SphI", site:"GCATG^C", end:"3′ 4 nt", note:"产生 3′ 突出端"},
+    {name:"AatII", site:"GACGT^C", end:"3′ 4 nt", note:"产生 3′ 突出端"},
+    {name:"AgeI", site:"A^CCGGT", end:"5′ 4 nt", note:"常用 6  cutter"},
+    {name:"ClaI", site:"AT^CGAT", end:"5′ 4 nt", note:"部分位点受 Dam 甲基化影响"},
+    {name:"BsaI", site:"GGTCTC(1/5)", end:"5′ 4 nt", note:"Type IIS；Golden Gate 常用"},
+    {name:"BbsI", site:"GAAGAC(2/6)", end:"5′ 4 nt", note:"Type IIS；Golden Gate 常用"},
+    {name:"BsmBI / Esp3I", site:"CGTCTC(1/5)", end:"5′ 4 nt", note:"Type IIS；Golden Gate 常用"},
+    {name:"SfiI", site:"GGCCNNNN^NGGCC", end:"5′ 3 nt", note:"稀有 cutter；识别序列含 N"},
+    {name:"XmnI", site:"GAANN^NNTTC", end:"平末端", note:"识别序列含 N"},
+    {name:"HinfI", site:"G^ANTC", end:"5′ 粘性", note:"识别序列含 N"},
+    {name:"DdeI", site:"C^TNAG", end:"5′ 粘性", note:"识别序列含 N"},
+    {name:"BstEII", site:"G^GTNACC", end:"5′ 粘性", note:"识别序列含 N"},
+    {name:"BglI", site:"GCCNNNN^NGGC", end:"3′ 粘性", note:"识别序列含 N"}
+];
+
+const SI_PREFIXES = [
+    {prefix:"T", name:"太", factor:"10¹²", example:"THz"},
+    {prefix:"G", name:"吉", factor:"10⁹", example:"GBq"},
+    {prefix:"M", name:"兆", factor:"10⁶", example:"MHz"},
+    {prefix:"k", name:"千", factor:"10³", example:"kDa"},
+    {prefix:"—", name:"—", factor:"1", example:"m"},
+    {prefix:"m", name:"毫", factor:"10⁻³", example:"mL"},
+    {prefix:"µ", name:"微", factor:"10⁻⁶", example:"µL"},
+    {prefix:"n", name:"纳", factor:"10⁻⁹", example:"ng"},
+    {prefix:"p", name:"皮", factor:"10⁻¹²", example:"pmol"},
+    {prefix:"f", name:"飞", factor:"10⁻¹⁵", example:"fmol"}
+];
+
+const CONVERSIONS = [
+    {item:"质量", formula:"1 g = 1000 mg = 10⁶ µg = 10⁹ ng", example:"1 µg = 10⁻⁶ g"},
+    {item:"体积", formula:"1 L = 1000 mL = 10⁶ µL", example:"1 mL = 1 cm³"},
+    {item:"摩尔浓度", formula:"1 M = 1000 mM = 10⁶ µM = 10⁹ nM", example:"10 mM = 10,000 µM"},
+    {item:"稀释", formula:"C₁V₁ = C₂V₂；稀释倍数 = V总 / V样品", example:"10× 母液配 1×：1 份母液 + 9 份溶剂"},
+    {item:"百分比浓度", formula:"1% (w/v) = 10 g/L = 10 mg/mL", example:"0.1% SDS = 1 g/L"},
+    {item:"ppm", formula:"1 ppm ≈ 1 µg/mL（稀水溶液）", example:"1 ppm = 1 mg/L"},
+    {item:"离心力", formula:"RCF (×g) = 1.118 × 10⁻⁵ × r (cm) × rpm²", example:"r=10 cm，1000 rpm ≈ 112 ×g"},
+    {item:"A260 定量", formula:"dsDNA 50；ssDNA 33；RNA 40（µg/mL per A260，1 cm）", example:"1 A260 dsDNA ≈ 50 µg/mL"},
+    {item:"温度", formula:"°F = °C × 9/5 + 32；K = °C + 273.15", example:"25°C = 77°F = 298.15 K"},
+    {item:"压力", formula:"1 atm = 101325 Pa = 760 mmHg ≈ 1.013 bar", example:"1 bar = 100 kPa"},
+    {item:"酶活", formula:"1 U = 1 µmol 底物/min；1 katal = 1 mol/s", example:"1 U ≈ 16.67 nkat"},
+    {item:"DNA → 蛋白", formula:"1 kb DNA ≈ 333 个氨基酸 ≈ 37 kDa 蛋白", example:"3 kb ORF ≈ 1000 aa ≈ 110 kDa"}
+];
+
+const RCF_ROWS = [
+    {r:"8 cm", v:"89 ×g", v2:"2236 ×g", v3:"8944 ×g", v4:"12879 ×g"},
+    {r:"10 cm", v:"112 ×g", v2:"2795 ×g", v3:"11180 ×g", v4:"16099 ×g"},
+    {r:"15 cm", v:"168 ×g", v2:"4193 ×g", v3:"16770 ×g", v4:"24149 ×g"},
+    {r:"20 cm", v:"224 ×g", v2:"5590 ×g", v3:"22360 ×g", v4:"32198 ×g"}
+];
+
+const DILUTIONS = [
+    {stock:"2×", ratio:"1:1", sample:"50 mL", solvent:"50 mL"},
+    {stock:"5×", ratio:"1:4", sample:"20 mL", solvent:"80 mL"},
+    {stock:"10×", ratio:"1:9", sample:"10 mL", solvent:"90 mL"},
+    {stock:"20×", ratio:"1:19", sample:"5 mL", solvent:"95 mL"},
+    {stock:"50×", ratio:"1:49", sample:"2 mL", solvent:"98 mL"},
+    {stock:"100×", ratio:"1:99", sample:"1 mL", solvent:"99 mL"},
+    {stock:"1000×", ratio:"1:999", sample:"1 mL", solvent:"999 mL"}
+];
+
+const FLUOR_PROTEINS = [
+    {name:"EGFP", type:"绿色", ex:"488", em:"507", note:"最常用；pH 敏感，pKa ≈ 6.0"},
+    {name:"mNeonGreen", type:"绿色", ex:"506", em:"517", note:"亮度高，单体"},
+    {name:"mClover3", type:"绿色", ex:"506", em:"518", note:"FRET 供体，亮度高"},
+    {name:"mVenus", type:"黄色", ex:"515", em:"528", note:"FRET 受体，成熟快"},
+    {name:"mCitrine", type:"黄色", ex:"516", em:"529", note:"pH 稳定性较好"},
+    {name:"mCherry", type:"红色", ex:"587", em:"610", note:"光稳定性好，单体"},
+    {name:"mScarlet", type:"红色", ex:"569", em:"594", note:"亮度高，单体"},
+    {name:"mRFP1", type:"红色", ex:"584", em:"607", note:"第一代单体红色荧光蛋白"},
+    {name:"mKate2", type:"远红", ex:"588", em:"633", note:"适合深层组织成像"},
+    {name:"mPlum", type:"远红", ex:"590", em:"649", note:"远红，亮度较低"},
+    {name:"mTurquoise2", type:"青色", ex:"434", em:"474", note:"高量子产率，FRET 供体"},
+    {name:"mCerulean", type:"青色", ex:"433", em:"475", note:"常用青色荧光蛋白"},
+    {name:"EBFP2", type:"蓝色", ex:"383", em:"448", note:"亮度较高的蓝色荧光蛋白"},
+    {name:"iRFP670", type:"近红外", ex:"643", em:"670", note:"需胆绿素；组织穿透性好"},
+    {name:"iRFP720", type:"近红外", ex:"702", em:"720", note:"需胆绿素；低背景"}
+];
+
+const REPORTERS = [
+    {name:"萤火虫荧光素酶 Firefly luciferase", signal:"560 nm 发光", substrate:"荧光素 + ATP + O₂", note:"灵敏度高，适合报告基因"},
+    {name:"海肾荧光素酶 Renilla luciferase", signal:"480 nm 发光", substrate:"腔肠素", note:"常与萤火虫荧光素酶双报告"},
+    {name:"β-半乳糖苷酶 β-gal", signal:"蓝色/黄色", substrate:"X-gal / ONPG", note:"经典报告基因，可组织染色"},
+    {name:"分泌型碱性磷酸酶 SEAP", signal:"化学发光/比色", substrate:"pNPP 等", note:"可检测培养上清"},
+    {name:"荧光蛋白 GFP/RFP", signal:"荧光", substrate:"无需底物", note:"可活细胞成像和定位"}
+];
+
+const RESISTANCE_GENES = [
+    {gene:"AmpR / bla", select:"氨苄青霉素 / 羧苄青霉素", note:"分泌型 β-内酰胺酶"},
+    {gene:"KanR / neo", select:"卡那霉素 / G418", note:"氨基糖苷磷酸转移酶"},
+    {gene:"CmR / cat", select:"氯霉素", note:"氯霉素乙酰转移酶"},
+    {gene:"TetR", select:"四环素", note:"外排泵或核糖体保护"},
+    {gene:"SpecR / StrR", select:"壮观霉素 / 链霉素", note:"氨基糖苷腺苷转移酶"},
+    {gene:"HygR", select:"潮霉素 B", note:"潮霉素磷酸转移酶"},
+    {gene:"PuroR", select:"嘌呤霉素", note:"嘌呤霉素 N-乙酰转移酶"},
+    {gene:"BlastR", select:"杀稻瘟菌素", note:"脱氨酶"},
+    {gene:"ZeoR / ble", select:"Zeocin", note:"结合并中和 Zeocin"}
+];
+
+// 将颜色转换为浅色底纹，保证深色文字可读
+function tint(hex, alpha) {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+}
+
 function renderCodon(query) {
     const q = (query || "").toUpperCase();
     const B = ["U", "C", "A", "G"];
-    let blocks = "";
+    const head = '<thead><tr>' +
+        '<th>第 1 位</th><th>第 2 位</th>' +
+        B.map(z => '<th>第 3 位<span class="base">' + z + '</span></th>').join("") +
+        '</tr></thead>';
+    let body = "<tbody>";
     for (const x of B) {
-        // 该行编码的氨基酸集合（用于标题提示）
-        const aas = [];
-        for (const y of B) for (const z of B) {
-            const aa = CODON_MAP[x + y + z];
-            const name = aa === "*" ? "终止" : (AA_DATA[aa] ? AA_DATA[aa].three + " " + AA_DATA[aa].zh : aa);
-            if (!aas.includes(name)) aas.push(name);
-        }
-        let cells = '<div class="sec-head">第 2 位 →</div>';
-        for (const y of B) cells += '<div class="sec-head">' + y + "</div>";
-        for (const y of B) for (const z of B) {
-            const c = x + y + z;
-            const aa = CODON_MAP[c];
-            const color = AA_COLOR[aa] || "#94a3b8";
-            const isStop = aa === "*";
-            const isStart = c === "AUG";
-            const d = AA_DATA[aa];
-            const hit = q && (c.includes(q) || aa === q ||
-                (d && (d.three.toUpperCase().includes(q) || d.zh.includes(q) || d.name.toUpperCase().includes(q))));
-            const dim = q && !hit ? "opacity:.15;" : "";
-            const title = c + " → " + (isStop ? "终止密码子" : aa + (d ? "（" + d.three + " " + d.zh + "）" : "")) +
-                (isStart ? "；起始密码子" : "");
-            cells += '<div class="codon-cell' + (isStop ? " stop" : "") + '" style="background:' + color + ';' + dim + '" title="' + title + '">' +
-                '<span class="tri">' + c + '</span>' +
-                '<span class="aa">' + (isStop ? "Stop" : aa) + (isStart ? "★" : "") + '</span></div>';
-        }
-        blocks += '<div class="codon-block">' +
-            '<div class="codon-block-title">第 1 位 = <b style="color:var(--primary)">' + x + '</b>　编码：' + aas.join("、") + '</div>' +
-            '<div class="codon-scroll"><div class="codon-grid">' + cells + '</div></div></div>';
+        B.forEach((y, yi) => {
+            body += "<tr>";
+            if (yi === 0) body += '<td class="cb-first" rowspan="4">' + x + '</td>';
+            body += '<td class="cb-second">' + x + y + '</td>';
+            for (const z of B) {
+                const c = x + y + z;
+                const aa = CODON_MAP[c];
+                const color = AA_COLOR[aa] || "#94a3b8";
+                const isStop = aa === "*";
+                const isStart = c === "AUG";
+                const d = AA_DATA[aa];
+                const hit = q && (c.includes(q) || aa === q ||
+                    (d && (d.three.toUpperCase().includes(q) || d.zh.includes(q) || d.name.toUpperCase().includes(q))));
+                const dim = q && !hit ? "opacity:.18;" : "";
+                const title = c + " → " + (isStop ? "终止密码子" : aa + (d ? "（" + d.three + " " + d.zh + "）" : "")) +
+                    (isStart ? "；起始密码子" : "");
+                body += '<td class="codon-cell' + (isStop ? " stop" : "") + (isStart ? " start" : "") + '"' +
+                    ' style="background:' + tint(color, 0.13) + ';box-shadow:inset 3px 0 0 ' + color + ';' + dim + '"' +
+                    ' title="' + title + '">' +
+                    '<span class="tri">' + c + '</span>' +
+                    '<span class="aa">' + (isStop ? "Stop 终止" : (d ? d.three + " <span class=\"one\">" + aa + '</span>' : aa)) +
+                    (isStart ? " ★" : "") + '</span></td>';
+            }
+            body += "</tr>";
+        });
     }
+    body += "</tbody>";
     document.getElementById("ref-codon").innerHTML =
-        '<div class="hint" style="margin-top:0">共 64 个密码子：20 种氨基酸 + 3 个终止（UAA/UAG/UGA）；<b>★AUG</b> 为起始密码子（甲硫氨酸）。搜索时非匹配项淡显。</div>' +
-        blocks +
+        '<div class="hint" style="margin-top:0">行 = 第 1、2 位碱基，列 = 第 3 位碱基；每格给出密码子、三字母简写与单字母。<b>★AUG</b> 为起始密码子（甲硫氨酸，橙色描边）；<b>UAA/UAG/UGA</b> 为终止密码子（红色）。搜索时非匹配项淡显。</div>' +
+        '<div class="codon-table-wrap"><table class="codon-table">' + head + body + '</table></div>' +
         '<div class="codon-legend">' + Object.keys(AA_COLOR).map(aa => {
             const name = aa === "*" ? "终止" : (AA_DATA[aa] ? aa + " " + AA_DATA[aa].three + " " + AA_DATA[aa].zh : aa);
             return '<span><span class="legend-swatch" style="background:' + AA_COLOR[aa] + '"></span>' + name + '</span>';
         }).join("") + '</div>';
 }
+
+// 化学式数字转下标：C3H7NO2 → C₃H₇NO₂
+const SUB_DIGITS = { "0":"₀", "1":"₁", "2":"₂", "3":"₃", "4":"₄", "5":"₅", "6":"₆", "7":"₇", "8":"₈", "9":"₉" };
+function subFormula(f) { return f.replace(/[0-9]/g, d => SUB_DIGITS[d]); }
 
 function renderAA(query, filter) {
     const q = (query || "").toLowerCase();
@@ -1075,23 +1459,25 @@ function renderAA(query, filter) {
     for (const aa of order) {
         const d = AA_DATA[aa];
         if (filter && filter !== "all" && d.type !== filter) continue;
-        const text = (aa + " " + d.three + " " + d.zh + " " + d.name + " " + d.formula + " " + d.desc).toLowerCase();
+        const text = (aa + " " + d.three + " " + d.zh + " " + d.name + " " + d.formula + " " + d.structure + " " + d.desc).toLowerCase();
         if (q && !text.includes(q)) continue;
         const color = AA_COLOR[aa];
         rows += '<tr>' +
-            '<td><span style="display:inline-block;width:22px;height:22px;border-radius:6px;background:' + color + ';color:#fff;text-align:center;line-height:22px;font-weight:700">' + aa + '</span></td>' +
+            '<td><span class="aa-badge" style="background:' + color + '">' + aa + '</span></td>' +
             '<td style="font-family:monospace;font-weight:600">' + d.three + '</td>' +
             '<td><b>' + d.zh + '</b></td>' +
             '<td>' + d.name + '</td>' +
-            '<td style="font-family:monospace">' + d.formula + '</td>' +
+            '<td style="font-family:monospace;font-weight:600;white-space:nowrap">' + subFormula(d.formula) + '</td>' +
+            '<td style="font-family:monospace;font-size:.7rem;line-height:1.3;white-space:pre">' + d.structure + '</td>' +
+            '<td style="font-variant-numeric:tabular-nums;white-space:nowrap">' + AA_MASS[aa].toFixed(2) + '</td>' +
             '<td>' + TYPE_LABEL[d.type] + '</td>' +
             '<td style="font-size:.78rem;color:var(--text-2)">' + d.desc + '</td>' +
             '</tr>';
     }
     document.getElementById("ref-aa").innerHTML =
-        '<div class="hint" style="margin-top:0">分子式为游离氨基酸形式（肽链中脱水成残基）。分组顺序：非极性 → 极性非带电 → 酸性 → 碱性。' +
+        '<div class="hint" style="margin-top:0">分子式为<b>游离氨基酸</b>形式，数字已转为下标；肽链中缩合脱水后按「残基质量」计算（游离分子量 = 残基质量 + 18.02）。结构式使用等宽字体绘制，显示主链与侧链连接键。分组顺序：非极性 → 极性非带电 → 酸性 → 碱性。' +
         (rows ? "" : '<b style="color:var(--red)">无匹配项</b>') + '</div>' +
-        '<table class="ref-table"><thead><tr><th>1 字母</th><th>3 字母</th><th>中文名</th><th>英文名</th><th>分子式</th><th>极性 / 酸碱</th><th>性质说明</th></tr></thead><tbody>' + rows + '</tbody></table>';
+        '<div class="ref-table-wrap"><table class="ref-table"><thead><tr><th>1 字母</th><th>3 字母</th><th>中文名</th><th>英文名</th><th>分子式</th><th>结构式</th><th>残基质量 (Da)</th><th>极性 / 酸碱</th><th>性质说明</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 function renderDegen(query) {
@@ -1114,15 +1500,186 @@ function renderDegen(query) {
         '<div class="hint">提示：两两简并可组合，如 <code>BN</code> = 非 A 且第二位任意；设计引物时简并度 = 各位点碱基数之积。</div>';
 }
 
+const REF_SUB = {"₀":"0","₁":"1","₂":"2","₃":"3","₄":"4","₅":"5","₆":"6","₇":"7","₈":"8","₉":"9"};
+function refNorm(v) {
+    return String(v).toLowerCase()
+        .replace(/[₀₁₂₃₄₅₆₇₈₉]/g, d => REF_SUB[d])
+        .replace(/[×✕]/g, "x").replace(/µ/g, "u")
+        .replace(/[–—]/g, "-").replace(/[′’]/g, "'");
+}
+function refHit(q, ...vals) { return !q || refNorm(vals.join(" ")).includes(refNorm(q)); }
+
+function refTable(headers, rows) {
+    const body = rows.length ? rows.join("") :
+        '<tr><td colspan="' + headers.length + '" style="text-align:center;color:var(--text-2)">无匹配项</td></tr>';
+    return '<div class="ref-table-wrap"><table class="ref-table"><thead><tr>' +
+        headers.map(h => "<th>" + h + "</th>").join("") +
+        '</tr></thead><tbody>' + body + '</tbody></table></div>';
+}
+
+function renderNucleic(query) {
+    const q = (query || "").trim().toLowerCase();
+    const hit = (...vals) => refHit(q, ...vals);
+    const baseRows = NUCLEIC_BASES.filter(b => hit(b.base, b.zh, b.type, b.pair, b.note)).map(b =>
+        "<tr><td><b>" + b.base + "</b></td><td>" + b.zh + "</td><td>" + b.type + "</td><td>" + b.pair +
+        "</td><td>" + b.hbond + "</td><td style=\"font-size:.78rem;color:var(--text-2)\">" + b.note + "</td></tr>");
+    const conc = [
+        {sample:"双链 DNA (dsDNA)", value:"50 µg/mL", note:"1 A260（1 cm 光程）≈ 50 µg/mL"},
+        {sample:"单链 DNA (ssDNA)", value:"33 µg/mL", note:"寡核苷酸也按此近似"},
+        {sample:"单链 RNA (ssRNA)", value:"40 µg/mL", note:"RNA 定量常用"},
+        {sample:"纯度 A260/A280", value:"DNA ≈ 1.8；RNA ≈ 2.0", note:"低于 1.8 提示蛋白/酚污染"},
+        {sample:"纯度 A260/A230", value:"≈ 2.0–2.2", note:"偏低提示胍盐/糖/酚残留"}
+    ];
+    const concRows = conc.filter(c => hit(c.sample, c.value, c.note)).map(c =>
+        "<tr><td>" + c.sample + "</td><td style=\"font-family:monospace;font-weight:600\">" + c.value +
+        "</td><td>" + c.note + "</td></tr>");
+    const formula = [
+        {item:"dsDNA 分子量", value:"MW ≈ 660 × bp (g/mol)", note:"平均每个碱基对约 660 Da"},
+        {item:"ssDNA 分子量", value:"MW ≈ 330 × nt (g/mol)", note:"单链 DNA"},
+        {item:"ssRNA 分子量", value:"MW ≈ 340 × nt (g/mol)", note:"单链 RNA"},
+        {item:"dsDNA 摩尔数", value:"pmol = µg × 10⁶ / (660 × bp)", note:"质量换算为摩尔"},
+        {item:"拷贝数", value:"copies = pmol × 6.022 × 10¹¹", note:"1 pmol ≈ 6.022 × 10¹¹ 个分子"},
+        {item:"常用实例", value:"1 µg 1000 bp dsDNA ≈ 1.52 pmol ≈ 9.1 × 10¹¹ 分子", note:"可用于 qPCR 标准曲线"},
+        {item:"DNA → 蛋白", value:"1 kb ≈ 333 aa ≈ 37 kDa", note:"仅估算，不含标签/修饰"},
+        {item:"Oligo Tm（≤14 nt）", value:"Tm = 2(A+T) + 4(G+C)", note:"Wallace 规则；长引物建议用 nearest-neighbor"},
+        {item:"Oligo Tm（长引物）", value:"Tm ≈ 64.9 + 41 × (G+C − 16.4) / N", note:"近似公式，盐浓度/错配会影响"}
+    ];
+    const formulaRows = formula.filter(f => hit(f.item, f.value, f.note)).map(f =>
+        "<tr><td>" + f.item + "</td><td><code>" + f.value + "</code></td><td style=\"font-size:.78rem;color:var(--text-2)\">" + f.note + "</td></tr>");
+    return '<div class="hint" style="margin-top:0">核酸碱基、A260 定量、质量↔摩尔↔拷贝数与引物 Tm 速查。A260 定量按 1 cm 光程。</div>' +
+        '<h3 class="ref-h3">碱基配对</h3>' +
+        refTable(["碱基", "中文名", "类型", "配对", "氢键数", "备注"], baseRows) +
+        '<h3 class="ref-h3">A260 定量与纯度</h3>' +
+        refTable(["样品", "1 A260 对应浓度", "说明"], concRows) +
+        '<h3 class="ref-h3">摩尔/拷贝数/Tm 公式</h3>' +
+        refTable(["项目", "公式 / 数值", "说明"], formulaRows);
+}
+
+function renderBuffers(query) {
+    const q = (query || "").trim().toLowerCase();
+    const hit = (...vals) => refHit(q, ...vals);
+    const bufferRows = BUFFERS.filter(b => hit(b.name, b.recipe, b.use, b.note)).map(b =>
+        "<tr><td><b>" + b.name + "</b></td><td style=\"font-size:.78rem\">" + b.recipe +
+        "</td><td style=\"font-size:.78rem\">" + b.use + "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + b.note + "</td></tr>");
+    const mediaRows = MEDIA.filter(m => hit(m.name, m.recipe, m.use, m.note)).map(m =>
+        "<tr><td><b>" + m.name + "</b></td><td style=\"font-size:.78rem\">" + m.recipe +
+        "</td><td style=\"font-size:.78rem\">" + m.use + "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + m.note + "</td></tr>");
+    return '<div class="hint" style="margin-top:0">配方默认按 1 L 计；固体培养基另加琼脂 15 g/L。抗生素需在培养基冷却至约 55°C 后加入。</div>' +
+        '<h3 class="ref-h3">常用缓冲液</h3>' +
+        refTable(["名称", "配方（1 L）", "用途 / 工作浓度", "备注"], bufferRows) +
+        '<h3 class="ref-h3">常用培养基</h3>' +
+        refTable(["名称", "配方（1 L）", "用途", "备注"], mediaRows);
+}
+
+function renderReagents(query) {
+    const q = (query || "").trim().toLowerCase();
+    const hit = (...vals) => refHit(q, ...vals);
+    const abRows = ANTIBIOTICS.filter(a => hit(a.name, a.stock, a.working, a.note)).map(a =>
+        "<tr><td><b>" + a.name + "</b></td><td style=\"font-size:.78rem\">" + a.stock +
+        "</td><td style=\"font-size:.78rem\">" + a.working + "</td><td>" + a.storage +
+        "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + a.note + "</td></tr>");
+    const reagentRows = REAGENTS.filter(r => hit(r.name, r.stock, r.working, r.note)).map(r =>
+        "<tr><td><b>" + r.name + "</b></td><td style=\"font-size:.78rem\">" + r.stock +
+        "</td><td style=\"font-size:.78rem\">" + r.working + "</td><td>" + r.storage +
+        "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + r.note + "</td></tr>");
+    return '<div class="hint" style="margin-top:0">工作浓度随菌株/细胞系和培养基变化，建议先做杀伤曲线。水溶液用 0.22 µm 滤膜过滤；乙醇/DMSO 母液通常无需过滤。</div>' +
+        '<h3 class="ref-h3">常用抗生素</h3>' +
+        refTable(["名称", "母液", "工作浓度", "储存", "备注"], abRows) +
+        '<h3 class="ref-h3">常用母液、诱导剂与酶抑制剂</h3>' +
+        refTable(["名称", "母液", "工作浓度", "储存", "备注"], reagentRows);
+}
+
+function renderTags(query) {
+    const q = (query || "").trim().toLowerCase();
+    const hit = (...vals) => refHit(q, ...vals);
+    const tagRows = TAGS.filter(t => hit(t.tag, t.size, t.pos, t.method, t.elute, t.note)).map(t =>
+        "<tr><td><b>" + t.tag + "</b></td><td>" + t.size + "</td><td>" + t.pos + "</td><td style=\"font-size:.78rem\">" + t.method +
+        "</td><td style=\"font-size:.78rem\">" + t.elute + "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + t.note + "</td></tr>");
+    const proRows = PROTEASES.filter(p => hit(p.name, p.site, p.cond, p.buffer, p.note)).map(p =>
+        "<tr><td><b>" + p.name + "</b></td><td style=\"font-family:monospace;white-space:nowrap\">" + p.site +
+        "</td><td style=\"font-size:.78rem\">" + p.cond + "</td><td style=\"font-size:.75rem\">" + p.buffer +
+        "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + p.note + "</td></tr>");
+    return '<div class="hint" style="margin-top:0">标签大小和位置为常见设计；切除效率与连接序列、缓冲液和温度有关，切除后请用 SDS-PAGE 验证。</div>' +
+        '<h3 class="ref-h3">常用蛋白标签</h3>' +
+        refTable(["标签", "大小", "位置", "纯化 / 检测", "洗脱 / 切除", "备注"], tagRows) +
+        '<h3 class="ref-h3">常用蛋白酶</h3>' +
+        refTable(["蛋白酶", "识别 / 切割位点", "常用条件", "缓冲液", "备注"], proRows);
+}
+
+function renderEnzymes(query) {
+    const q = (query || "").trim().toLowerCase();
+    const hit = (...vals) => refHit(q, ...vals);
+    const rows = ENZYMES.filter(e => hit(e.name, e.site, e.end, e.note)).map(e =>
+        "<tr><td><b>" + e.name + "</b></td><td style=\"font-family:monospace;font-weight:600;white-space:nowrap\">" + e.site +
+        "</td><td>" + e.end + "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + e.note + "</td></tr>");
+    return '<div class="hint" style="margin-top:0">位点按 5′→3′ 书写，<code>^</code> 为切割位点；N/R/Y 等为 IUPAC 简并碱基。不同厂商的缓冲液、甲基化敏感性和热失活条件可能不同，克隆前请核对说明书。</div>' +
+        refTable(["酶", "识别序列（^ 切点）", "末端", "备注"], rows) +
+        '<div class="hint">同尾酶速记：<b>BamHI / BglII / BclI</b> → GATC；<b>XhoI / SalI</b> → TCGA；<b>NheI / SpeI / XbaI</b> → CTAG；<b>NotI / EagI</b> → GGCC。Type IIS 酶（BsaI/BbsI/BsmBI）常用于 Golden Gate。</div>';
+}
+
+function renderUnits(query) {
+    const q = (query || "").trim().toLowerCase();
+    const hit = (...vals) => refHit(q, ...vals);
+    const prefixRows = SI_PREFIXES.filter(p => hit(p.prefix, p.name, p.factor, p.example)).map(p =>
+        "<tr><td style=\"font-family:monospace;font-weight:700\">" + p.prefix + "</td><td>" + p.name +
+        "</td><td><code>" + p.factor + "</code></td><td>" + p.example + "</td></tr>");
+    const convRows = CONVERSIONS.filter(c => hit(c.item, c.formula, c.example)).map(c =>
+        "<tr><td><b>" + c.item + "</b></td><td><code>" + c.formula + "</code></td><td style=\"font-size:.78rem;color:var(--text-2)\">" + c.example + "</td></tr>");
+    const rcfRows = RCF_ROWS.filter(r => hit(r.r, r.v, r.v2, r.v3, r.v4)).map(r =>
+        "<tr><td><b>" + r.r + "</b></td><td>" + r.v + "</td><td>" + r.v2 + "</td><td>" + r.v3 + "</td><td>" + r.v4 + "</td></tr>");
+    const dilRows = DILUTIONS.filter(d => hit(d.stock, d.ratio, d.sample, d.solvent)).map(d =>
+        "<tr><td><b>" + d.stock + "</b></td><td>" + d.ratio + "</td><td>" + d.sample + "</td><td>" + d.solvent + "</td></tr>");
+    return '<div class="hint" style="margin-top:0">常用单位、浓度/稀释、离心力与 A260 换算。RCF 与 rpm 换算需要转子半径（cm）。</div>' +
+        '<h3 class="ref-h3">SI 词头</h3>' +
+        refTable(["词头", "中文", "倍数", "示例"], prefixRows) +
+        '<h3 class="ref-h3">常用换算与公式</h3>' +
+        refTable(["项目", "公式 / 换算", "示例 / 说明"], convRows) +
+        '<h3 class="ref-h3">RCF (×g) 速查</h3>' +
+        refTable(["转子半径", "1000 rpm", "5000 rpm", "10000 rpm", "12000 rpm"], rcfRows) +
+        '<h3 class="ref-h3">母液稀释（配制 100 mL 工作液）</h3>' +
+        refTable(["母液浓度", "稀释比", "取母液", "加溶剂"], dilRows) +
+        '<div class="hint">公式：<code>RCF = 1.118 × 10⁻⁵ × r (cm) × rpm²</code>；<code>rpm = √(RCF / (1.118 × 10⁻⁵ × r))</code>。</div>';
+}
+
+function renderFluor(query) {
+    const q = (query || "").trim().toLowerCase();
+    const hit = (...vals) => refHit(q, ...vals);
+    const proteinRows = FLUOR_PROTEINS.filter(p => hit(p.name, p.type, p.ex, p.em, p.note)).map(p =>
+        "<tr><td><b>" + p.name + "</b></td><td>" + p.type + "</td><td>" + p.ex + "</td><td>" + p.em +
+        "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + p.note + "</td></tr>");
+    const reporterRows = REPORTERS.filter(r => hit(r.name, r.signal, r.substrate, r.note)).map(r =>
+        "<tr><td><b>" + r.name + "</b></td><td>" + r.signal + "</td><td>" + r.substrate +
+        "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + r.note + "</td></tr>");
+    const resistRows = RESISTANCE_GENES.filter(r => hit(r.gene, r.select, r.note)).map(r =>
+        "<tr><td style=\"font-family:monospace;font-weight:600\">" + r.gene + "</td><td>" + r.select +
+        "</td><td style=\"font-size:.75rem;color:var(--text-2)\">" + r.note + "</td></tr>");
+    return '<div class="hint" style="margin-top:0">Ex/Em 为常用峰值（nm）；亮度 ≈ 消光系数 × 量子产率。多色成像请用 FPbase 核对滤光片兼容性。</div>' +
+        '<h3 class="ref-h3">常用荧光蛋白</h3>' +
+        refTable(["蛋白", "颜色", "Ex (nm)", "Em (nm)", "特点 / 用途"], proteinRows) +
+        '<h3 class="ref-h3">常用报告基因</h3>' +
+        refTable(["报告基因", "信号", "底物", "备注"], reporterRows) +
+        '<h3 class="ref-h3">常用抗性基因</h3>' +
+        refTable(["抗性基因", "对应筛选药物", "机制 / 备注"], resistRows);
+}
+
 function refreshRef() {
     const q = document.getElementById("refSearch").value.trim();
-    const filterEl = document.querySelector(".ref-filters .chip.active");
+    const filterEl = document.querySelector("#refFilters .chip.active");
     const filter = filterEl ? filterEl.dataset.filter : "all";
     const sub = document.querySelector(".ref-subtab.active");
     const cur = sub ? sub.dataset.sub : "codon";
+    const filtersEl = document.getElementById("refFilters");
+    if (filtersEl) filtersEl.style.display = cur === "aa" ? "flex" : "none";
     if (cur === "codon") renderCodon(q);
     else if (cur === "aa") renderAA(q, filter);
-    else renderDegen(q);
+    else if (cur === "degen") renderDegen(q);
+    else if (cur === "nucleic") document.getElementById("ref-nucleic").innerHTML = renderNucleic(q);
+    else if (cur === "buffers") document.getElementById("ref-buffers").innerHTML = renderBuffers(q);
+    else if (cur === "reagents") document.getElementById("ref-reagents").innerHTML = renderReagents(q);
+    else if (cur === "tags") document.getElementById("ref-tags").innerHTML = renderTags(q);
+    else if (cur === "enzymes") document.getElementById("ref-enzymes").innerHTML = renderEnzymes(q);
+    else if (cur === "units") document.getElementById("ref-units").innerHTML = renderUnits(q);
+    else if (cur === "fluor") document.getElementById("ref-fluor").innerHTML = renderFluor(q);
 }
 
 /* ── 参考手册交互 ── */
@@ -1137,9 +1694,9 @@ document.querySelectorAll(".ref-subtab").forEach(btn => {
         refreshRef();
     });
 });
-document.querySelectorAll(".ref-filters .chip").forEach(btn => {
+document.querySelectorAll("#refFilters .chip").forEach(btn => {
     btn.addEventListener("click", () => {
-        document.querySelectorAll(".ref-filters .chip").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll("#refFilters .chip").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         refreshRef();
     });
@@ -1150,6 +1707,13 @@ document.getElementById("refSearch").addEventListener("input", refreshRef);
 renderCodon("");
 renderAA("", "all");
 renderDegen("");
+document.getElementById("ref-nucleic").innerHTML = renderNucleic("");
+document.getElementById("ref-buffers").innerHTML = renderBuffers("");
+document.getElementById("ref-reagents").innerHTML = renderReagents("");
+document.getElementById("ref-tags").innerHTML = renderTags("");
+document.getElementById("ref-enzymes").innerHTML = renderEnzymes("");
+document.getElementById("ref-units").innerHTML = renderUnits("");
+document.getElementById("ref-fluor").innerHTML = renderFluor("");
 
 /* ═══════════════════════════════════════════════════════════
    6. 密码子优化
@@ -1395,7 +1959,7 @@ function coExpand(st, codon, ctx) {
             const prevEx = Math.max(0, tr - (CO_P.HOMO - 1));
             tr++;
             const newEx = Math.max(0, tr - (CO_P.HOMO - 1));
-            ns.sc += CO_P.LH * (newEx - prevEx);
+            if (ctx.homo) ns.sc += CO_P.LH * (newEx - prevEx);
         } else { tb = b; tr = 1; }
     }
     ns.tb = tb; ns.tr = tr;
@@ -1465,7 +2029,7 @@ function coExpandSoft(st, codon, ctx) {
         if (b === tb) {
             const prevEx = Math.max(0, tr - (CO_P.HOMO - 1));
             tr++;
-            ns.sc += CO_P.LH * (Math.max(0, tr - (CO_P.HOMO - 1)) - prevEx);
+            if (ctx.homo) ns.sc += CO_P.LH * (Math.max(0, tr - (CO_P.HOMO - 1)) - prevEx);
         } else { tb = b; tr = 1; }
     }
     ns.tb = tb; ns.tr = tr;
@@ -1527,6 +2091,7 @@ function coRepairSites(dna, ctx, freq) {
 }
 
 function coRepairHomo(dna, ctx, freq) {
+    if (!ctx.homo) return { dna, fixed: true };
     for (let round = 0; round < 8; round++) {
         // 找第一个长度 ≥ HOMO 的同碱基串
         let runStart = -1, runLen = 0;
@@ -1635,7 +2200,7 @@ function coRepairGC(dna, ctx, freq) {
                     if (t === dna.slice(ci * 3, ci * 3 + 3)) continue;
                     const nd = dna.slice(0, ci * 3) + t + dna.slice(ci * 3 + 3);
                     if (coFindSites(nd, ctx.pats).length) continue;
-                    if (coMaxRun(nd) >= CO_P.HOMO) continue;
+                    if (ctx.homo && coMaxRun(nd) >= CO_P.HOMO) continue;
                     if (coGcViolationEnergy(nd, ctx) < baseEnergy - 1e-12) {
                         dna = nd; progress = true; break;
                     }
@@ -1661,7 +2226,8 @@ function optimizeCodon(aaSeq, speciesKey, siteList, opts) {
         w: coWTable(freq), pats, maxL,
         gmin, gmax, gwin,
         target: species.gc / 100,
-        cpg: !!opts.cpg
+        cpg: !!opts.cpg,
+        homo: opts.homo !== false
     };
 
     // 终止密码子
@@ -1713,7 +2279,8 @@ function optimizeCodon(aaSeq, speciesKey, siteList, opts) {
         dna, cai, gcOverall, gcMin, gcMax, gwin,
         maxRun, siteHits, roundTrip, stop,
         len: dna.length, species,
-        homoOk: maxRun < CO_P.HOMO,
+        homoOk: !ctx.homo || maxRun < CO_P.HOMO,
+        homo: ctx.homo,
         gcOk: gcs.length === 0 || (gcMin >= gmin - 1e-9 && gcMax <= gmax + 1e-9),
         siteOk: siteHits.length === 0
     };
@@ -1766,7 +2333,8 @@ function runCodonOpt() {
         gcMin: parseFloat(document.getElementById("coGcMin").value) || 30,
         gcMax: parseFloat(document.getElementById("coGcMax").value) || 70,
         gcWin: parseInt(document.getElementById("coGcWin").value, 10) || 50,
-        cpg: document.getElementById("coCpGChip").classList.contains("active")
+        cpg: document.getElementById("coCpGChip").classList.contains("active"),
+        homo: document.getElementById("coHomoChip").classList.contains("active")
     };
     const btn = document.getElementById("coRunBtn");
     btn.disabled = true; btn.textContent = "⏳ 计算中…";
@@ -1797,9 +2365,11 @@ function coRenderResult(res, aaSeq) {
         ? "限制性内切酶位点：未检出目标位点（含反向互补）"
         : "限制性内切酶位点：仍存在 " + res.siteHits.length + " 处（" +
           res.siteHits.slice(0, 5).map(h => h.p + "@" + (h.i + 1)).join(", ") + "）——该位点可能受氨基酸序列强制，无法完全避免" });
-    checks.push({ ok: res.homoOk, t: res.homoOk
-        ? "聚聚体：无 ≥" + CO_P.HOMO + " 连续相同碱基"
-        : "聚聚体：仍有 " + res.maxRun + " 连连续碱基（受序列限制）" });
+    checks.push({ ok: res.homoOk, t: res.homo
+        ? (res.homoOk
+            ? "聚聚体：无 ≥" + CO_P.HOMO + " 连续相同碱基"
+            : "聚聚体：仍有 " + res.maxRun + " 连连续碱基（受序列限制）")
+        : "聚聚体约束已关闭" });
     checks.push({ ok: res.gcOk, t: res.gcOk
         ? "GC 窗口：全部落在 [" + Math.round(opts_gcMinPct()) + "%, " + Math.round(opts_gcMaxPct()) + "%]"
         : "GC 窗口：存在越界（" + Math.round(res.gcMin * 100) + "%–" + Math.round(res.gcMax * 100) + "%），已尽量优化" });
