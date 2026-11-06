@@ -285,6 +285,7 @@
         <button class="tab" data-tab="ref" role="tab">📚 参考手册</button>
         <button class="tab" data-tab="codon" role="tab">🧬 密码子优化</button>
         <button class="tab" data-tab="tm" role="tab">🧮 Tm 计算</button>
+        <button class="tab" data-tab="kd" role="tab">🌡️ KD 疏水性</button>
     </div>
 
     <div id="errorArea" class="error"></div>
@@ -599,6 +600,32 @@
                     <li><b>二聚体/发夹</b>：扫描所有 ≥4 bp 互补区，计算 ΔG₃₇；ΔG < -6 kcal/mol 标红预警。</li>
                 </ul>
             </div>
+        </div>
+    </div>
+
+    <!-- ═══ 面板 8：KD 疏水性 ═══ -->
+    <div class="panel" id="panel-kd">
+        <div class="card">
+            <h2><span class="ico">🌡️</span>Kyte-Doolittle 疏水性分析</h2>
+            <div class="form-grid">
+                <div class="field">
+                    <label>滑动窗口大小（奇数）</label>
+                    <input type="number" id="kdWindow" value="9" min="1" max="99" step="2">
+                    <div class="unit">常用 7 / 9 / 19；窗口越大越平滑</div>
+                </div>
+            </div>
+            <div class="row">
+                <button class="btn" onclick="calcKD()">⚡ 计算疏水性</button>
+            </div>
+            <div class="stats" id="kdStats" style="display:none"></div>
+            <div class="hint" style="margin-top:.6rem">Kyte & Doolittle (1982) J Mol Biol：正值为疏水，负值为亲水。窗口平均 > 0 的区段倾向埋藏于蛋白内部。</div>
+            <div class="hydro-wrap" id="hydroWrap" style="display:none">
+                <div class="hydro-strip" id="hydroStrip" title="悬停查看每个残基的 KD 值"></div>
+                <div class="hydro-legend">
+                    <span>亲水 −4.5</span><span class="legend-bar"></span><span>疏水 +4.5</span>
+                </div>
+            </div>
+            <div class="win-chart" id="winChart" style="display:none"></div>
         </div>
     </div>
 
