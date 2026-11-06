@@ -1163,13 +1163,15 @@ H₂N─C─COOH
     (苯环)`},
     P: {name:"Proline",      zh:"脯氨酸",   three:"Pro", formula:"C5H9NO2",    type:"nonpolar", desc:"非极性，亚氨基酸，破坏α螺旋", pI: 6.30,
         structure:
-`    H─C─COOH
-        │
-        N─H
-       ╱   ╲
-     CH₂   CH₂
-       ╲   ╱
-        CH₂`},
+`         COOH
+          │
+       H─Cα─H
+          │
+          N─H
+         ╱  ╲
+       CH₂  CH₂
+        │   │
+       CH₂──┘`},
     S: {name:"Serine",       zh:"丝氨酸",   three:"Ser", formula:"C3H7NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化", pI: 5.68,
         structure:
 `    H
@@ -1271,7 +1273,8 @@ const MEDIA = [
     {name:"2×YT", recipe:"胰蛋白胨 16 g<br>酵母提取物 10 g<br>NaCl 5 g<br>ddH₂O 至 1 L，pH 7.0", use:"大肠杆菌高密度培养、质粒扩增；固体加琼脂 15 g/L", note:"营养比 LB 更丰富，产菌量更高"},
     {name:"TB", recipe:"胰蛋白胨 12 g<br>酵母提取物 24 g<br>甘油 4 mL<br>10× 磷酸盐缓冲液 100 mL<br>ddH₂O 至 1 L", use:"高密度发酵、蛋白表达", note:"10× 磷酸盐：0.17 M KH₂PO₄ + 0.72 M K₂HPO₄"},
     {name:"SOC", recipe:"胰蛋白胨 20 g<br>酵母提取物 5 g<br>NaCl 0.5 g<br>1 M KCl 2.5 mL<br>1 M MgCl₂ 10 mL<br>1 M 葡萄糖 20 mL<br>ddH₂O 至 1 L，pH 7.0", use:"感受态细胞热激后恢复培养", note:"葡萄糖和 Mg²⁺ 需过滤除菌后加入"},
-    {name:"M9 基本培养基", recipe:"Na₂HPO₄ 6 g<br>KH₂PO₄ 3 g<br>NaCl 0.5 g<br>NH₄Cl 1 g<br>1 M MgSO₄ 2 mL<br>1 M CaCl₂ 0.1 mL<br>20% 葡萄糖 20 mL<br>ddH₂O 至 1 L", use:"同位素标记、代谢实验", note:"按需补充维生素、氨基酸或抗生素"}
+    {name:"M9 基本培养基", recipe:"Na₂HPO₄ 6 g<br>KH₂PO₄ 3 g<br>NaCl 0.5 g<br>NH₄Cl 1 g<br>1 M MgSO₄ 2 mL<br>1 M CaCl₂ 0.1 mL<br>20% 葡萄糖 20 mL<br>ddH₂O 至 1 L", use:"同位素标记、代谢实验", note:"按需补充维生素、氨基酸或抗生素"},
+    {name:"5× PEG8000/NaCl", recipe:"PEG 8000 200 g (20% w/v)<br>NaCl 146.1 g (2.5 M)<br>ddH₂O 定容至 1 L", use:"噬菌体/病毒颗粒沉淀、DNA/RNA 聚沉、蛋白浓缩", note:"5× 储存液，使用时 1:4 稀释为工作液 (4% PEG 8000, 0.5 M NaCl)；4°C 孵育 1 h–过夜，10,000–12,000 ×g 离心 15–30 min"}
 ];
 
 const ANTIBIOTICS = [
