@@ -17,6 +17,7 @@
 | 🌡️ KD 疏水性 | 平均 KD、滑动窗口剖面图、残基热图 | Kyte & Doolittle (1982) J Mol Biol |
 | 🔬 A280 浓度 | ε₂₈₀、mg/mL、mM/μM、1 mg/mL 吸光度 | Pace et al. (1995)：`ε = 5500·W + 1490·Y + 125·Cystine`；Beer-Lambert |
 | 🧪 摩尔换算 | 分子的量 (nmol/pmol)、摩尔浓度、质量/浓度互转 | `n = m/MW`，`c = n/V`，1 g/L ≡ 1 mg/mL |
+| 🧮 Tm 计算 | 引物 Tm、GC%、退火温度建议；支持单序列/批量 FASTA/每行一条序列与 CSV 导出 | 完全复刻 `tools/Tm-calculate/primer_Tm-calculator.py`：SantaLucia 最近邻参数 + 校准补偿 + Na⁺ 盐校正 |
 | 📚 参考手册 | 遗传密码子表、20 种氨基酸性质表（含分子式/结构式/残基质量）、IUPAC 简并碱基表、核酸定量换算、缓冲液/培养基、抗生素/母液、蛋白标签/蛋白酶、限制性内切酶、单位换算、荧光蛋白/报告基因；支持搜索与分类筛选 | NCBI 标准遗传密码（transl_table=1）；IUPAC 碱基歧义代码；ExPASy 残基质量；常用实验配方与试剂参数 |
 | 🧬 密码子优化 | 按 7 个物种的密码子偏好生成编码序列，排除酶切位点、控制 GC 窗口/聚聚体/CpG | Sharp & Li CAI + beam search（K=60）+ 局部同义修复；Kazusa CUD 频率表 |
 
@@ -57,7 +58,7 @@ GC 窗口上下限/窗长；避免 ≥5 聚聚体、避免 CpG；终止密码子
 - **限制性内切酶**：33 种常用酶（含 BsaI/BbsI/BsmBI Golden Gate、SfiI/XmnI/BglI/BstEII/HinfI/DdeI 简并位点）的识别序列、切点、末端与同尾酶备注；
 - **单位换算与实验计算**：SI 词头、质量/体积/浓度/稀释、% w/v、ppm、rpm↔rcf、A260、温度/压力/酶活、DNA→蛋白估算、母液稀释表；
 - **荧光蛋白与报告基因**：常用荧光蛋白 Ex/Em、荧光素酶/β-gal/SEAP 报告基因、常用抗性基因；
-- **🧮 引物 Tm 计算（第 7 面板）**：最近邻法（SantaLucia 1998）+ 盐/镁/dNTP 校正、基本公式、Wallace 规则；DNA/RNA 通用；二聚体/发夹 ΔG₃₇ 扫描预警；支持 FASTA 批量计算与 CSV 导出；盐校正用 Owczarzy 等 (2008) 近似；
+- **🧮 引物 Tm 计算（第 7 面板）**：完全复刻 `tools/Tm-calculate/primer_Tm-calculator.py`——最近邻热力学模型 + 校准参数（56 条序列，RMSE 1.16°C）、Na⁺ 盐校正、末端 AT 修正、退火模式对称因子；输出 Tm、GC%、标准酶/高保真酶/梯度 PCR 退火建议；支持 FASTA 批量、每行一条纯序列与 CSV 导出；
 - 顶部搜索框实时过滤当前子表；分类 chip 仅在氨基酸表显示；密码子表搜索时非匹配项淡显。
 - 酶切位点/缓冲液/荧光蛋白等为常用速查数据，厂商、批次和实验条件可能存在差异，关键实验请核对试剂说明书、FPbase 或最新文献。
 
@@ -80,6 +81,7 @@ open tools/protein-analyse/index.html   # macOS
 
 - 分子量/pI 结果支持一键复制；
 - 全部计算在浏览器本地完成，序列不上传、不联网（Service Worker 离线可用）。
+- Service Worker 使用独立缓存（`protein-analyse-*`），更新时只清理本工具缓存，不影响同域下其他 PWA 的离线缓存。
 
 ## 核心公式
 
