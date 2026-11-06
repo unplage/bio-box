@@ -280,7 +280,6 @@
     <!-- 标签页 -->
     <div class="tabs" role="tablist">
         <button class="tab active" data-tab="basic" role="tab">⚖️ 分子量 / pI</button>
-        <button class="tab" data-tab="kd" role="tab">🌡️ KD 疏水性</button>
         <button class="tab" data-tab="a280" role="tab">🔬 A280 浓度</button>
         <button class="tab" data-tab="molar" role="tab">🧪 摩尔换算</button>
         <button class="tab" data-tab="ref" role="tab">📚 参考手册</button>
@@ -313,35 +312,9 @@
                 </div>
             </div>
         </div>
-    </div>
+</div>
 
-    <!-- ═══ 面板 2：KD 疏水性 ═══ -->
-    <div class="panel" id="panel-kd">
-        <div class="card">
-            <h2><span class="ico">🌡️</span>Kyte-Doolittle 疏水性分析</h2>
-            <div class="form-grid">
-                <div class="field">
-                    <label>滑动窗口大小（奇数）</label>
-                    <input type="number" id="kdWindow" value="9" min="1" max="99" step="2">
-                    <div class="unit">常用 7 / 9 / 19；窗口越大越平滑</div>
-                </div>
-            </div>
-            <div class="row">
-                <button class="btn" onclick="calcKD()">⚡ 计算疏水性</button>
-            </div>
-            <div class="stats" id="kdStats" style="display:none"></div>
-            <div class="hint" style="margin-top:.6rem">Kyte &amp; Doolittle (1982) J Mol Biol：正值为疏水，负值为亲水。窗口平均 &gt; 0 的区段倾向埋藏于蛋白内部。</div>
-            <div class="hydro-wrap" id="hydroWrap" style="display:none">
-                <div class="hydro-strip" id="hydroStrip" title="悬停查看每个残基的 KD 值"></div>
-                <div class="hydro-legend">
-                    <span>亲水 −4.5</span><span class="legend-bar"></span><span>疏水 +4.5</span>
-                </div>
-            </div>
-            <div class="win-chart" id="winChart" style="display:none"></div>
-        </div>
-    </div>
-
-    <!-- ═══ 面板 3：A280 浓度 ═══ -->
+    <!-- ═══ 面板 2：A280 浓度 ═══ -->
     <div class="panel" id="panel-a280">
         <div class="card">
             <h2><span class="ico">🔬</span>A280 消光系数与浓度计算</h2>
@@ -545,6 +518,86 @@
                 <b>聚聚体</b>：同一碱基连续 ≥5，每超出 1 个罚 4（自然对数单位）；<b>GC 窗口</b>：滑窗超出 [下限,上限] 罚 <code>200×偏差²</code>，偏离物种编码区 GC 罚 <code>20×偏差²</code>；<b>CpG</b>（可选）每个罚 2<br>
                 <b>搜索</b>：beam search（宽度 60）逐密码子扩展同义候选并按累计得分剪枝；酶切位点为硬约束（当步禁止生成，含反向互补；<b>位点按 IUPAC 正则匹配，N/R/Y 等简并碱基展开为字符类</b>，如 SfiI 同时排除 <code>GGCCNNNNNGGCC</code> 及其全部中间可变变体）；结束后对残余位点/聚聚体/GC 违规做局部同义替换修复<br>
                 <b>数据</b>：Kazusa Codon Usage Database（Nakamura et al. <i>NAR</i> 2003），GenBank R160 汇总
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ 面板 7：Tm 计算 ═══ -->
+    <div class="panel" id="panel-tm">
+        <div class="card">
+            <h2><span class="ico">🧮</span>引物熔解温度（Tm）计算</h2>
+            <div class="hint" style="margin-top:0">读取上方输入的核酸序列（DNA/RNA），或手动输入引物序列。支持最近邻法（NN）、基本公式、Wallace 规则；含盐/镁/去氧核苷酸校正、二聚体/发夹预警、批量 FASTA 导出。</div>
+            <div class="form-grid">
+                <div class="field">
+                    <label>序列来源</label>
+                    <select id="tmSource">
+                        <option value="input" selected>上方输入区（取第一条序列）</option>
+                        <option value="manual">手动输入下方</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>序列类型</label>
+                    <select id="tmType">
+                        <option value="dna" selected>DNA</option>
+                        <option value="rna">RNA</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field" id="tmManualWrap" style="display:none">
+                <label>手动输入引物序列（多行可批量，FASTA 或纯序列）</label>
+                <textarea id="tmManualSeq" spellcheck="false" rows="4" placeholder=">primer1&#10;ATGCGTACGTAGCTAG&#10;>primer2&#10;TGCATGCATGCATGCA"></textarea>
+                <div class="hint">批量模式：每行一个 FASTA 或纯序列；点击「计算」输出表格可导出 CSV。</div>
+            </div>
+            <div class="form-grid">
+                <div class="field">
+                    <label>算法</label>
+                    <select id="tmAlgo">
+                        <option value="nn" selected>最近邻法（SantaLucia 1998，含起始/末端修正）</option>
+                        <option value="basic">基本公式（含盐校正）</option>
+                        <option value="wallace">Wallace 规则（2A+2T+4G+4C）</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>引物浓度 (nM)</label>
+                    <input type="number" id="tmPrimerConc" value="200" min="1" max="1000000" step="10">
+                    <div class="unit">PCR 常用 100–500 nM；非对称/测序可调</div>
+                </div>
+                <div class="field">
+                    <label>单链 DNA 浓度 (nM)</label>
+                    <input type="number" id="tmDnaConc" value="50" min="0" max="1000000" step="10">
+                    <div class="unit">模板/互补链浓度；自测二聚体时设为引物浓度</div>
+                </div>
+                <div class="field">
+                    <label>Na⁺ 当量 (mM)</label>
+                    <input type="number" id="tmNaEq" value="50" min="0" max="5000" step="1">
+                    <div class="unit">Owczarzy 等 (2008) 近似：Na⁺ + 120×√Mg²⁺ + 0.7×dNTP - 3.5×dNTP×√Mg²⁺（mM）</div>
+                </div>
+                <div class="field">
+                    <label>Mg²⁺ (mM)</label>
+                    <input type="number" id="tmMg" value="1.5" min="0" max="100" step="0.1">
+                </div>
+                <div class="field">
+                    <label>dNTP (mM)</label>
+                    <input type="number" id="tmDntp" value="0.2" min="0" max="10" step="0.05">
+                </div>
+            </div>
+            <div class="row">
+                <button class="btn" onclick="calcTm()">⚡ 计算 Tm</button>
+                <button class="btn btn-ghost btn-sm" onclick="downloadTmCsv()">📥 导出 CSV</button>
+                <button class="btn btn-ghost btn-sm" onclick="copyTmResults()">复制结果</button>
+            </div>
+            <div class="stats" id="tmStats" style="display:none"></div>
+            <div id="tmBatchWrap" style="display:none">
+                <div class="stats" id="tmBatchStats"></div>
+            </div>
+            <div class="formula" style="margin-top:.8rem">
+                <b>算法说明</b>：
+                <ul style="margin:.4rem 0;padding-left:1.2rem;font-size:.8rem;color:var(--text-2)">
+                    <li><b>最近邻法（NN）</b>：SantaLucia (1998) 热力学参数，含起始/末端修正、对称序列自补正；ΔG = ΔH - T·ΔS，Tm = ΔH / (ΔS + R·ln(Ct)) - 273.15 + 16.6·log₁₀([Na⁺]eq)。盐校正用 Owczarzy 等 (2008) 近似公式。</li>
+                    <li><b>基本公式</b>：Tm = ΔH / (ΔS + R·ln(Ct)) - 273.15 + 16.6·log₁₀([Na⁺])，其中 ΔH/ΔS 为序列总和（含起始修正）。</li>
+                    <li><b>Wallace 规则</b>：Tm = 2×(A+T) + 4×(G+C)，仅适用 <14 nt 短引物估算。</li>
+                    <li><b>二聚体/发夹</b>：扫描所有 ≥4 bp 互补区，计算 ΔG₃₇；ΔG < -6 kcal/mol 标红预警。</li>
+                </ul>
             </div>
         </div>
     </div>
