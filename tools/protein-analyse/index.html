@@ -285,6 +285,7 @@
         <button class="tab" data-tab="molar" role="tab">🧪 摩尔换算</button>
         <button class="tab" data-tab="ref" role="tab">📚 参考手册</button>
         <button class="tab" data-tab="codon" role="tab">🧬 密码子优化</button>
+        <button class="tab" data-tab="tm" role="tab">🧮 Tm 计算</button>
     </div>
 
     <div id="errorArea" class="error"></div>
@@ -2407,6 +2408,278 @@ function downloadOpt() {
 document.getElementById("coHomoChip").addEventListener("click", function () { this.classList.toggle("active"); });
 document.getElementById("coCpGChip").addEventListener("click", function () { this.classList.toggle("active"); });
 coRenderEnzymes();
+
+/* ── Tm 计算逻辑 ── */
+// 最近邻法热力学参数（SantaLucia 1998，DNA/DNA，37°C，1M NaCl）
+// ΔH (kcal/mol), ΔS (cal/mol·K)
+const NN_DNA = {
+    AA: {dH: -7.6, dS: -21.3}, AT: {dH: -7.2, dS: -20.4}, TA: {dH: -7.2, dS: -21.3}, CA: {dH: -8.5, dS: -22.7},
+    GT: {dH: -8.4, dS: -22.4}, CT: {dH: -7.8, dS: -21.0}, GA: {dH: -8.2, dS: -22.2}, CG: {dH: -10.6, dS: -27.2},
+    GC: {dH: -9.8, dS: -24.4}, GG: {dH: -8.0, dS: -19.9},
+    TT: {dH: -7.6, dS: -21.3}, TA: {dH: -7.2, dS: -21.3}, AT: {dH: -7.2, dS: -20.4}, TG: {dH: -8.4, dS: -22.4},
+    AC: {dH: -8.5, dS: -22.7}, AG: {dH: -8.2, dS: -22.2}, TC: {dH: -7.8, dS: -21.0}, CC: {dH: -8.0, dS: -19.9},
+    GC: {dH: -9.8, dS: -24.4}, CG: {dH: -10.6, dS: -27.2}, GT: {dH: -8.4, dS: -22.4}, CT: {dH: -7.8, dS: -21.0}
+};
+const NN_RNA = {
+    AA: {dH: -6.8, dS: -18.4}, AU: {dH: -7.6, dS: -20.5}, UA: {dH: -7.7, dS: -20.5}, CA: {dH: -8.5, dS: -22.6},
+    GU: {dH: -9.3, dS: -23.5}, CU: {dH: -8.1, dS: -21.0}, GA: {dH: -8.7, dS: -22.6}, CG: {dH: -10.5, dS: -26.8},
+    GC: {dH: -10.5, dS: -26.2}, GG: {dH: -7.8, dS: -19.4},
+    UU: {dH: -6.8, dS: -18.4}, UA: {dH: -7.7, dS: -20.5}, AU: {dH: -7.6, dS: -20.5}, UG: {dH: -9.3, dS: -23.5},
+    AC: {dH: -8.5, dS: -22.6}, AG: {dH: -8.7, dS: -22.6}, UC: {dH: -8.1, dS: -21.0}, CC: {dH: -7.8, dS: -19.4},
+    GC: {dH: -10.5, dS: -26.2}, CG: {dH: -10.5, dS: -26.8}, GU: {dH: -9.3, dS: -23.5}, CU: {dH: -8.1, dS: -21.0}
+};
+const SYM_CORR = {dH: 0.0, dS: -1.4};
+
+function calcNaEq(na, mg, dntp) {
+    return na + 120 * Math.sqrt(Math.max(0, mg)) + 0.7 * dntp - 3.5 * dntp * Math.sqrt(Math.max(0, mg));
+}
+
+function parseNucleic(text) {
+    const lines = text.trim().split(/\r?\n/);
+    const out = [];
+    let id = "", seq = "";
+    for (const line of lines) {
+        if (line.startsWith(">")) {
+            if (seq) out.push({id, seq});
+            id = line.slice(1).trim();
+            seq = "";
+        } else {
+            seq += line.trim().toUpperCase();
+        }
+    }
+    if (seq) out.push({id, seq});
+    if (out.length === 0 && text.trim()) out.push({id: "seq1", seq: text.trim().toUpperCase()});
+    return out;
+}
+
+function revcomp(seq, type) {
+    const comp = type === "rna" ? {A:"U",U:"A",G:"C",C:"G",T:"A"} : {A:"T",T:"A",G:"C",C:"G",U:"A"};
+    return seq.split("").reverse().map(b => comp[b] || b).join("");
+}
+
+function calcNN(seq, type) {
+    const table = type === "rna" ? NN_RNA : NN_DNA;
+    let dH = 0, dS = 0;
+    for (let i = 0; i < seq.length - 1; i++) {
+        const pair = seq.slice(i, i + 2);
+        const p = table[pair];
+        if (!p) return null;
+        dH += p.dH;
+        dS += p.dS;
+    }
+    if (seq.length >= 2) {
+        const first = seq.slice(0,2), last = seq.slice(-2);
+        if (first === "AT" || first === "TA") { dH += 2.2; dS += 6.9; }
+        if (last === "AT" || last === "TA") { dH += 2.2; dS += 6.9; }
+    }
+    if (seq === revcomp(seq, type)) dS += -1.4;
+    return {dH, dS};
+}
+
+function calcTmNN(seq, opts) {
+    const nn = calcNN(seq, opts.type);
+    if (!nn) return {error: "序列含非标准碱基（仅支持 A/T/U/C/G）"};
+    const {dH, dS} = nn;
+    const R = 1.987;
+    const Ct = opts.primerConc * 1e-9;
+    const naEq = calcNaEq(opts.naEq, opts.mg, opts.dntp) / 1000;
+    const saltCorr = 16.6 * Math.log10(naEq);
+    const TmK = (dH * 1000) / (dS + R * Math.log(Ct)) - 273.15 + saltCorr;
+    return {Tm: TmK, dH, dS};
+}
+
+function calcTmBasic(seq, opts) {
+    const nn = calcNN(seq, opts.type);
+    if (!nn) return {error: "序列含非标准碱基"};
+    const {dH, dS} = nn;
+    const R = 1.987;
+    const Ct = opts.primerConc * 1e-9;
+    const naEq = calcNaEq(opts.naEq, opts.mg, opts.dntp) / 1000;
+    const saltCorr = 16.6 * Math.log10(naEq);
+    const TmK = (dH * 1000) / (dS + R * Math.log(Ct)) - 273.15 + saltCorr;
+    return {Tm: TmK, dH: nn.dH, dS: nn.dS};
+}
+
+function calcTmWallace(seq) {
+    let a=0,t=0,g=0,c=0;
+    for (const b of seq) { if (b==="A") a++; else if (b==="T"||b==="U") t++; else if (b==="G") g++; else if (b==="C") c++; }
+    return {Tm: 2*(a+t) + 4*(g+c), dH: null, dS: null};
+}
+
+function calcDG37(dH, dS) {
+    if (dH === null || dS === null) return null;
+    return dH - 310.15 * (dS / 1000);
+}
+
+function scanDimersHairpins(seq, type) {
+    const rc = revcomp(seq, type);
+    const n = seq.length;
+    const results = [];
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 4; j <= n; j++) {
+            const stem = seq.slice(i, j);
+            const rcStem = revcomp(stem, type);
+            const rest = seq.slice(0, i) + seq.slice(j);
+            const idx = rest.indexOf(rcStem);
+            if (idx >= 0) {
+                const nn = calcNN(stem, type);
+                if (nn) {
+                    const dG = nn.dH - 310.15 * (nn.dS / 1000);
+                    results.push({type: "hairpin", pos: i, len: stem.length, seq: stem, dG, partner: rcStem});
+                }
+            }
+        }
+    }
+    const rcFull = revcomp(seq, type);
+    for (let offset = -n + 4; offset < n - 3; offset++) {
+        let match = 0, start = -1;
+        for (let i = 0; i < n; i++) {
+            const j = i + offset;
+            if (j >= 0 && j < n && seq[i] === rcFull[j]) {
+                if (start === -1) start = i;
+                match++;
+            } else {
+                if (match >= 4) {
+                    const stem = seq.slice(start, start + match);
+                    const nn = calcNN(stem, type);
+                    if (nn) {
+                        const dG = nn.dH - 310.15 * (nn.dS / 1000);
+                        results.push({type: "dimer", pos: start, len: match, seq: stem, dG, partner: rcFull.slice(start+offset, start+offset+match)});
+                    }
+                }
+                match = 0; start = -1;
+            }
+        }
+        if (match >= 4) {
+            const stem = seq.slice(start, start + match);
+            const nn = calcNN(stem, type);
+            if (nn) {
+                const dG = nn.dH - 310.15 * (nn.dS / 1000);
+                results.push({type: "dimer", pos: start, len: match, seq: stem, dG, partner: rcFull.slice(start+offset, start+offset+match)});
+            }
+        }
+    }
+    return results;
+}
+
+function seqProps(seq, type) {
+    let a=0,t=0,g=0,c=0,u=0;
+    for (const b of seq) {
+        if (b==="A") a++; else if (b==="T") t++; else if (b==="U") u++; else if (b==="G") g++; else if (b==="C") c++;
+    }
+    const gc = g + c;
+    const len = seq.length;
+    const gcPct = len ? (gc / len * 100) : 0;
+    const mw = a*313.2 + (type==="rna"?u*306.2:t*304.2) + g*329.2 + c*289.2 - (len-1)*18.015;
+    return {gcPct, len, mw};
+}
+
+function calcTm() {
+    const source = document.getElementById("tmSource").value;
+    const type = document.getElementById("tmType").value;
+    const algo = document.getElementById("tmAlgo").value;
+    const primerConc = parseFloat(document.getElementById("tmPrimerConc").value) || 200;
+    const dnaConc = parseFloat(document.getElementById("tmDnaConc").value) || 50;
+    const na = parseFloat(document.getElementById("tmNaEq").value) || 50;
+    const mg = parseFloat(document.getElementById("tmMg").value) || 1.5;
+    const dntp = parseFloat(document.getElementById("tmDntp").value) || 0.2;
+
+    const opts = {primerConc, dnaConc, naEq: na, mg, dntp, type};
+    const statsEl = document.getElementById("tmStats");
+    const batchWrap = document.getElementById("tmBatchWrap");
+    const batchStats = document.getElementById("tmBatchStats");
+
+    statsEl.style.display = "none";
+    document.getElementById("tmBatchWrap").style.display = "none";
+    document.getElementById("tmBatchStats").innerHTML = "";
+
+    let seqs = [];
+    if (source === "input") {
+        const txt = document.getElementById("seqInput").value;
+        const parsed = parseNucleic(txt);
+        if (parsed.length === 0) return alert("请先在上方输入核酸序列");
+        seqs = [parsed[0]];
+    } else {
+        const txt = document.getElementById("tmManualSeq").value;
+        const parsed = parseNucleic(txt);
+        if (parsed.length === 0) return alert("请输入引物序列");
+        seqs = parsed;
+    }
+
+    const isBatch = seqs.length > 1;
+    const rows = [];
+    let csv = "ID,Sequence,Length,GC%,MW(Da),Tm(°C),ΔH(kcal/mol),ΔS(cal/mol·K),dG37(kcal/mol),Dimer_dG,Hairpin_dG\n";
+
+    for (const s of seqs) {
+        const seq = s.seq.replace(/[^ATUCG]/gi, "").toUpperCase();
+        if (!seq) continue;
+        let res;
+        if (algo === "nn") res = calcTmNN(seq, opts);
+        else if (algo === "basic") res = calcTmBasic(seq, opts);
+        else res = calcTmWallace(seq);
+        if (res.error) {
+            rows.push(`<div class="stat red"><b>${s.id}</b><span>${res.error}</span></div>`);
+            continue;
+        }
+        const props = seqProps(seq, type);
+        const dimers = scanDimersHairpins(seq, type);
+        let worstDimer = 0, worstHairpin = 0;
+        for (const d of dimers) {
+            if (d.dG !== null) {
+                if (d.type === "dimer" && d.dG < worstDimer) worstDimer = d.dG;
+                if (d.type === "hairpin" && d.dG < worstHairpin) worstHairpin = d.dG;
+            }
+        }
+        const dG37 = res.dH !== null ? (res.dH - 310.15 * (res.dS / 1000)) : null;
+        const row = `<div class="stat ${worstDimer < -6 || worstHairpin < -6 ? "red" : ""}"><b>${s.id}</b><span>${seq} | ${props.len} nt | GC ${props.gcPct.toFixed(1)}% | Tm ${res.Tm.toFixed(1)}°C | ΔH ${res.dH?.toFixed(1)||"–"} | ΔS ${res.dS?.toFixed(1)||"–"} | dG37 ${dG37?.toFixed(2)||"–"} | 最坏二聚体 dG ${worstDimer||"–"} | 最坏发夹 dG ${worstHairpin||"–"}</span></div>`;
+        rows.push(row);
+        csv += `${s.id},${seq},${props.len},${props.gcPct.toFixed(1)},${props.mw.toFixed(1)},${res.Tm.toFixed(1)},${res.dH?.toFixed(1)||""},${res.dS?.toFixed(1)||""},${res.dH!==null?(res.dH - 310.15*(res.dS/1000)).toFixed(2):""},${worstDimer||""},${worstHairpin||""}\n`;
+    }
+
+    document.getElementById("tmStats").style.display = "block";
+    document.getElementById("tmStats").innerHTML = rows.join("");
+
+    if (rows.length > 1) {
+        document.getElementById("tmBatchWrap").style.display = "block";
+        document.getElementById("tmBatchStats").innerHTML = '<div class="hint">共 ' + rows.length + ' 条序列，点击导出 CSV 下载完整表格。</div>' + rows.join("");
+    }
+
+    window._lastTmCsv = csv;
+}
+
+function downloadTmCsv() {
+    if (!window._lastTmCsv) return alert("请先计算");
+    const blob = new Blob(["\uFEFF" + window._lastTmCsv], {type: "text/csv;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "tm_results.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function copyTmResults() {
+    const txt = document.getElementById("tmStats").innerText;
+    if (!txt) return alert("无结果");
+    navigator.clipboard.writeText(txt).then(() => alert("已复制"));
+}
+
+document.getElementById("tmSource").addEventListener("change", function() {
+    document.getElementById("tmManualWrap").style.display = this.value === "manual" ? "block" : "none";
+});
+
+// 显式导出到全局（严格模式下 function 声明不创建全局）
+global.calcTm = calcTm;
+global.calcTmNN = calcTmNN;
+global.calcTmBasic = calcTmBasic;
+global.calcTmWallace = calcTmWallace;
+global.calcTmBasic = calcTmBasic;
+global.parseNucleic = parseNucleic;
+global.revcomp = revcomp;
+global.calcNN = calcNN;
+global.calcNaEq = calcNaEq;
+global.scanDimersHairpins = scanDimersHairpins;
+global.seqProps = seqProps;
+global.calcDG37 = calcDG37;
 
 /* ── Service Worker（PWA 离线） ── */
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
