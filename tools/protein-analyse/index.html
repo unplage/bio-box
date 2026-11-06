@@ -1167,9 +1167,7 @@ H₂N─C─COOH
         |
     H─N─Cα─CH2
     |       |
-   CH2     CH2
-    \      /
-     CH2──┘`},
+   CH2─────CH2`},
     S: {name:"Serine",       zh:"丝氨酸",   three:"Ser", formula:"C3H7NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化", pI: 5.68,
         structure:
 `    H
@@ -1259,6 +1257,8 @@ const BUFFERS = [
     {name:"6× DNA 上样缓冲液", recipe:"1 M Tris-HCl (pH 7.4) 10 mL<br>100% 甘油 60 mL<br>0.5 M EDTA 12 mL<br>溴酚蓝 0.01 g<br>ddH₂O 至 100 mL", use:"DNA 琼脂糖凝胶上样", note:"溴酚蓝约相当于 300 bp，二甲苯青约相当于 4 kb"},
     {name:"5× SDS-PAGE 上样缓冲液", recipe:"250 mM Tris-HCl (pH 6.8)<br>10% SDS<br>50% 甘油<br>0.5% 溴酚蓝<br>5% β-巯基乙醇（或 500 mM DTT）", use:"蛋白变性上样；95–100°C 加热 5–10 min", note:"β-巯基乙醇需通风柜操作；还原剂现用现加"},
     {name:"考马斯亮蓝染色液", recipe:"考马斯亮蓝 R-250 1 g<br>甲醇 400 mL<br>冰乙酸 100 mL<br>ddH₂O 至 1 L", use:"SDS-PAGE 凝胶染色", note:"脱色液：甲醇 400 mL + 冰乙酸 100 mL + ddH₂O 至 1 L"},
+    {name:"0.1 M Glycine-HCl (pH 2.2)", recipe:"甘氨酸 7.51 g<br>ddH₂O 约 900 mL，浓 HCl 调 pH 2.2<br>定容至 1 L", use:"低 pH 洗脱（亲和层析）、抗原回收、蛋白变性", note:"甘氨酸 pKa₂=9.78，pH 2.2 缓冲容量有限，现配现用"},
+    {name:"碳酸盐缓冲液 (0.05 M, pH 9.6)", recipe:"Na₂CO₃ 1.59 g<br>NaHCO₃ 2.93 g<br>ddH₂O 至 1 L", use:"ELISA 板包被、蛋白/抗体吸附", note:"pH 9.6 利于蛋白带正电吸附到聚苯乙烯板面；4°C 过夜包被"},
     {name:"0.5 M EDTA (pH 8.0)", recipe:"EDTA·2Na·2H₂O 186.1 g<br>ddH₂O 约 800 mL，NaOH 调 pH 8.0<br>定容至 1 L", use:"核酸酶抑制、螯合金属离子", note:"EDTA 在 pH 接近 8.0 时才完全溶解"},
     {name:"1 M Tris-HCl (pH 8.0)", recipe:"Tris base 121.1 g<br>ddH₂O 约 800 mL，HCl 调 pH 8.0<br>定容至 1 L", use:"常用缓冲液母液", note:"pH 随温度变化明显，室温校准"},
     {name:"5 M NaCl", recipe:"NaCl 292.2 g<br>ddH₂O 至 1 L", use:"调节离子强度", note:"可高压灭菌"},
@@ -1869,8 +1869,8 @@ const RESTRICT_ENZYMES = [
 ];
 const CO_COMMON = ["EcoRI","BamHI","HindIII","XhoI","NdeI","NcoI","EcoRV","SpeI","XbaI","SacI","KpnI","SalI","PstI","NotI"];
 
-// 优化参数（自然对数得分单位）
-const CO_P = { K: 60, LH: 4, LG: 200, LT: 20, LC: 2, HOMO: 5 };
+// 优化参数（自然对数得分单位，统一量纲）
+const CO_P = { K: 60, LH: 4, LG: 12, LT: 0, LC: 2, HOMO: 5 };
 
 // 同义密码子表（由标准遗传密码构建，U 表示）
 const CO_SYNONYMS = (() => {
@@ -2026,20 +2026,14 @@ function coExpand(st, codon, ctx) {
         len++;
         if (len >= ctx.gwin) {
             const gc = ns.rc / ctx.gwin;
+            // 仅保留区间越界惩罚，去除重复的 target 项（LT=0）
             ns.sc -= CO_P.LG * (Math.max(0, ctx.gmin - gc) ** 2 + Math.max(0, gc - ctx.gmax) ** 2);
-            ns.sc -= CO_P.LT * (gc - ctx.target) ** 2;
         }
     }
-    // 位点：只检查与新密码子重叠的新增命中（硬约束，正则匹配支持 N/IUPAC 简并）
-    const start = Math.max(0, parentLen - ctx.maxL + 1);
-    const region = ns.s.slice(start);
+    // 位点硬约束：全序列扫描（含跨密码子边界），而非仅新增区域
     for (const pat of ctx.pats) {
         pat.re.lastIndex = 0;
-        let m;
-        while ((m = pat.re.exec(region)) !== null) {
-            if (start + m.index + m[0].length > parentLen) return null; // 命中 → 该候选禁止
-            pat.re.lastIndex = m.index + 1;
-        }
+        if (pat.re.test(ns.s)) return null; // 命中 → 该候选禁止
     }
     // CpG（与新密码子重叠的二核苷酸）
     if (ctx.cpg) {
@@ -2096,18 +2090,12 @@ function coExpandSoft(st, codon, ctx) {
         if (len >= ctx.gwin) {
             const gc = ns.rc / ctx.gwin;
             ns.sc -= CO_P.LG * (Math.max(0, ctx.gmin - gc) ** 2 + Math.max(0, gc - ctx.gmax) ** 2);
-            ns.sc -= CO_P.LT * (gc - ctx.target) ** 2;
         }
     }
-    const start = Math.max(0, parentLen - ctx.maxL + 1);
-    const region = ns.s.slice(start);
+    // 位点软约束：全序列扫描，命中计罚
     for (const pat of ctx.pats) {
         pat.re.lastIndex = 0;
-        let m;
-        while ((m = pat.re.exec(region)) !== null) {
-            if (start + m.index + m[0].length > parentLen) ns.sc -= 300;
-            pat.re.lastIndex = m.index + 1;
-        }
+        if (pat.re.test(ns.s)) ns.sc -= 300;
     }
     if (ctx.cpg) {
         for (let i = parentLen; i <= parentLen + 2 && i < ns.s.length; i++) {
