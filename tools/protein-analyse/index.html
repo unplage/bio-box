@@ -559,9 +559,9 @@
                     </select>
                 </div>
                 <div class="field">
-                    <label>引物浓度 (nM)</label>
-                    <input type="number" id="tmPrimerConc" value="200" min="1" max="1000000" step="10">
-                    <div class="unit">PCR 常用 100–500 nM；非对称/测序可调</div>
+                    <label>引物浓度 (μM)</label>
+                    <input type="number" id="tmPrimerConc" value="0.25" min="0.01" max="100" step="0.01">
+                    <div class="unit">PCR 常用 0.1–0.5 μM；非对称/测序可调</div>
                 </div>
                 <div class="field">
                     <label>单链 DNA 浓度 (nM)</label>
@@ -580,6 +580,12 @@
                 <div class="field">
                     <label>dNTP (mM)</label>
                     <input type="number" id="tmDntp" value="0.2" min="0" max="10" step="0.05">
+                </div>
+                <div class="field">
+                    <label>
+                        <input type="checkbox" id="tmAnnealing"> 退火模式
+                    </label>
+                    <div class="unit">PCR模式(默认)对称因子4；退火模式对称因子1</div>
                 </div>
             </div>
             <div class="row">
@@ -2490,31 +2496,62 @@ document.getElementById("coHomoChip").addEventListener("click", function () { th
 document.getElementById("coCpGChip").addEventListener("click", function () { this.classList.toggle("active"); });
 coRenderEnzymes();
 
-/* ── Tm 计算逻辑 ── */
-// 最近邻法热力学参数（SantaLucia 1998，DNA/DNA，37°C，1M NaCl）
-// ΔH (kcal/mol), ΔS (cal/mol·K)
-const NN_DNA = {
-    AA: {dH: -7.6, dS: -21.3}, AT: {dH: -7.2, dS: -20.4}, TA: {dH: -7.2, dS: -21.3}, CA: {dH: -8.5, dS: -22.7},
-    GT: {dH: -8.4, dS: -22.4}, CT: {dH: -7.8, dS: -21.0}, GA: {dH: -8.2, dS: -22.2}, CG: {dH: -10.6, dS: -27.2},
-    GC: {dH: -9.8, dS: -24.4}, GG: {dH: -8.0, dS: -19.9},
-    TT: {dH: -7.6, dS: -21.3}, TA: {dH: -7.2, dS: -21.3}, AT: {dH: -7.2, dS: -20.4}, TG: {dH: -8.4, dS: -22.4},
-    AC: {dH: -8.5, dS: -22.7}, AG: {dH: -8.2, dS: -22.2}, TC: {dH: -7.8, dS: -21.0}, CC: {dH: -8.0, dS: -19.9},
-    GC: {dH: -9.8, dS: -24.4}, CG: {dH: -10.6, dS: -27.2}, GT: {dH: -8.4, dS: -22.4}, CT: {dH: -7.8, dS: -21.0}
-};
-const NN_RNA = {
-    AA: {dH: -6.8, dS: -18.4}, AU: {dH: -7.6, dS: -20.5}, UA: {dH: -7.7, dS: -20.5}, CA: {dH: -8.5, dS: -22.6},
-    GU: {dH: -9.3, dS: -23.5}, CU: {dH: -8.1, dS: -21.0}, GA: {dH: -8.7, dS: -22.6}, CG: {dH: -10.5, dS: -26.8},
-    GC: {dH: -10.5, dS: -26.2}, GG: {dH: -7.8, dS: -19.4},
-    UU: {dH: -6.8, dS: -18.4}, UA: {dH: -7.7, dS: -20.5}, AU: {dH: -7.6, dS: -20.5}, UG: {dH: -9.3, dS: -23.5},
-    AC: {dH: -8.5, dS: -22.6}, AG: {dH: -8.7, dS: -22.6}, UC: {dH: -8.1, dS: -21.0}, CC: {dH: -7.8, dS: -19.4},
-    GC: {dH: -10.5, dS: -26.2}, CG: {dH: -10.5, dS: -26.8}, GU: {dH: -9.3, dS: -23.5}, CU: {dH: -8.1, dS: -21.0}
-};
-const SYM_CORR = {dH: 0.0, dS: -1.4};
+/* ── Tm 计算逻辑（完全复刻 tools/Tm-calculate/primer_Tm-calculator.py） ── */
 
+// 校准参数（基于 56 条序列，RMSE 1.16°C）
+const CALIBRATION_PARAMS = {
+    salt_correction_factor: 1.6,
+    terminal_AT_penalty: 2.497083789430314,
+    entropy_scaling_factor: 0.9675869088668494,
+    initiation_adjustment: -0.0007103390016273732,
+    calibration_rmse: 1.1553994766937066,
+    calibration_points: 56
+};
+
+// NN 热力学参数（与 Python 版完全一致）
+const NN_DH = {
+    'AA': -7.6, 'TT': -7.6, 'AT': -7.2, 'TA': -7.2,
+    'CA': -8.5, 'TG': -8.5, 'GT': -8.4, 'AC': -8.4,
+    'CT': -7.8, 'AG': -7.8, 'GA': -8.2, 'TC': -8.2,
+    'CG': -10.6, 'GC': -10.6, 'GG': -8.0, 'CC': -8.0
+};
+
+const NN_DS = {
+    'AA': -21.3, 'TT': -21.3, 'AT': -20.4, 'TA': -20.4,
+    'CA': -22.7, 'TG': -22.7, 'GT': -22.4, 'AC': -22.4,
+    'CT': -21.0, 'AG': -21.0, 'GA': -22.2, 'TC': -22.2,
+    'CG': -27.2, 'GC': -27.2, 'GG': -19.9, 'CC': -19.9
+};
+
+// RNA 参数（近似，仅用于 RNA 模式）
+const NN_DH_RNA = {
+    'AA': -6.8, 'UU': -6.8, 'AU': -7.6, 'UA': -7.7,
+    'CA': -8.5, 'UG': -9.3, 'GU': -9.3, 'AC': -8.5,
+    'CU': -8.1, 'AG': -8.7, 'GA': -8.7, 'UC': -8.1,
+    'CG': -10.5, 'GC': -10.5, 'GG': -7.8, 'CC': -7.8,
+    'UA': -7.7, 'AU': -7.6, 'UA': -7.7, 'UG': -9.3,
+    'AC': -8.5, 'AG': -8.7, 'UC': -8.1, 'CC': -7.8,
+    'GC': -10.5, 'CG': -10.5, 'GU': -9.3, 'CU': -8.1
+};
+
+const NN_DS_RNA = {
+    'AA': -18.4, 'UU': -18.4, 'AU': -20.5, 'UA': -20.5,
+    'CA': -22.6, 'UG': -23.5, 'GU': -23.5, 'AC': -22.6,
+    'CU': -21.0, 'AG': -22.6, 'GA': -22.6, 'UC': -21.0,
+    'CG': -26.8, 'GC': -26.2, 'GG': -19.4, 'CC': -19.4,
+    'UU': -18.4, 'UA': -20.5, 'AU': -20.5, 'UG': -23.5,
+    'AC': -22.6, 'AG': -22.6, 'UC': -21.0, 'CC': -19.4,
+    'GC': -26.2, 'CG': -26.8, 'GU': -23.5, 'CU': -21.0
+};
+
+const CALIB = CALIBRATION_PARAMS;
+
+// Owczarzy 等 (2008) Na⁺ 当量近似
 function calcNaEq(na, mg, dntp) {
     return na + 120 * Math.sqrt(Math.max(0, mg)) + 0.7 * dntp - 3.5 * dntp * Math.sqrt(Math.max(0, mg));
 }
 
+// 解析核酸序列（支持 FASTA）
 function parseNucleic(text) {
     const lines = text.trim().split(/\r?\n/);
     const out = [];
@@ -2533,52 +2570,76 @@ function parseNucleic(text) {
     return out;
 }
 
+// 反向互补
 function revcomp(seq, type) {
     const comp = type === "rna" ? {A:"U",U:"A",G:"C",C:"G",T:"A"} : {A:"T",T:"A",G:"C",C:"G",U:"A"};
     return seq.split("").reverse().map(b => comp[b] || b).join("");
 }
 
-function calcNN(seq, type) {
-    const table = type === "rna" ? NN_RNA : NN_DNA;
-    let dH = 0, dS = 0;
-    for (let i = 0; i < seq.length - 1; i++) {
-        const pair = seq.slice(i, i + 2);
-        const p = table[pair];
-        if (!p) return null;
-        dH += p.dH;
-        dS += p.dS;
+// 核心 Tm 计算（完全复刻 Python 版 calculate_tm）
+function calcTmCore(seq, opts) {
+    const n = seq.length;
+    if (n < 4) return {error: "序列太短 (" + n + " bp)，至少需要 4 bp"};
+
+    // 初始化 dH, dS（完全复刻 Python 版）
+    let dH = 0.2 + CALIB.initiation_adjustment * 0.05;
+    let dS = -5.7 * CALIB.entropy_scaling_factor;
+
+    // 累加 NN 参数
+    for (let i = 0; i < n - 1; i++) {
+        const nn = seq.slice(i, i + 2);
+        const dh = NN_DH[nn];
+        const ds = NN_DS[nn];
+        if (dh === undefined) return {error: "序列含非标准碱基（仅支持 A/T/C/G）"};
+        dH += dh;
+        dS += NN_DS[nn] * CALIB.entropy_scaling_factor;
     }
-    if (seq.length >= 2) {
-        const first = seq.slice(0,2), last = seq.slice(-2);
-        if (first === "AT" || first === "TA") { dH += 2.2; dS += 6.9; }
-        if (last === "AT" || last === "TA") { dH += 2.2; dS += 6.9; }
+
+    // 末端 AT 惩罚：仅当最后一碱基为 A/T 时
+    if (seq[n - 1] === 'A' || seq[n - 1] === 'T') {
+        dH += CALIB.terminal_AT_penalty;
+        dS += 6.9;
     }
-    if (seq === revcomp(seq, type)) dS += -1.4;
-    return {dH, dS};
+
+    // 盐校正（Owczarzy 2008 近似，含校准因子）
+    const monovalent_M = calcNaEq(opts.naEq, opts.mg, opts.dntp) / 1000.0;
+    const salt_effect = 0.368 * (n - 1) * Math.log(monovalent_M) * CALIB.salt_correction_factor;
+    const dS_corrected = dS + salt_effect;
+
+    // Tm 计算
+    const R = 1.987;
+    const Ct = opts.primerConc * 1e-6;  // M
+    const sym_factor = opts.annealingMode ? 1 : 4;  // 退火模式=1, PCR模式=4
+    const denominator = dS + R * Math.log(Ct / sym_factor);
+
+    // 如果分母 >= 0，退化到 Wallace 规则
+    if (denominator >= 0) {
+        let gc = 0;
+        for (let i = 0; i < n; i++) if (seq[i] === 'G' || seq[i] === 'C') gc++;
+        return {Tm: 2 * (n - gc) + 4 * gc, dH: null, dS: null};
+    }
+
+    const TmK = (dH * 1000) / denominator;
+    const tm = TmK - 273.15;
+
+    return {Tm: round(tm, 2), dH, dS};
 }
 
+// Wallace 规则（仅用于回退或用户显式选择）
+function calcTmWallace(seq) {
+    let a=0,t=0,g=0,c=0;
+    for (const b of seq) { if (b==="A") a++; else if (b==="T"||b==="U") t++; else if (b==="G") g++; else if (b==="C") c++; }
+    return {Tm: 2*(a+t) + 4*(g+c), dH: null, dS: null};
+}
+
+// 最近邻法（DNA 模式）
 function calcTmNN(seq, opts) {
-    const nn = calcNN(seq, opts.type);
-    if (!nn) return {error: "序列含非标准碱基（仅支持 A/T/U/C/G）"};
-    const {dH, dS} = nn;
-    const R = 1.987;
-    const Ct = opts.primerConc * 1e-9;
-    const naEq = calcNaEq(opts.naEq, opts.mg, opts.dntp) / 1000;
-    const saltCorr = 16.6 * Math.log10(naEq);
-    const TmK = (dH * 1000) / (dS + R * Math.log(Ct)) - 273.15 + saltCorr;
-    return {Tm: TmK, dH, dS};
+    return calcTmCore(seq, {...opts, type: "dna"});
 }
 
+// 基本公式（同最近邻法，但供显式选择用）
 function calcTmBasic(seq, opts) {
-    const nn = calcNN(seq, opts.type);
-    if (!nn) return {error: "序列含非标准碱基"};
-    const {dH, dS} = nn;
-    const R = 1.987;
-    const Ct = opts.primerConc * 1e-9;
-    const naEq = calcNaEq(opts.naEq, opts.mg, opts.dntp) / 1000;
-    const saltCorr = 16.6 * Math.log10(naEq);
-    const TmK = (dH * 1000) / (dS + R * Math.log(Ct)) - 273.15 + saltCorr;
-    return {Tm: TmK, dH: nn.dH, dS: nn.dS};
+    return calcTmCore(seq, {...opts, type: "dna"});
 }
 
 function calcTmWallace(seq) {
@@ -2587,11 +2648,19 @@ function calcTmWallace(seq) {
     return {Tm: 2*(a+t) + 4*(g+c), dH: null, dS: null};
 }
 
+// ΔG37 计算
 function calcDG37(dH, dS) {
     if (dH === null || dS === null) return null;
     return dH - 310.15 * (dS / 1000);
 }
 
+// 反向互补
+function revcomp(seq, type) {
+    const comp = type === "rna" ? {A:"U",U:"A",G:"C",C:"G",T:"A"} : {A:"T",T:"A",G:"C",C:"G",U:"A"};
+    return seq.split("").reverse().map(b => comp[b] || b).join("");
+}
+
+// 扫描二聚体/发夹（简化版，使用 DNA 参数）
 function scanDimersHairpins(seq, type) {
     const rc = revcomp(seq, type);
     const n = seq.length;
@@ -2643,6 +2712,22 @@ function scanDimersHairpins(seq, type) {
     return results;
 }
 
+// 简单 NN 计算（用于二聚体/发夹扫描，不含校准修正）
+function calcNN(seq, type) {
+    const tableDH = type === "rna" ? NN_DH_RNA : NN_DH;
+    const tableDS = type === "rna" ? NN_DS_RNA : NN_DS;
+    let dH = 0, dS = 0;
+    for (let i = 0; i < seq.length - 1; i++) {
+        const pair = seq.slice(i, i + 2);
+        const dh = tableDH[pair];
+        const ds = tableDS[pair];
+        if (dh === undefined) return null;
+        dH += dh;
+        dS += ds;
+    }
+    return {dH, dS};
+}
+
 function seqProps(seq, type) {
     let a=0,t=0,g=0,c=0,u=0;
     for (const b of seq) {
@@ -2655,6 +2740,26 @@ function seqProps(seq, type) {
     return {gcPct, len, mw};
 }
 
+// 四舍五入工具
+function round(x, digits) {
+    const f = Math.pow(10, digits);
+    return Math.round(x * f) / f;
+}
+
+// 显式导出到全局（严格模式下 function 声明不创建全局）
+global.calcTm = calcTm;
+global.calcTmNN = calcTmNN;
+global.calcTmBasic = calcTmBasic;
+global.calcTmWallace = calcTmWallace;
+global.parseNucleic = parseNucleic;
+global.revcomp = revcomp;
+global.calcNN = calcNN;
+global.calcNaEq = calcNaEq;
+global.scanDimersHairpins = scanDimersHairpins;
+global.seqProps = seqProps;
+global.calcDG37 = calcDG37;
+global.round = round;
+
 function calcTm() {
     const source = document.getElementById("tmSource").value;
     const type = document.getElementById("tmType").value;
@@ -2664,8 +2769,9 @@ function calcTm() {
     const na = parseFloat(document.getElementById("tmNaEq").value) || 50;
     const mg = parseFloat(document.getElementById("tmMg").value) || 1.5;
     const dntp = parseFloat(document.getElementById("tmDntp").value) || 0.2;
+    const annealingMode = document.getElementById("tmAnnealing")?.checked || false;
 
-    const opts = {primerConc, dnaConc, naEq: na, mg, dntp, type};
+    const opts = {primerConc, dnaConc, naEq: na, mg, dntp, type, annealingMode};
     const statsEl = document.getElementById("tmStats");
     const batchWrap = document.getElementById("tmBatchWrap");
     const batchStats = document.getElementById("tmBatchStats");
@@ -2695,7 +2801,7 @@ function calcTm() {
         const seq = s.seq.replace(/[^ATUCG]/gi, "").toUpperCase();
         if (!seq) continue;
         let res;
-        if (algo === "nn") res = calcTmNN(seq, opts);
+        if (algo === "nn") res = calcTmNN(seq, {...opts, type});
         else if (algo === "basic") res = calcTmBasic(seq, opts);
         else res = calcTmWallace(seq);
         if (res.error) {
@@ -2727,42 +2833,6 @@ function calcTm() {
 
     window._lastTmCsv = csv;
 }
-
-function downloadTmCsv() {
-    if (!window._lastTmCsv) return alert("请先计算");
-    const blob = new Blob(["\uFEFF" + window._lastTmCsv], {type: "text/csv;charset=utf-8"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "tm_results.csv";
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-
-function copyTmResults() {
-    const txt = document.getElementById("tmStats").innerText;
-    if (!txt) return alert("无结果");
-    navigator.clipboard.writeText(txt).then(() => alert("已复制"));
-}
-
-document.getElementById("tmSource").addEventListener("change", function() {
-    document.getElementById("tmManualWrap").style.display = this.value === "manual" ? "block" : "none";
-});
-
-// 显式导出到全局（严格模式下 function 声明不创建全局）
-global.calcTm = calcTm;
-global.calcTmNN = calcTmNN;
-global.calcTmBasic = calcTmBasic;
-global.calcTmWallace = calcTmWallace;
-global.calcTmBasic = calcTmBasic;
-global.parseNucleic = parseNucleic;
-global.revcomp = revcomp;
-global.calcNN = calcNN;
-global.calcNaEq = calcNaEq;
-global.scanDimersHairpins = scanDimersHairpins;
-global.seqProps = seqProps;
-global.calcDG37 = calcDG37;
-
-/* ── Service Worker（PWA 离线） ── */
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
     window.addEventListener("load", () => {
         navigator.serviceWorker.register("sw.js").catch(() => {});
