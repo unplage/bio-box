@@ -1003,63 +1003,63 @@ const CODON_MAP = {
 
 // 20 种氨基酸完整性质（分子式为游离氨基酸形式）
 const AA_DATA = {
-    A: {name:"Alanine",      zh:"丙氨酸",   three:"Ala", formula:"C3H7NO2",    type:"nonpolar", desc:"非极性，小侧链",
+    A: {name:"Alanine",      zh:"丙氨酸",   three:"Ala", formula:"C3H7NO2",    type:"nonpolar", desc:"非极性，小侧链", pI: 6.00,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₃`},
-    R: {name:"Arginine",     zh:"精氨酸",   three:"Arg", formula:"C6H14N4O2",  type:"basic",    desc:"碱性，胍基带正电",
+    R: {name:"Arginine",     zh:"精氨酸",   three:"Arg", formula:"C6H14N4O2",  type:"basic",    desc:"碱性，胍基带正电", pI: 10.76,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─CH₂─CH₂─NH─C(=NH)NH₂`},
-    N: {name:"Asparagine",   zh:"天冬酰胺", three:"Asn", formula:"C4H8N2O3",   type:"polar",    desc:"极性非带电，酰胺",
+    N: {name:"Asparagine",   zh:"天冬酰胺", three:"Asn", formula:"C4H8N2O3",   type:"polar",    desc:"极性非带电，酰胺", pI: 5.41,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─C(=O)NH₂`},
-    D: {name:"Aspartate",    zh:"天冬氨酸", three:"Asp", formula:"C4H7NO4",    type:"acidic",   desc:"酸性，羧基带负电",
+    D: {name:"Aspartate",    zh:"天冬氨酸", three:"Asp", formula:"C4H7NO4",    type:"acidic",   desc:"酸性，羧基带负电", pI: 2.77,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─COOH`},
-    C: {name:"Cysteine",     zh:"半胱氨酸", three:"Cys", formula:"C3H7NO2S",   type:"polar",    desc:"极性，巯基可形成二硫键",
+    C: {name:"Cysteine",     zh:"半胱氨酸", three:"Cys", formula:"C3H7NO2S",   type:"polar",    desc:"极性，巯基可形成二硫键", pI: 5.07,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─SH`},
-    E: {name:"Glutamate",    zh:"谷氨酸",   three:"Glu", formula:"C5H9NO4",    type:"acidic",   desc:"酸性，羧基带负电",
+    E: {name:"Glutamate",    zh:"谷氨酸",   three:"Glu", formula:"C5H9NO4",    type:"acidic",   desc:"酸性，羧基带负电", pI: 3.22,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─CH₂─COOH`},
-    Q: {name:"Glutamine",    zh:"谷氨酰胺", three:"Gln", formula:"C5H10N2O3",  type:"polar",    desc:"极性非带电，酰胺",
+    Q: {name:"Glutamine",    zh:"谷氨酰胺", three:"Gln", formula:"C5H10N2O3",  type:"polar",    desc:"极性非带电，酰胺", pI: 5.65,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─CH₂─C(=O)NH₂`},
-    G: {name:"Glycine",      zh:"甘氨酸",   three:"Gly", formula:"C2H5NO2",    type:"nonpolar", desc:"非极性，最小侧链(H)",
+    G: {name:"Glycine",      zh:"甘氨酸",   three:"Gly", formula:"C2H5NO2",    type:"nonpolar", desc:"非极性，最小侧链(H)", pI: 5.97,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     H`},
-    H: {name:"Histidine",    zh:"组氨酸",   three:"His", formula:"C6H9N3O2",   type:"basic",    desc:"碱性，咪唑基，pKa≈6，近中性可质子化",
+    H: {name:"Histidine",    zh:"组氨酸",   three:"His", formula:"C6H9N3O2",   type:"basic",    desc:"碱性，咪唑基，pKa≈6，近中性可质子化", pI: 7.59,
         structure:
 `    H
     │
@@ -1067,38 +1067,38 @@ H₂N─C─COOH
     │
     CH₂─┌─CH
         │  ║
-        N  C─H
+        NH  C
         │  │
-        CH─N`},
-    I: {name:"Isoleucine",   zh:"异亮氨酸", three:"Ile", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链",
+        CH═CH`},
+    I: {name:"Isoleucine",   zh:"异亮氨酸", three:"Ile", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链", pI: 6.02,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH(CH₃)─CH₂─CH₃`},
-    L: {name:"Leucine",      zh:"亮氨酸",   three:"Leu", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链",
+    L: {name:"Leucine",      zh:"亮氨酸",   three:"Leu", formula:"C6H13NO2",   type:"nonpolar", desc:"非极性，支链", pI: 5.98,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─CH(CH₃)₂`},
-    K: {name:"Lysine",       zh:"赖氨酸",   three:"Lys", formula:"C6H14N2O2",  type:"basic",    desc:"碱性，氨基带正电",
+    K: {name:"Lysine",       zh:"赖氨酸",   three:"Lys", formula:"C6H14N2O2",  type:"basic",    desc:"碱性，氨基带正电", pI: 9.74,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─CH₂─CH₂─CH₂─NH₂`},
-    M: {name:"Methionine",   zh:"甲硫氨酸", three:"Met", formula:"C5H11NO2S",  type:"nonpolar", desc:"非极性，含硫；起始密码子 AUG 对应",
+    M: {name:"Methionine",   zh:"甲硫氨酸", three:"Met", formula:"C5H11NO2S",  type:"nonpolar", desc:"非极性，含硫；起始密码子 AUG 对应", pI: 5.74,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─CH₂─S─CH₃`},
-    F: {name:"Phenylalanine",zh:"苯丙氨酸", three:"Phe", formula:"C9H11NO2",   type:"nonpolar", desc:"非极性，芳香族",
+    F: {name:"Phenylalanine",zh:"苯丙氨酸", three:"Phe", formula:"C9H11NO2",   type:"nonpolar", desc:"非极性，芳香族", pI: 5.48,
         structure:
 `    H
     │
@@ -1106,32 +1106,32 @@ H₂N─C─COOH
     │
     CH₂─Ph
     (苯环)`},
-    P: {name:"Proline",      zh:"脯氨酸",   three:"Pro", formula:"C5H9NO2",    type:"nonpolar", desc:"非极性，亚氨基酸，破坏α螺旋",
+    P: {name:"Proline",      zh:"脯氨酸",   three:"Pro", formula:"C5H9NO2",    type:"nonpolar", desc:"非极性，亚氨基酸，破坏α螺旋", pI: 6.30,
         structure:
 `    H
     │
     N
    ╱  ╲
-CH₂  CH₂
- │    │
-CH₂  COOH
-  ╲  ╱
-   CH₂`},
-    S: {name:"Serine",       zh:"丝氨酸",   three:"Ser", formula:"C3H7NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化",
+CH₂   CH₂
+ │     │
+CH₂   CH─COOH
+ ╲    ╱
+  CH₂`},
+    S: {name:"Serine",       zh:"丝氨酸",   three:"Ser", formula:"C3H7NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化", pI: 5.68,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH₂─OH`},
-    T: {name:"Threonine",    zh:"苏氨酸",   three:"Thr", formula:"C4H9NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化",
+    T: {name:"Threonine",    zh:"苏氨酸",   three:"Thr", formula:"C4H9NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化", pI: 5.60,
         structure:
 `    H
     │
 H₂N─C─COOH
     │
     CH(OH)─CH₃`},
-    W: {name:"Tryptophan",   zh:"色氨酸",   three:"Trp", formula:"C11H12N2O2", type:"nonpolar", desc:"非极性，芳香族，最大侧链，A280 贡献最大",
+    W: {name:"Tryptophan",   zh:"色氨酸",   three:"Trp", formula:"C11H12N2O2", type:"nonpolar", desc:"非极性，芳香族，最大侧链，A280 贡献最大", pI: 5.89,
         structure:
 `    H
     │
@@ -1142,7 +1142,7 @@ H₂N─C─COOH
         NH  C
         │  ║
         CH─CH`},
-    Y: {name:"Tyrosine",     zh:"酪氨酸",   three:"Tyr", formula:"C9H11NO3",   type:"polar",    desc:"极性弱，酚羟基，可磷酸化，A280 有贡献",
+    Y: {name:"Tyrosine",     zh:"酪氨酸",   three:"Tyr", formula:"C9H11NO3",   type:"polar",    desc:"极性弱，酚羟基，可磷酸化，A280 有贡献", pI: 5.66,
         structure:
 `    H
     │
@@ -1150,7 +1150,7 @@ H₂N─C─COOH
     │
     CH₂─Ph─OH
     (对位)`},
-    V: {name:"Valine",       zh:"缬氨酸",   three:"Val", formula:"C5H11NO2",   type:"nonpolar", desc:"非极性，支链",
+    V: {name:"Valine",       zh:"缬氨酸",   three:"Val", formula:"C5H11NO2",   type:"nonpolar", desc:"非极性，支链", pI: 5.96,
         structure:
 `    H
     │
@@ -1460,7 +1460,7 @@ function renderAA(query, filter) {
     for (const aa of order) {
         const d = AA_DATA[aa];
         if (filter && filter !== "all" && d.type !== filter) continue;
-        const text = (aa + " " + d.three + " " + d.zh + " " + d.name + " " + d.formula + " " + d.structure + " " + d.desc).toLowerCase();
+        const text = (aa + " " + d.three + " " + d.zh + " " + d.name + " " + d.formula + " " + d.structure + " " + d.desc + " " + (d.pI || "")).toLowerCase();
         if (q && !text.includes(q)) continue;
         const color = AA_COLOR[aa];
         rows += '<tr>' +
@@ -1471,6 +1471,7 @@ function renderAA(query, filter) {
             '<td style="font-family:monospace;font-weight:600;white-space:nowrap">' + subFormula(d.formula) + '</td>' +
             '<td style="font-family:monospace;font-size:.7rem;line-height:1.3;white-space:pre">' + d.structure + '</td>' +
             '<td style="font-variant-numeric:tabular-nums;white-space:nowrap">' + AA_MASS[aa].toFixed(2) + '</td>' +
+            '<td style="font-variant-numeric:tabular-nums;white-space:nowrap">' + (d.pI || "").toFixed(2) + '</td>' +
             '<td>' + TYPE_LABEL[d.type] + '</td>' +
             '<td style="font-size:.78rem;color:var(--text-2)">' + d.desc + '</td>' +
             '</tr>';
@@ -1478,7 +1479,7 @@ function renderAA(query, filter) {
     document.getElementById("ref-aa").innerHTML =
         '<div class="hint" style="margin-top:0">分子式为<b>游离氨基酸</b>形式，数字已转为下标；肽链中缩合脱水后按「残基质量」计算（游离分子量 = 残基质量 + 18.02）。结构式使用等宽字体绘制，显示主链与侧链连接键。分组顺序：非极性 → 极性非带电 → 酸性 → 碱性。' +
         (rows ? "" : '<b style="color:var(--red)">无匹配项</b>') + '</div>' +
-        '<div class="ref-table-wrap"><table class="ref-table"><thead><tr><th>1 字母</th><th>3 字母</th><th>中文名</th><th>英文名</th><th>分子式</th><th>结构式</th><th>残基质量 (Da)</th><th>极性 / 酸碱</th><th>性质说明</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+        '<div class="ref-table-wrap"><table class="ref-table"><thead><tr><th>1 字母</th><th>3 字母</th><th>中文名</th><th>英文名</th><th>分子式</th><th>结构式</th><th>残基质量 (Da)</th><th>pI</th><th>极性 / 酸碱</th><th>性质说明</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 function renderDegen(query) {
