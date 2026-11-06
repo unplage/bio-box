@@ -1163,13 +1163,13 @@ H₂N─C─COOH
     (苯环)`},
     P: {name:"Proline",      zh:"脯氨酸",   three:"Pro", formula:"C5H9NO2",    type:"nonpolar", desc:"非极性，亚氨基酸，破坏α螺旋", pI: 6.30,
         structure:
-`         N-H
-        /   \
-       /     \
-     CH2      Cα-H
-      \       / \
-       \     /   COOH
-       CH2──CH2`},
+`       COOH
+        |
+    H─N─Cα─CH2
+    |       |
+   CH2     CH2
+    \      /
+     CH2──┘`},
     S: {name:"Serine",       zh:"丝氨酸",   three:"Ser", formula:"C3H7NO3",    type:"polar",    desc:"极性非带电，羟基，可磷酸化", pI: 5.68,
         structure:
 `    H
@@ -1520,7 +1520,7 @@ function renderAA(query, filter) {
             '<td><b>' + d.zh + '</b></td>' +
             '<td>' + d.name + '</td>' +
             '<td style="font-family:monospace;font-weight:600;white-space:nowrap">' + subFormula(d.formula) + '</td>' +
-            '<td style="font-family:monospace;font-size:.7rem;line-height:1.3;white-space:pre">' + d.structure + '</td>' +
+            '<td style="font-family:monospace;font-size:.75rem;line-height:1.5;white-space:pre-wrap">' + d.structure + '</td>' +
             '<td style="font-variant-numeric:tabular-nums;white-space:nowrap">' + AA_MASS[aa].toFixed(2) + '</td>' +
             '<td style="font-variant-numeric:tabular-nums;white-space:nowrap">' + (d.pI || "").toFixed(2) + '</td>' +
             '<td>' + TYPE_LABEL[d.type] + '</td>' +
