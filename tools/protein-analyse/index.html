@@ -286,6 +286,7 @@
         <button class="tab" data-tab="codon" role="tab">🧬 密码子优化</button>
         <button class="tab" data-tab="tm" role="tab">🧮 Tm 计算</button>
         <button class="tab" data-tab="kd" role="tab">🌡️ KD 疏水性</button>
+        <button class="tab" data-tab="visc" role="tab">💧 抗体粘度</button>
     </div>
 
     <div id="errorArea" class="error"></div>
@@ -298,13 +299,55 @@
                 <button class="btn" onclick="calcBasic()">⚡ 计算</button>
                 <button class="btn btn-ghost btn-sm" onclick="copyStats()">复制结果</button>
             </div>
+            <div class="form-grid">
+                <div class="field">
+                    <label>pKa 参数集</label>
+                    <select id="pkaSet" onchange="if(document.getElementById('seqInput').value.trim()) calcBasic()">
+                        <option value="bjellqvist" selected>Bjellqvist / ExPASy（默认，与 ProtParam 一致）</option>
+                        <option value="ipc_protein">IPC_protein（Kozlowski 2016，蛋白基准最优经典集）</option>
+                        <option value="emboss">EMBOSS</option>
+                        <option value="sillero">Sillero</option>
+                        <option value="nozaki">Nozaki–Tanford</option>
+                    </select>
+                    <div class="unit">不同参数集结果可相差约 0.3–1.5 pH</div>
+                </div>
+                <div class="field">
+                    <label>Cys 二硫键处理</label>
+                    <select id="pkaCysMode" onchange="if(document.getElementById('seqInput').value.trim()) calcBasic()">
+                        <option value="free" selected>全部按游离 Cys 计入</option>
+                        <option value="pair">按 nC/2 对二硫键扣除</option>
+                        <option value="none">全部氧化，忽略 Cys 电荷</option>
+                    </select>
+                    <div class="unit">成对扣除后仅未配对的奇余 Cys 带电</div>
+                </div>
+            </div>
+            <div class="hint" style="margin-top:.6rem">
+                <b>可靠性</b>：结果仅为序列层面的理论估算。未考虑三维结构微环境、盐桥、金属离子及翻译后修饰，
+                与实验值典型偏差约 <b>±0.5–1.5 pH</b>，不能替代等电聚焦等实验测定。
+            </div>
             <div class="stats" id="basicStats" style="display:none"></div>
             <div class="formula">
                 <b>分子量</b>：MW = Σ(残基平均质量) + 18.0153（水），残基质量取 ExPASy 平均同位素质量。<br>
-                <b>pI</b>：二分法求净电荷 = 0 的 pH，pKa 采用 Bjellqvist et al. (1993/1994) / ExPASy ProtParam 值：
-                <code>N 端 7.50</code> <code>C 端 3.55</code> <code>C 9.0</code> <code>D 4.05</code>
-                <code>E 4.45</code> <code>H 5.98</code> <code>K 10.0</code> <code>R 12.0</code> <code>Y 10.0</code>，
-                且 N/C 末端 pKa 按首/末残基修正（如 N 端 M→7.0、C 端 D→4.55）。
+                <b>pI 算法</b>：对每个可离子化基团按 Henderson–Hasselbalch 方程计算电荷，再二分法求净电荷 Q(pH) = 0 的 pH：<br>
+                &nbsp;&nbsp;Q(pH) = Σ<sub>正</sub> 1/(1+10<sup>pH−pKa</sup>) − Σ<sub>负</sub> 1/(1+10<sup>pKa−pH</sup>)<br>
+                正电荷基团：N 端、His、Lys、Arg；负电荷基团：C 端、Asp、Glu、Cys、Tyr。Q(pH) 随 pH 单调递减，故解唯一。<br>
+                <b>pKa 参数集</b>：可选 Bjellqvist/ExPASy、IPC_protein、EMBOSS、Sillero、Nozaki–Tanford。
+                Bjellqvist 额外按首/末残基修正末端 pKa（如 N 端 M→7.0、C 端 D→4.55）；IPC_protein 为 Kozlowski 2016 基于实验 pI 优化的九参数集。<br>
+                <b>Cys 状态</b>：可全部按游离巯基、按二硫键成对扣除或完全氧化忽略；成键 Cys 的巯基不再电离。<br>
+                <b>结果解读</b>：Bjellqvist 与 ExPASy ProtParam/Biopython 完全一致；IPC_protein 在蛋白实验数据集上通常更接近实测值；
+                Sillero/Nozaki 等为经典参数集，蛋白基准误差通常更大。详见下方“不同 pKa 参数集结果对比”。
+            </div>
+            <div id="ptmHint" class="hint" style="display:none"></div>
+            <div id="pkaCompare" style="display:none">
+                <div class="section" style="margin-top:1rem">
+                    <h2 style="font-size:.9rem"><span class="ico">📐</span>不同 pKa 参数集结果对比</h2>
+                    <table id="pkaCompareTable"></table>
+                    <div class="hint">
+                        同一序列、同一 Cys 处理方式下，各参数集得到的 pI。ΔpH 相对当前所选参数集；
+                        IPC_protein 在 Kozlowski 2016 的蛋白基准中 RMSE 约 0.87，Bjellqvist 约 0.94，
+                        Sillero 约 1.05、Nozaki 约 1.02（数值越低越接近实验值）。
+                    </div>
+                </div>
             </div>
             <div id="basicAA" style="display:none">
                 <div class="section" style="margin-top:1rem">
@@ -607,8 +650,52 @@
         </div>
     </div>
 
+    <!-- ═══ 面板 9：抗体粘度 ═══ -->
+    <div class="panel" id="panel-visc">
+        <div class="card">
+            <h2><span class="ico">💧</span>抗体 Fv 粘度预测（Sharma 2014）</h2>
+            <div class="hint" style="margin-bottom:.8rem">
+                输入同一抗体的 <b>重链可变区（VH）</b> 与 <b>轻链可变区（VL）</b>，按 Sharma et al. 2014 序列模型预测
+                180 mg/mL、25°C、pH 5.5、200 mM 精氨酸盐酸盐条件下的粘度（cP）。
+            </div>
+            <div class="form-grid">
+                <div class="field">
+                    <label>VH 氨基酸序列</label>
+                    <textarea id="vhInput" spellcheck="false" rows="7" style="font-family:monospace;font-size:.82rem" placeholder="支持 FASTA 或纯序列，仅需可变区（约 110–130 aa）"></textarea>
+                    <div class="unit" id="vhInfo">未输入</div>
+                </div>
+                <div class="field">
+                    <label>VL 氨基酸序列</label>
+                    <textarea id="vlInput" spellcheck="false" rows="7" style="font-family:monospace;font-size:.82rem" placeholder="支持 FASTA 或纯序列，仅需可变区（约 110–130 aa）"></textarea>
+                    <div class="unit" id="vlInfo">未输入</div>
+                </div>
+            </div>
+            <div class="row">
+                <button class="btn" onclick="calcViscosity()">⚡ 计算粘度</button>
+                <button class="btn btn-ghost btn-sm" onclick="loadViscExample()">✨ 加载示例（曲妥珠单抗 Fv）</button>
+                <button class="btn btn-ghost btn-sm" onclick="clearVisc()">清空</button>
+            </div>
+            <div id="viscError" class="error" style="margin-top:.6rem"></div>
+            <div class="stats" id="viscStats" style="display:none"></div>
+            <div class="hint" id="viscRisk" style="display:none;margin-top:.7rem"></div>
+            <div class="formula" style="margin-top:.9rem">
+                <b>Sharma 模型</b>：η (cP) = 10<sup>[0.15 + 1.26·HI − 0.043·q − 0.020·q<sub>sym</sub>]</sup><br>
+                <b>q</b>：Fv 在 pH 5.5 的净电荷 = q<sub>VH</sub> + q<sub>VL</sub>，仅计 Asp/Glu/His/Lys/Arg（pKa 3.9/4.3/6.0/10.8/12.5，Berg 等）。<br>
+                <b>q<sub>sym</sub></b>：电荷不对称性 = q<sub>VH</sub> × q<sub>VL</sub>（FvCSP）。<br>
+                <b>HI</b>：疏水指数 = −Σ<sub>疏水</sub> E<sub>i</sub> / Σ<sub>亲水</sub> E<sub>j</sub>，E 为 Eisenberg 归一化共识疏水标度；
+                疏水残基 A/C/F/I/L/P/V/W/Y，亲水残基 D/E/G/H/K/M/N/Q/R/S/T。<br>
+                <b>分层参考</b>：&lt;10 cP 低、10–20 cP 中、&gt;20 cP 偏高。
+            </div>
+            <div class="hint" style="margin-top:.6rem">
+                <b>局限</b>：Sharma 模型在 180 mg/mL 条件下训练，对部分抗体偏差较大（如曲妥珠单抗实测约 8.6 cP，本模型约 16.6 cP）；
+                未考虑结构、盐浓度、辅料与聚集。DeepViscosity（Kalejaye/Lai 2025）使用 102 个 ANN 集成 + DeepSP CNN 特征，
+                需 ANARCI/IMGT 比对与外部模型权重，<b>无法在离线单文件工具中复现</b>，本面板不冒充其结果。
+            </div>
+        </div>
+    </div>
+
     <div class="footer">
-        Protein-Analyse · 纯前端离线 PWA · 算法参考 ExPASy ProtParam / Pace 1995 / Kyte-Doolittle 1982 ·
+        Protein-Analyse · 纯前端离线 PWA · 算法参考 ExPASy ProtParam / Pace 1995 / Kyte-Doolittle 1982 / Sharma 2014 ·
         浓度公式对照 <a href="https://www.novopro.cn/tools/protein-extinction-coefficient.html" target="_blank" rel="noopener">NovoPro A280 工具</a>
     </div>
 </div>
@@ -629,15 +716,56 @@ const AA_MASS = {
 };
 const WATER = 18.01528; // H2O 平均质量
 
-// 可电离基团 pKa（Bjellqvist et al. 1993/1994，与 ExPASy ProtParam / Biopython 同源）
-const PKA = {
-    Nterm: 7.5, Cterm: 3.55,
-    C: 9.0, D: 4.05, E: 4.45, H: 5.98,
-    K: 10.0, R: 12.0, Y: 10.0
+// 可电离基团 pKa 参数集（九参数模型：N/C 端 + C D E H K R Y）
+// 各集均可在 Henderson-Hasselbalch 方程下使用，差异只来自 pKa 取值。
+const PKA_SETS = {
+    bjellqvist: {
+        label: "Bjellqvist / ExPASy",
+        short: "Bjellqvist",
+        ref: "Bjellqvist et al. 1993/1994；与 ExPASy ProtParam、Biopython 逐位一致",
+        Nterm: 7.5, Cterm: 3.55,
+        C: 9.0, D: 4.05, E: 4.45, H: 5.98, K: 10.0, R: 12.0, Y: 10.0,
+        pKnOverrides: { A: 7.59, M: 7.0, S: 6.93, P: 8.36, T: 6.82, V: 7.44, E: 7.7 },
+        pKcOverrides: { D: 4.55, E: 4.75 }
+    },
+    ipc_protein: {
+        label: "IPC_protein",
+        short: "IPC_protein",
+        ref: "Kozlowski 2016（Biology Direct）；基于 2324 个实验 pI 优化，经典 pKa 集中蛋白基准最优",
+        Nterm: 9.094, Cterm: 2.869,
+        C: 7.555, D: 3.872, E: 4.412, H: 5.637, K: 9.052, R: 11.84, Y: 10.85,
+        pKnOverrides: null,
+        pKcOverrides: null
+    },
+    emboss: {
+        label: "EMBOSS",
+        short: "EMBOSS",
+        ref: "EMBOSS iep 默认参数集",
+        Nterm: 8.6, Cterm: 3.6,
+        C: 8.5, D: 3.9, E: 4.1, H: 6.5, K: 10.8, R: 12.5, Y: 10.1,
+        pKnOverrides: null,
+        pKcOverrides: null
+    },
+    sillero: {
+        label: "Sillero",
+        short: "Sillero",
+        ref: "Sillero & Ribeiro 1989",
+        Nterm: 8.2, Cterm: 3.2,
+        C: 9.0, D: 4.0, E: 4.5, H: 6.4, K: 10.4, R: 12.0, Y: 10.0,
+        pKnOverrides: null,
+        pKcOverrides: null
+    },
+    nozaki: {
+        label: "Nozaki–Tanford",
+        short: "Nozaki",
+        ref: "Nozaki & Tanford 1967",
+        Nterm: 7.5, Cterm: 3.8,
+        C: 9.5, D: 4.0, E: 4.4, H: 6.3, K: 10.4, R: 12.0, Y: 9.6,
+        pKnOverrides: null,
+        pKcOverrides: null
+    }
 };
-// 末端残基依赖的 N 端 / C 端 pKa 覆盖表
-const PKA_NTERM = { A: 7.59, M: 7.0, S: 6.93, P: 8.36, T: 6.82, V: 7.44, E: 7.7 };
-const PKA_CTERM = { D: 4.55, E: 4.75 };
+const PKA_SET_ORDER = ["bjellqvist", "ipc_protein", "emboss", "sillero", "nozaki"];
 
 // Kyte-Doolittle 疏水性指数（1982）
 const KD = {
@@ -699,55 +827,110 @@ function molecularWeight(seq) {
     return mw;
 }
 
-// 净电荷（Henderson-Hasselbalch，末端 pKa 按首/末残基取覆盖值）
-function netCharge(seq, pH) {
-    const pKn = PKA_NTERM[seq[0]] !== undefined ? PKA_NTERM[seq[0]] : PKA.Nterm;
-    const pKc = PKA_CTERM[seq[seq.length - 1]] !== undefined ? PKA_CTERM[seq[seq.length - 1]] : PKA.Cterm;
+// Cys 电荷处理：
+// free = 全部按游离巯基计入；pair = 每 2 个 Cys 形成 1 对二硫键，仅保留未配对者；
+// none = 视为完全氧化成二硫键，不贡献电荷。
+function effectiveCysCount(nC, cysMode) {
+    if (cysMode === "none") return 0;
+    if (cysMode === "pair") return nC % 2;
+    return nC;
+}
+
+// 净电荷（Henderson-Hasselbalch；正/负基团分别取质子化/去质子化分数）
+function netCharge(seq, pH, setKey, cysMode) {
+    const set = PKA_SETS[setKey] || PKA_SETS.bjellqvist;
+    const first = seq[0], last = seq[seq.length - 1];
+    const pKn = (set.pKnOverrides && set.pKnOverrides[first] !== undefined) ? set.pKnOverrides[first] : set.Nterm;
+    const pKc = (set.pKcOverrides && set.pKcOverrides[last] !== undefined) ? set.pKcOverrides[last] : set.Cterm;
     let pos = 0, neg = 0;
+    const cnt = {};
+    for (const aa of seq) cnt[aa] = (cnt[aa] || 0) + 1;
+
     // 正电荷基团：质子化分数 = 1 / (1 + 10^(pH - pKa))
     pos += 1 / (1 + Math.pow(10, pH - pKn));
-    let cnt = {};
-    for (const aa of seq) cnt[aa] = (cnt[aa] || 0) + 1;
-    pos += (cnt.H || 0) / (1 + Math.pow(10, pH - PKA.H));
-    pos += (cnt.K || 0) / (1 + Math.pow(10, pH - PKA.K));
-    pos += (cnt.R || 0) / (1 + Math.pow(10, pH - PKA.R));
+    pos += (cnt.H || 0) / (1 + Math.pow(10, pH - set.H));
+    pos += (cnt.K || 0) / (1 + Math.pow(10, pH - set.K));
+    pos += (cnt.R || 0) / (1 + Math.pow(10, pH - set.R));
+
     // 负电荷基团：去质子化分数 = 1 / (1 + 10^(pKa - pH))
     neg += 1 / (1 + Math.pow(10, pKc - pH));
-    neg += (cnt.C || 0) / (1 + Math.pow(10, PKA.C - pH));
-    neg += (cnt.D || 0) / (1 + Math.pow(10, PKA.D - pH));
-    neg += (cnt.E || 0) / (1 + Math.pow(10, PKA.E - pH));
-    neg += (cnt.Y || 0) / (1 + Math.pow(10, PKA.Y - pH));
+    neg += effectiveCysCount(cnt.C || 0, cysMode) / (1 + Math.pow(10, set.C - pH));
+    neg += (cnt.D || 0) / (1 + Math.pow(10, set.D - pH));
+    neg += (cnt.E || 0) / (1 + Math.pow(10, set.E - pH));
+    neg += (cnt.Y || 0) / (1 + Math.pow(10, set.Y - pH));
     return pos - neg;
 }
 
-// 二分法求 pI（电荷 = 0）
-function isoelectricPoint(seq) {
+// 二分法求 pI（净电荷 = 0）；Q(pH) 随 pH 单调递减，故区间内解唯一
+function isoelectricPoint(seq, setKey, cysMode) {
     let lo = 0, hi = 14;
     for (let i = 0; i < 80; i++) {
         const mid = (lo + hi) / 2;
-        if (netCharge(seq, mid) > 0) lo = mid; else hi = mid;
+        if (netCharge(seq, mid, setKey, cysMode) > 0) lo = mid; else hi = mid;
     }
     return (lo + hi) / 2;
 }
 
 let lastBasic = null;
 
+// PTM 相关提示：仅做序列模式提示，不参与 pI 计算
+function buildPtmHint(seq, cnt, cysMode) {
+    let glyco = 0;
+    for (let i = 0; i + 2 < seq.length; i++) {
+        if (seq[i] === "N" && seq[i + 1] !== "P" && (seq[i + 2] === "S" || seq[i + 2] === "T")) glyco++;
+    }
+    const nC = cnt.C || 0;
+    const phospho = (cnt.S || 0) + (cnt.T || 0) + (cnt.Y || 0);
+    let cysDesc;
+    if (cysMode === "none") cysDesc = "全部 " + nC + " 个 Cys 视为氧化成二硫键，不计电荷";
+    else if (cysMode === "pair") cysDesc = "按 " + Math.floor(nC / 2) + " 对二硫键扣除，剩余 " + (nC % 2) + " 个游离 Cys 计入";
+    else cysDesc = "全部 " + nC + " 个 Cys 按游离巯基计入";
+    let ptm = "本工具不建模磷酸化、糖基化、乙酰化、N 端环化等翻译后修饰，实际 pI 可能偏离理论值。";
+    if (glyco) ptm = "检测到 " + glyco + " 处潜在 N-糖基化序列（N-X-S/T，X≠P）；S/T/Y 共 " + phospho + " 个可能被磷酸化的位点。" + ptm;
+    return "<b>Cys 处理</b>：" + cysDesc + "。<br><b>PTM 提示</b>：" + ptm;
+}
+
 function calcBasic() {
     const seq = getSeq();
     if (!seq) return;
+    const setKey = document.getElementById("pkaSet").value;
+    const cysMode = document.getElementById("pkaCysMode").value;
+    const set = PKA_SETS[setKey] || PKA_SETS.bjellqvist;
     const mw = molecularWeight(seq);
-    const pI = isoelectricPoint(seq);
+    const pI = isoelectricPoint(seq, setKey, cysMode);
     const cnt = {};
     for (const aa of seq) cnt[aa] = (cnt[aa] || 0) + 1;
-    lastBasic = { seq, mw, pI, cnt };
+    lastBasic = { seq, mw, pI, cnt, setKey, cysMode };
 
     const stats = document.getElementById("basicStats");
     stats.style.display = "grid";
     stats.innerHTML =
         '<div class="stat"><b>' + seq.length + '</b><span>氨基酸数 (aa)</span></div>' +
         '<div class="stat green"><b>' + mw.toFixed(2) + '</b><span>分子量 MW (Da)</span></div>' +
-        '<div class="stat orange"><b>' + pI.toFixed(3) + '</b><span>等电点 pI</span></div>' +
+        '<div class="stat orange"><b>' + pI.toFixed(3) + '</b><span>等电点 pI（' + set.short + '）</span></div>' +
         '<div class="stat purple"><b>' + (mw / 1000).toFixed(2) + '</b><span>MW (kDa)</span></div>';
+
+    // 不同 pKa 参数集结果对比
+    let cmp = '<thead><tr><th>pKa 参数集</th><th>pI</th><th>相对所选 ΔpH</th><th>来源 / 说明</th></tr></thead><tbody>';
+    for (const k of PKA_SET_ORDER) {
+        const s = PKA_SETS[k];
+        const v = isoelectricPoint(seq, k, cysMode);
+        const selected = k === setKey;
+        const d = v - pI;
+        cmp += '<tr' + (selected ? ' style="background:#eff6ff"' : '') + '>' +
+            '<td><b>' + s.label + '</b>' + (selected ? '（所选）' : '') + '</td>' +
+            '<td class="num">' + v.toFixed(3) + '</td>' +
+            '<td class="num">' + (selected ? "—" : (d > 0 ? "+" : "") + d.toFixed(3)) + '</td>' +
+            '<td style="font-size:.76rem;color:var(--text-2)">' + s.ref + '</td></tr>';
+    }
+    cmp += '</tbody>';
+    document.getElementById("pkaCompareTable").innerHTML = cmp;
+    document.getElementById("pkaCompare").style.display = "block";
+
+    // Cys / PTM 提示
+    const hint = document.getElementById("ptmHint");
+    hint.innerHTML = buildPtmHint(seq, cnt, cysMode);
+    hint.style.display = "block";
 
     // 组成表
     const order = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b));
@@ -765,11 +948,139 @@ function calcBasic() {
 
 function copyStats() {
     if (!lastBasic) return;
+    const set = PKA_SETS[lastBasic.setKey] || PKA_SETS.bjellqvist;
     const txt = "序列长度: " + lastBasic.seq.length + " aa\n分子量: " +
         lastBasic.mw.toFixed(2) + " Da (" + (lastBasic.mw / 1000).toFixed(2) + " kDa)\npI: " +
-        lastBasic.pI.toFixed(3);
+        lastBasic.pI.toFixed(3) + "（" + set.label + "）";
     navigator.clipboard.writeText(txt).then(() => alert("已复制"));
 }
+
+/* ═══════════════════════════════════════════════════════════
+   3. 抗体粘度（Sharma et al. 2014 PNAS）
+   ═══════════════════════════════════════════════════════════ */
+
+// Eisenberg 归一化共识疏水标度（Eisenberg et al. 1984 J Mol Biol）
+const EISENBERG = {
+    A: 0.62,  R: -2.53, N: -0.78, D: -0.90, C: 0.29,
+    Q: -0.85, E: -0.74, G: 0.48,  H: -0.40, I: 1.38,
+    L: 1.06,  K: -1.50, M: 0.64,  F: 1.19,  P: 0.12,
+    S: -0.18, T: -0.05, W: 0.81,  Y: 0.26,  V: 1.08
+};
+const VISC_PH = 5.5;
+const SHARMA_PKA = { D: 3.9, E: 4.3, H: 6.0, K: 10.8, R: 12.5 };
+const VISC_HYDROPHOBIC = "ACFILPVWY";
+const VISC_HYDROPHILIC = "DEGHKMNQRST";
+
+// Sharma 净电荷：pH 5.5 下仅计 D/E/H/K/R，pKa 取 Berg 等
+function sharmaCharge(seq) {
+    let q = 0;
+    for (const aa of seq) {
+        const pKa = SHARMA_PKA[aa];
+        if (pKa === undefined) continue;
+        if (aa === "D" || aa === "E") q -= 1 / (1 + Math.pow(10, pKa - VISC_PH));
+        else q += 1 / (1 + Math.pow(10, VISC_PH - pKa));
+    }
+    return q;
+}
+
+// 疏水指数 HI = −Σ疏水 E / Σ亲水 E
+function hydrophobicityIndex(seq) {
+    let hp = 0, hl = 0;
+    for (const aa of seq) {
+        if (VISC_HYDROPHOBIC.includes(aa)) hp += EISENBERG[aa];
+        else if (VISC_HYDROPHILIC.includes(aa)) hl += EISENBERG[aa];
+    }
+    return { hi: hl === 0 ? NaN : -hp / hl, hp, hl };
+}
+
+function sharmaViscosity(vh, vl) {
+    const qVH = sharmaCharge(vh);
+    const qVL = sharmaCharge(vl);
+    const q = qVH + qVL;
+    const qsym = qVH * qVL;
+    const { hi, hp, hl } = hydrophobicityIndex(vh + vl);
+    const eta = Math.pow(10, 0.15 + 1.26 * hi - 0.043 * q - 0.020 * qsym);
+    return { qVH, qVL, q, qsym, hi, hp, hl, eta };
+}
+
+function viscTier(eta) {
+    if (eta < 10) return { label: "低粘度风险", color: "var(--green)", cls: "green", desc: "预测粘度较低，高浓度制剂通常较易开发。" };
+    if (eta < 20) return { label: "中等粘度", color: "var(--orange)", cls: "orange", desc: "处于可接受区间边缘，建议关注高浓度可制造性。" };
+    return { label: "高粘度风险", color: "var(--red)", cls: "", desc: "预测粘度偏高，高浓度皮下给药可能受限，建议实验验证或序列优化。" };
+}
+
+function readViscSeq(id, label) {
+    const el = document.getElementById(id);
+    const { seq, bad } = parseSeq(el.value);
+    return { seq, bad, label, el };
+}
+
+function updateViscInfo() {
+    for (const [id, infoId, label] of [["vhInput", "vhInfo", "VH"], ["vlInput", "vlInfo", "VL"]]) {
+        const { seq, bad } = parseSeq(document.getElementById(id).value);
+        document.getElementById(infoId).textContent = seq
+            ? label + "：" + seq.length + " aa" + (bad ? "（已忽略 " + bad.length + " 个非法字符）" : "")
+            : "未输入";
+    }
+}
+
+function calcViscosity() {
+    const vh = readViscSeq("vhInput", "VH");
+    const vl = readViscSeq("vlInput", "VL");
+    const err = document.getElementById("viscError");
+    const problems = [];
+    if (!vh.seq) problems.push("VH 序列为空或没有有效氨基酸。");
+    if (!vl.seq) problems.push("VL 序列为空或没有有效氨基酸。");
+    if (vh.seq && (vh.seq.length < 60 || vh.seq.length > 180)) problems.push("VH 长度 " + vh.seq.length + " aa，不像可变区（通常 110–130 aa）。");
+    if (vl.seq && (vl.seq.length < 60 || vl.seq.length > 180)) problems.push("VL 长度 " + vl.seq.length + " aa，不像可变区（通常 110–130 aa）。");
+    if (problems.length) {
+        err.innerHTML = problems.join("<br>");
+        err.classList.add("show");
+        document.getElementById("viscStats").style.display = "none";
+        document.getElementById("viscRisk").style.display = "none";
+        return;
+    }
+    err.classList.remove("show");
+
+    const r = sharmaViscosity(vh.seq, vl.seq);
+    const tier = viscTier(r.eta);
+    const stats = document.getElementById("viscStats");
+    stats.style.display = "grid";
+    stats.innerHTML =
+        '<div class="stat ' + tier.cls + '"><b style="color:' + tier.color + '">' + r.eta.toFixed(2) + '</b><span>预测粘度 η (cP)</span></div>' +
+        '<div class="stat orange"><b>' + r.hi.toFixed(3) + '</b><span>疏水指数 HI</span></div>' +
+        '<div class="stat"><b>' + r.q.toFixed(2) + '</b><span>Fv 净电荷 q (pH 5.5)</span></div>' +
+        '<div class="stat purple"><b>' + r.qsym.toFixed(2) + '</b><span>电荷不对称性 q<sub>sym</sub></span></div>' +
+        '<div class="stat"><b>' + r.qVH.toFixed(2) + '</b><span>q<sub>VH</sub></span></div>' +
+        '<div class="stat"><b>' + r.qVL.toFixed(2) + '</b><span>q<sub>VL</sub></span></div>';
+    const risk = document.getElementById("viscRisk");
+    risk.innerHTML = "<b style=\"color:" + tier.color + "\">" + tier.label + "</b>：" + tier.desc +
+        " 分层阈值借自 DeepViscosity 的 150 mg/mL、20 cP 判据；本模型条件为 180 mg/mL，二者不可直接等同。" +
+        " 计算细节：Σ疏水 E = " + r.hp.toFixed(3) + "，Σ亲水 E = " + r.hl.toFixed(3) + "。";
+    risk.style.display = "block";
+}
+
+function loadViscExample() {
+    document.getElementById("vhInput").value =
+        "EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS";
+    document.getElementById("vlInput").value =
+        "DIQMTQSPSSLSASVGDRVTITCRASQDVNTAVAWYQQKPGKAPKLLIYSASFLYSGVPSRFSGSRSGTDFTLTISSLQPEDFATYYCQQHYTTPPTFGQGTKVEIK";
+    updateViscInfo();
+    calcViscosity();
+}
+
+function clearVisc() {
+    document.getElementById("vhInput").value = "";
+    document.getElementById("vlInput").value = "";
+    document.getElementById("viscError").classList.remove("show");
+    document.getElementById("viscStats").style.display = "none";
+    document.getElementById("viscRisk").style.display = "none";
+    updateViscInfo();
+}
+
+["vhInput", "vlInput"].forEach(id => {
+    document.getElementById(id).addEventListener("input", updateViscInfo);
+});
 
 /* ═══════════════════════════════════════════════════════════
    2. KD 疏水性
