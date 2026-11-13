@@ -1,7 +1,7 @@
 {
   "name": "Protein-Analyse 蛋白质分析工具集",
   "short_name": "Protein-Analyse",
-  "description": "分子量、等电点、KD疏水性、A280消光系数与浓度、摩尔换算 —— 离线蛋白质分析工具集",
+  "description": "分子量、等电点（含 FASTA 批量计算）、KD疏水性、A280消光系数与浓度、摩尔换算 —— 离线蛋白质分析工具集",
   "lang": "zh-CN",
   "start_url": "./index.html",
   "scope": "./",

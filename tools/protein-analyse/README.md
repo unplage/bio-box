@@ -8,12 +8,13 @@
 | `manifest.json` | PWA manifest，可安装到桌面/手机 |
 | `sw.js` | Service Worker，离线缓存 |
 | `icon.svg` | 应用图标 |
+| `tests/run.js` | 零依赖 Node 回归测试（FASTA 批量解析 + 批量 pI/MW 一致性） |
 
 ## 功能模块
 
 | 模块 | 功能 | 算法来源 |
 |:---|:---|:---|
-| ⚖️ 分子量 / pI | 分子量、等电点、氨基酸组成表、**多 pKa 参数集对比**、Cys 二硫键处理、PTM 提示 | ExPASy 残基平均质量；Henderson–Hasselbalch + 二分法求净电荷=0；可选 Bjellqvist/IPC_protein/EMBOSS/Sillero/Nozaki–Tanford |
+| ⚖️ 分子量 / pI | 分子量、等电点、氨基酸组成表、**多 pKa 参数集对比**、**FASTA 批量计算**、Cys 二硫键处理、PTM 提示 | ExPASy 残基平均质量；Henderson–Hasselbalch + 二分法求净电荷=0；可选 Bjellqvist/IPC_protein/EMBOSS/Sillero/Nozaki–Tanford |
 | 🌡️ KD 疏水性 | 平均 KD、滑动窗口剖面图、残基热图 | Kyte & Doolittle (1982) J Mol Biol |
 | 💧 抗体粘度 | 输入 VH/VL，预测 180 mg/mL 高浓度粘度、HI、Fv 净电荷与电荷不对称性，并给出风险分层 | Sharma et al. (2014) PNAS 序列模型；Eisenberg (1984) 疏水标度 |
 | 🔬 A280 浓度 | ε₂₈₀、mg/mL、mM/μM、1 mg/mL 吸光度 | Pace et al. (1995)：`ε = 5500·W + 1490·Y + 125·Cystine`；Beer-Lambert |
@@ -48,6 +49,30 @@ pI    = Q(pH) = 0 的根（Q 随 pH 单调递减，二分区间 0–14）
 **PTM 提示**：结果面板会提示潜在 N-糖基化序列（N-X-S/T，X≠P）与可磷酸化的 S/T/Y 数量，但**不参与计算**。
 
 **可靠性**：本工具给出的是序列层面的理论估算，未考虑三维结构微环境（埋藏、盐桥、氢键）、金属离子、翻译后修饰及非标准残基。与实验 pI 的典型偏差约 **±0.5–1.5 pH**，不能替代等电聚焦等实验测定。蛋白基准 RMSE 参考（Kozlowski 2016/2021）：IPC_protein ≈ 0.87、Bjellqvist ≈ 0.94、Nozaki ≈ 1.02、Sillero ≈ 1.05；机器学习方法 IPC 2.0 可降至 ≈ 0.85，但需联网/外部服务，本离线工具未采用。
+
+## 批量计算 pI（FASTA 多序列）
+
+「⚖️ 分子量 / pI」面板底部提供**批量计算**区块：在独立输入框粘贴多条 FASTA 序列，按 `>` 标题行逐条计算分子量与 pI。
+
+**解析规则**
+
+| 项 | 规则 |
+|:---|:---|
+| 序列划分 | 以 `>` 标题行分隔；标题全文作为 ID；同一条序列可跨多行，自动拼接 |
+| 无标题行 | 整段输入视为**一条**序列（ID = `unnamed`） |
+| 「每行一条序列」模式 | 每行独立成一条序列，ID = `seq1`、`seq2`…… |
+| 字符清洗 | 与单条计算一致：去空格/换行/数字/连字符/`*`/`.`，仅保留 20 种标准氨基酸；被过滤的非标准字符在「备注」列列出 |
+| 注释行 | `;` 或 `#` 开头的行忽略 |
+
+**结果表**：序号、ID、长度 (aa)、MW (Da)、pI（所选参数集）、净电荷 @ pH 7.0、各参数集 pI（Bjellqvist / IPC_protein / EMBOSS / Sillero / Nozaki–Tanford）、备注（ID 重复 / 被过滤字符）。
+
+**与单条计算的关系**：批量与单条共用 `molecularWeight` / `isoelectricPoint` / `netCharge` 同一实现，**结果逐位一致**（回归测试逐条断言）；差别仅在于批量路径预计算残基计数，使每次电荷计算的复杂度由 O(序列长度) 降为 O(1)，200 条 × 300 aa 的批次在毫秒级完成。
+
+**导出**：CSV（`protein_pi_batch.csv`，含 BOM 以便 Excel 直接打开）列出全部 5 个参数集的 pI 与完整序列；「复制结果」输出制表符分隔文本。
+
+**参数联动**：批量沿用面板上方的 pKa 参数集与 Cys 二硫键处理方式；切换这两项后，已有的批量结果会自动按新参数重算。
+
+**边界**：批量输入框与页面顶部主输入区相互独立，避免影响 KD 疏水性 / A280 / 摩尔换算 / 密码子优化等模块（这些模块会把主输入区中多段 FASTA **拼接**成一条序列计算）。若要把主输入区的内容送入批量区，点「⬆️ 载入上方输入区」即可。
 
 ## 抗体粘度（Sharma 模型）
 
@@ -131,12 +156,24 @@ open tools/protein-analyse/index.html   # macOS
 6. 「📚 参考手册」无需输入序列，可直接查询密码子/氨基酸/简并碱基，以及核酸定量、缓冲液/培养基、抗生素/母液、蛋白标签/蛋白酶、限制性内切酶、单位换算、荧光蛋白/报告基因；
 7. 「🧬 密码子优化」读取同一序列输入：选物种 → 点选要排除的酶切位点 → ⚡ 开始优化 → 下载 FASTA。
 8. 「💧 抗体粘度」在独立输入框分别粘贴 VH/VL 可变区（FASTA 或纯序列）→ ⚡ 计算粘度；示例按钮可载入曲妥珠单抗 Fv 对照。
+9. 「⚖️ 分子量 / pI」面板底部的「📚 批量计算（FASTA 多序列）」：粘贴多条 FASTA → ⚡ 批量计算 → 结果表 / 导出 CSV。
 
 ## 导出说明
 
 - 分子量/pI 结果支持一键复制；
+- 批量 pI 结果支持导出 CSV（`protein_pi_batch.csv`，含 BOM）与一键复制（制表符分隔）；
 - 全部计算在浏览器本地完成，序列不上传、不联网（Service Worker 离线可用）。
 - Service Worker 使用独立缓存（`protein-analyse-*`），更新时只清理本工具缓存，不影响同域下其他 PWA 的离线缓存。
+
+## 测试
+
+```bash
+node tools/protein-analyse/tests/run.js          # 全部用例
+node tools/protein-analyse/tests/run.js fasta    # 只跑名字含 "fasta" 的用例
+PROTEIN_ANALYSE_HTML=<path> tools/protein-analyse/tests/run.js   # 指定被测页面
+```
+
+零依赖（仅 Node 内置模块）：覆盖 FASTA 标题行切分、多行拼接、无标题行兜底、每行一条模式、非标准字符过滤、与单条 `parseSeq` 清洗规则一致性、批量 MW/pI 与单条路径逐位一致、计数预计算不改变 `netCharge`、空序列计入失败、批量规模性能，以及批量表格渲染与空输入提示。
 
 ## 核心公式
 

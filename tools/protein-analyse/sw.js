@@ -1,6 +1,6 @@
 "use strict";
 const CACHE_PREFIX = "protein-analyse-";
-const CACHE = CACHE_PREFIX + "v5";
+const CACHE = CACHE_PREFIX + "v6";
 const ASSETS = [
   "./",
   "./index.html",

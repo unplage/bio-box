@@ -349,14 +349,51 @@
                     </div>
                 </div>
             </div>
-            <div id="basicAA" style="display:none">
+<div id="basicAA" style="display:none">
                 <div class="section" style="margin-top:1rem">
                     <h2 style="font-size:.9rem"><span class="ico">📊</span>氨基酸组成</h2>
                     <table id="aaTable"></table>
                 </div>
             </div>
+
+            <!-- 批量计算：FASTA 多序列 -->
+            <div class="section" style="margin-top:1.2rem;border-top:1px solid var(--border);padding-top:.9rem">
+                <h2 style="font-size:.9rem"><span class="ico">📚</span>批量计算（FASTA 多序列）</h2>
+                <div class="hint" style="margin-top:0">
+                    按 FASTA 标题行（<code>&gt;</code>）区分不同序列，逐条计算分子量与 pI；
+                    算法与上方单条计算<b>完全一致</b>（同一 Henderson–Hasselbalch + 二分法实现），
+                    pKa 参数集与 Cys 处理方式沿用上方设置。
+                </div>
+                <div class="form-grid">
+                    <div class="field">
+                        <label>解析方式</label>
+                        <select id="piBatchMode">
+                            <option value="fasta" selected>按 FASTA 解析（以 &gt; 标题行分隔）</option>
+                            <option value="lines">每行一条序列</option>
+                        </select>
+                        <div class="unit">无标题行时，整段输入视为一条序列</div>
+                    </div>
+                    <div class="field" style="grid-column:1 / -1">
+                        <label>批量 FASTA 输入</label>
+                        <textarea id="piBatchInput" spellcheck="false" rows="6" placeholder="&gt;seq1&#10;MALWMRLLPLLALLALWGPDPAAAFVNQHLCGSHLVEALYLVCGERGFFYTPKT&#10;&gt;seq2&#10;EVQLVESGGGLVQPGGSLRLSCAASGFTFSSYAMSWVRQAPGKGLEWVSAISGSGGSTYYADSVKGRFTISRDNSKNTLYLQMNSLRAEDTAVYYCAK..."></textarea>
+                        <div class="unit">独立输入框，与上方主输入区互不影响（KD / A280 / 摩尔 / 密码子等模块不受影响）</div>
+                    </div>
+                </div>
+                <div class="row">
+                    <button class="btn" onclick="calcPiBatch()">⚡ 批量计算</button>
+                    <button class="btn btn-ghost btn-sm" onclick="downloadPiBatchCsv()">📥 导出 CSV</button>
+                    <button class="btn btn-ghost btn-sm" onclick="copyPiBatchResults()">复制结果</button>
+                    <button class="btn btn-ghost btn-sm" onclick="clearPiBatchResults()">清空结果</button>
+                    <button class="btn btn-ghost btn-sm" onclick="loadPiBatchFromTop()">⬆️ 载入上方输入区</button>
+                </div>
+                <div class="stats" id="piBatchStats" style="display:none"></div>
+                <div id="piBatchWrap" style="display:none">
+                    <div class="hint" id="piBatchSummary"></div>
+                    <div class="ref-table-wrap"><table id="piBatchTable" class="ref-table"></table></div>
+                </div>
+            </div>
         </div>
-</div>
+    </div>
 
     <!-- ═══ 面板 2：A280 浓度 ═══ -->
     <div class="panel" id="panel-a280">
@@ -836,15 +873,22 @@ function effectiveCysCount(nC, cysMode) {
     return nC;
 }
 
+// 残基计数（批量计算时预计算一次，供 netCharge 复用，避免重复遍历序列）
+function countResidues(seq) {
+    const cnt = {};
+    for (const aa of seq) cnt[aa] = (cnt[aa] || 0) + 1;
+    return cnt;
+}
+
 // 净电荷（Henderson-Hasselbalch；正/负基团分别取质子化/去质子化分数）
-function netCharge(seq, pH, setKey, cysMode) {
+// cnt 可选：预先算好的残基计数，传入后单次调用为 O(1)
+function netCharge(seq, pH, setKey, cysMode, cnt) {
     const set = PKA_SETS[setKey] || PKA_SETS.bjellqvist;
     const first = seq[0], last = seq[seq.length - 1];
     const pKn = (set.pKnOverrides && set.pKnOverrides[first] !== undefined) ? set.pKnOverrides[first] : set.Nterm;
     const pKc = (set.pKcOverrides && set.pKcOverrides[last] !== undefined) ? set.pKcOverrides[last] : set.Cterm;
     let pos = 0, neg = 0;
-    const cnt = {};
-    for (const aa of seq) cnt[aa] = (cnt[aa] || 0) + 1;
+    if (!cnt) cnt = countResidues(seq);
 
     // 正电荷基团：质子化分数 = 1 / (1 + 10^(pH - pKa))
     pos += 1 / (1 + Math.pow(10, pH - pKn));
@@ -862,11 +906,12 @@ function netCharge(seq, pH, setKey, cysMode) {
 }
 
 // 二分法求 pI（净电荷 = 0）；Q(pH) 随 pH 单调递减，故区间内解唯一
-function isoelectricPoint(seq, setKey, cysMode) {
+// cnt 可选：预先算好的残基计数，批量场景下避免每次迭代重新统计序列
+function isoelectricPoint(seq, setKey, cysMode, cnt) {
     let lo = 0, hi = 14;
     for (let i = 0; i < 80; i++) {
         const mid = (lo + hi) / 2;
-        if (netCharge(seq, mid, setKey, cysMode) > 0) lo = mid; else hi = mid;
+        if (netCharge(seq, mid, setKey, cysMode, cnt) > 0) lo = mid; else hi = mid;
     }
     return (lo + hi) / 2;
 }
@@ -897,9 +942,8 @@ function calcBasic() {
     const cysMode = document.getElementById("pkaCysMode").value;
     const set = PKA_SETS[setKey] || PKA_SETS.bjellqvist;
     const mw = molecularWeight(seq);
-    const pI = isoelectricPoint(seq, setKey, cysMode);
-    const cnt = {};
-    for (const aa of seq) cnt[aa] = (cnt[aa] || 0) + 1;
+    const cnt = countResidues(seq);
+    const pI = isoelectricPoint(seq, setKey, cysMode, cnt);
     lastBasic = { seq, mw, pI, cnt, setKey, cysMode };
 
     const stats = document.getElementById("basicStats");
@@ -954,6 +998,289 @@ function copyStats() {
         lastBasic.pI.toFixed(3) + "（" + set.label + "）";
     navigator.clipboard.writeText(txt).then(() => alert("已复制"));
 }
+
+/* ═══════════════════════════════════════════════════════════
+   1b. 批量 pI 计算（FASTA 多序列）
+   算法与单条计算共用 molecularWeight / isoelectricPoint / netCharge，
+   因此批量与单条结果逐位一致；仅在计数预计算上做性能优化。
+   ═══════════════════════════════════════════════════════════ */
+
+// 行清洗规则与 parseSeq 一致：去空白/数字/连字符/*/.，再仅保留 20 种标准氨基酸
+function piCleanLine(line) {
+    const up = String(line || "").toUpperCase().replace(/[\s\d\-\*\.]/g, "");
+    const bad = up.replace(/[ACDEFGHIKLMNPQRSTVWY]/g, "");
+    return { seq: up.replace(/[^ACDEFGHIKLMNPQRSTVWY]/g, ""), bad: bad };
+}
+
+// 按 FASTA 解析：标题行（>）分隔不同序列，标题全文作为 ID
+// mode = "fasta"（默认）：无标题行时整段输入视为一条序列
+// mode = "lines"：每行一条纯序列
+function piParseFasta(text, mode) {
+    const lines = String(text || "").split(/\r?\n/);
+    const entries = [];
+
+    if (mode === "lines") {
+        lines.forEach((rawLine, i) => {
+            const line = rawLine.trim();
+            if (!line || line.startsWith(">") || line.startsWith(";") || line.startsWith("#")) return;
+            const c = piCleanLine(line);
+            if (!c.seq) return;
+            entries.push({ id: "seq" + (i + 1), seq: c.seq, invalid: c.bad });
+        });
+        return entries;
+    }
+
+    const hasHeader = lines.some(l => l.trim().startsWith(">"));
+    if (!hasHeader) {
+        let all = [], badAll = "";
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line || line.startsWith(";") || line.startsWith("#")) continue;
+            const c = piCleanLine(line);
+            all.push(c.seq);
+            badAll += c.bad;
+        }
+        const seq = all.join("");
+        if (seq) entries.push({ id: "unnamed", seq: seq, invalid: badAll });
+        return entries;
+    }
+
+    let curId = null, curSeq = [], curBad = "";
+    const flush = () => {
+        if (curSeq.length) {
+            const seq = curSeq.join("");
+            if (seq) entries.push({ id: curId === null ? "unnamed" : curId, seq: seq, invalid: curBad });
+        }
+        curSeq = []; curBad = ""; curId = null;
+    };
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        if (line.startsWith(">")) {
+            flush();
+            curId = line.slice(1).trim() || "unnamed";
+        } else if (line.startsWith(";") || line.startsWith("#")) {
+            continue;
+        } else {
+            if (curId === null) curId = "unnamed";
+            const c = piCleanLine(line);
+            curSeq.push(c.seq);
+            curBad += c.bad;
+        }
+    }
+    flush();
+    return entries;
+}
+
+// 批量计算核心（纯函数）：逐条计算 MW / pI / 各参数集 pI / pH 7.0 净电荷
+function piComputeBatch(entries, setKey, cysMode) {
+    const results = [];
+    const errors = [];
+    (entries || []).forEach((entry, i) => {
+        const id = (entry && entry.id) || ("seq" + (i + 1));
+        try {
+            if (!entry || !entry.seq) throw new Error("序列为空");
+            const seq = entry.seq;
+            const cnt = countResidues(seq);
+            const pkaPi = {};
+            for (const k of PKA_SET_ORDER) pkaPi[k] = isoelectricPoint(seq, k, cysMode, cnt);
+            const pI = (pkaPi[setKey] !== undefined)
+                ? pkaPi[setKey]
+                : isoelectricPoint(seq, setKey, cysMode, cnt);
+            results.push({
+                index: i,
+                id: id,
+                seq: seq,
+                length: seq.length,
+                mw: molecularWeight(seq),
+                pI: pI,
+                pkaPi: pkaPi,
+                charge7: netCharge(seq, 7.0, setKey, cysMode, cnt),
+                invalid: entry.invalid || ""
+            });
+        } catch (e) {
+            errors.push({ index: i, id: id, error: e.message });
+        }
+    });
+    return {
+        total: (entries || []).length,
+        successful: results.length,
+        failed: errors.length,
+        results: results,
+        errors: errors
+    };
+}
+
+function piEsc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[ch]));
+}
+
+function piCsvCell(value) {
+    const s = String(value == null ? "" : value);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+let piBatchLastRun = null;
+
+function calcPiBatch() {
+    const text = document.getElementById("piBatchInput").value;
+    const mode = document.getElementById("piBatchMode").value;
+    const setKey = document.getElementById("pkaSet").value;
+    const cysMode = document.getElementById("pkaCysMode").value;
+    const set = PKA_SETS[setKey] || PKA_SETS.bjellqvist;
+
+    const statsEl = document.getElementById("piBatchStats");
+    const wrapEl = document.getElementById("piBatchWrap");
+    const summaryEl = document.getElementById("piBatchSummary");
+    const tableEl = document.getElementById("piBatchTable");
+
+    statsEl.style.display = "none";
+    statsEl.innerHTML = "";
+    wrapEl.style.display = "none";
+    summaryEl.innerHTML = "";
+    tableEl.innerHTML = "";
+    piBatchLastRun = null;
+
+    if (!text.trim()) return alert("请粘贴 FASTA 序列（每条序列以 > 标题行区分）");
+
+    const entries = piParseFasta(text, mode);
+    if (!entries.length) return alert("未找到有效序列（仅识别 20 种标准氨基酸）");
+
+    const run = piComputeBatch(entries, setKey, cysMode);
+    if (!run.successful) {
+        statsEl.style.display = "grid";
+        statsEl.innerHTML = run.errors.map(e =>
+            '<div class="stat"><b style="color:var(--red)">' + piEsc(e.id) + "</b><span>" +
+            piEsc(e.error) + "</span></div>").join("");
+        return;
+    }
+
+    // 重复 ID 标记
+    const idCount = {};
+    for (const r of run.results) idCount[r.id] = (idCount[r.id] || 0) + 1;
+
+    piBatchLastRun = {
+        run: run,
+        setKey: setKey,
+        cysMode: cysMode,
+        mode: mode
+    };
+
+    const pis = run.results.map(r => r.pI);
+    const minPi = Math.min.apply(null, pis), maxPi = Math.max.apply(null, pis);
+    const avgMw = run.results.reduce((s, r) => s + r.mw, 0) / run.results.length;
+
+    statsEl.style.display = "grid";
+    statsEl.innerHTML =
+        '<div class="stat"><b>' + run.total + '</b><span>序列数</span></div>' +
+        '<div class="stat green"><b>' + run.successful + '</b><span>成功计算</span></div>' +
+        '<div class="stat orange"><b>' + minPi.toFixed(2) + '–' + maxPi.toFixed(2) + '</b><span>pI 范围（' + set.short + '）</span></div>' +
+        '<div class="stat purple"><b>' + (avgMw / 1000).toFixed(2) + '</b><span>平均 MW (kDa)</span></div>';
+
+    const cysDesc = cysMode === "none" ? "全部氧化" : (cysMode === "pair" ? "nC/2 对二硫键" : "游离 Cys");
+    let summary = "共 " + run.total + " 条序列，成功 " + run.successful + " 条，失败 " + run.failed +
+        " 条；pKa 参数集 <b>" + set.label + "</b>，Cys 处理：<b>" + cysDesc + "</b>；点击「导出 CSV」下载完整结果。";
+    if (run.failed) {
+        summary += '<div style="color:var(--red);margin-top:.3rem">' + run.failed + " 条序列无效：" +
+            run.errors.map(e => piEsc(e.id) + "（" + piEsc(e.error) + "）").join("、") + "</div>";
+    }
+    summary += '<div style="margin-top:.3rem">结果为序列层面的理论估算，与实验 pI 典型偏差约 ±0.5–1.5 pH。</div>';
+    summaryEl.innerHTML = summary;
+
+    let html = "<thead><tr><th>#</th><th>ID</th><th>长度 (aa)</th><th>MW (Da)</th>" +
+        "<th>pI（" + set.short + "）</th><th>净电荷 @ pH 7.0</th>" +
+        "<th>各参数集 pI</th><th>备注</th></tr></thead><tbody>";
+    for (const r of run.results) {
+        const pkaTxt = PKA_SET_ORDER.map(k =>
+            PKA_SETS[k].short + " " + r.pkaPi[k].toFixed(2)).join(" / ");
+        const notes = [];
+        if (idCount[r.id] > 1) notes.push("ID 重复");
+        if (r.invalid) notes.push("过滤非标准字符 " + r.invalid.length + " 个：" + [...new Set(r.invalid)].join(" "));
+        html += "<tr><td class=\"num\">" + (r.index + 1) + "</td><td>" + piEsc(r.id) +
+            '</td><td class="num">' + r.length +
+            '</td><td class="num">' + r.mw.toFixed(2) +
+            '</td><td class="num"><b>' + r.pI.toFixed(3) + "</b></td><td class=\"num\">" +
+            (r.charge7 >= 0 ? "+" : "") + r.charge7.toFixed(2) +
+            '</td><td style="font-size:.74rem;color:var(--text-2)">' + pkaTxt +
+            "</td><td style=\"font-size:.74rem;color:var(--text-2)\">" +
+            (notes.length ? piEsc(notes.join("；")) : "—") + "</td></tr>";
+    }
+    html += "</tbody>";
+    tableEl.innerHTML = html;
+    wrapEl.style.display = "block";
+}
+
+function downloadPiBatchCsv() {
+    if (!piBatchLastRun || !piBatchLastRun.run.successful) return alert("没有可导出的结果，请先批量计算");
+    const run = piBatchLastRun.run;
+    const set = PKA_SETS[piBatchLastRun.setKey] || PKA_SETS.bjellqvist;
+    const cysDesc = piBatchLastRun.cysMode === "none" ? "全部氧化" :
+        (piBatchLastRun.cysMode === "pair" ? "nC/2对二硫键" : "游离Cys");
+
+    const header = ["序号", "ID", "长度(aa)", "MW(Da)", "MW(kDa)", "pI(" + set.short + ")",
+        "pI_Bjellqvist", "pI_IPC_protein", "pI_EMBOSS", "pI_Sillero", "pI_Nozaki",
+        "净电荷@pH7.0", "pKa参数集", "Cys处理", "过滤字符数", "序列"];
+    const rows = [header.map(piCsvCell).join(",")];
+    for (const r of run.results) {
+        rows.push([
+            r.index + 1, r.id, r.length, r.mw.toFixed(2), (r.mw / 1000).toFixed(3),
+            r.pI.toFixed(3),
+            r.pkaPi.bjellqvist.toFixed(3), r.pkaPi.ipc_protein.toFixed(3),
+            r.pkaPi.emboss.toFixed(3), r.pkaPi.sillero.toFixed(3), r.pkaPi.nozaki.toFixed(3),
+            r.charge7.toFixed(3), set.label, cysDesc, r.invalid.length, r.seq
+        ].map(piCsvCell).join(","));
+    }
+    const blob = new Blob(["﻿" + rows.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "protein_pi_batch.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function copyPiBatchResults() {
+    if (!piBatchLastRun || !piBatchLastRun.run.successful) return alert("没有可复制的结果，请先批量计算");
+    const run = piBatchLastRun.run;
+    const set = PKA_SETS[piBatchLastRun.setKey] || PKA_SETS.bjellqvist;
+    const lines = ["ID\t长度(aa)\tMW(Da)\tpI(" + set.short + ")\t净电荷@pH7.0\t" +
+        PKA_SET_ORDER.map(k => "pI_" + k).join("\t")];
+    for (const r of run.results) {
+        lines.push([
+            r.id, r.length, r.mw.toFixed(2), r.pI.toFixed(3), r.charge7.toFixed(3),
+            PKA_SET_ORDER.map(k => r.pkaPi[k].toFixed(3)).join("\t")
+        ].join("\t"));
+    }
+    lines.push("", "pKa参数集: " + set.label, "Cys处理: " +
+        (piBatchLastRun.cysMode === "none" ? "全部氧化" :
+            (piBatchLastRun.cysMode === "pair" ? "nC/2 对二硫键" : "游离 Cys")));
+    navigator.clipboard.writeText(lines.join("\n")).then(() => alert("已复制"));
+}
+
+function clearPiBatchResults() {
+    piBatchLastRun = null;
+    document.getElementById("piBatchStats").style.display = "none";
+    document.getElementById("piBatchStats").innerHTML = "";
+    document.getElementById("piBatchWrap").style.display = "none";
+    document.getElementById("piBatchSummary").innerHTML = "";
+    document.getElementById("piBatchTable").innerHTML = "";
+}
+
+function loadPiBatchFromTop() {
+    const top = document.getElementById("seqInput").value;
+    if (!top.trim()) return alert("上方输入区为空");
+    document.getElementById("piBatchInput").value = top;
+    document.getElementById("piBatchMode").value = "fasta";
+    document.getElementById("piBatchInput").focus();
+}
+
+// pKa 参数集 / Cys 处理变更后，自动按新参数重算已有批量结果
+["pkaSet", "pkaCysMode"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", function () {
+        if (piBatchLastRun) calcPiBatch();
+    });
+});
 
 /* ═══════════════════════════════════════════════════════════
    3. 抗体粘度（Sharma et al. 2014 PNAS）
@@ -3208,6 +3535,11 @@ window.calcTm = calcTm;
 window.downloadTmCsv = downloadTmCsv;
 window.copyTmResults = copyTmResults;
 window.clearTmResults = clearTmResults;
+window.calcPiBatch = calcPiBatch;
+window.downloadPiBatchCsv = downloadPiBatchCsv;
+window.copyPiBatchResults = copyPiBatchResults;
+window.clearPiBatchResults = clearPiBatchResults;
+window.loadPiBatchFromTop = loadPiBatchFromTop;
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
     window.addEventListener("load", () => {
         navigator.serviceWorker.register("sw.js").catch(() => {});
