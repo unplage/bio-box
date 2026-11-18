@@ -25,7 +25,7 @@ const moduleIds = new Set(meta.modules.map(m => m.id));
 const nodeIds = new Set(nodes.map(n => n.id));
 const refIds = new Set(Object.keys(refs));
 const nodeKinds = new Set(["receptor", "ligand", "cytokine", "complex", "cell", "drug"]);
-const relTypes = new Set(["bind", "activate", "inhibit", "compete", "block", "agonist", "regulate"]);
+const relTypes = new Set(["bind", "activate", "inhibit", "compete", "block", "agonist", "regulate", "recruit"]);
 const mechanisms = new Set(["block", "agonist"]);
 
 function checkRefs(list, owner) {
@@ -102,7 +102,7 @@ test("药物靶点存在、机制有效且 ID 唯一", () => {
   }
 });
 
-test("两个模块均具备节点、关系、药物与两种机制", () => {
+test("每个模块均具备节点、关系与药物", () => {
   for (const id of moduleIds) {
     const modNodes = nodes.filter(n => n.modules.includes(id));
     const modEdges = edges.filter(e => e.modules.includes(id));
@@ -110,8 +110,19 @@ test("两个模块均具备节点、关系、药物与两种机制", () => {
     assert(modNodes.length >= 15, `模块 ${id} 节点过少: ${modNodes.length}`);
     assert(modEdges.length >= 10, `模块 ${id} 关系过少: ${modEdges.length}`);
     assert(modDrugs.length >= 10, `模块 ${id} 药物过少: ${modDrugs.length}`);
-    for (const mech of mechanisms) assert(modDrugs.some(d => d.mechanism === mech), `模块 ${id} 缺少 ${mech} 药物`);
+    assert(modDrugs.some(d => mechanisms.has(d.mechanism)), `模块 ${id} 没有有效机制药物`);
   }
+  for (const mech of mechanisms) assert(drugs.some(d => d.mechanism === mech), `全局缺少 ${mech} 药物`);
+});
+
+test("没有孤立节点", () => {
+  const used = new Set();
+  for (const edge of edges) {
+    used.add(edge.source);
+    used.add(edge.target);
+  }
+  const orphans = nodes.filter(node => !used.has(node.id)).map(node => node.id);
+  assert.deepStrictEqual(orphans, [], `存在孤立节点: ${orphans.join(", ")}`);
 });
 
 test("已生成 index.html 且无模板占位符", () => {

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#1d4ed8">
-<meta name="description" content="免疫靶点关系图谱：检查点/共刺激与细胞因子/趋化因子的配体-受体-药物证据网络，标注亲和力、机制与文献来源。">
+<meta name="description" content="免疫靶点关系图谱：检查点/共刺激、先天/代谢检查点、细胞因子与趋化因子的配体-受体-药物证据网络，标注亲和力、机制与文献来源。">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -353,7 +353,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       {
         "id": "checkpoint",
         "name": "检查点 / 共刺激",
-        "desc": "共抑制受体（PD-1、CTLA-4、LAG-3、TIGIT、TIM-3、NKG2A 等）与共刺激受体（CD28、4-1BB、OX40、ICOS、CD40 等）共同决定 T/NK 细胞的净激活阈值。注意：同一配体常被多个受体共享，亲和力差异决定竞争方向。",
+        "desc": "适应性免疫的共抑制与共刺激受体决定 T/B 细胞活化阈值。重点展示 PD-1、CTLA-4、LAG-3、TIGIT、TIM-3、CD2、CD5/CD6、SLAMF7、CD30、DR3、RANK、BAFF 与 CD40 等轴；同一配体常被多个受体共享，亲和力与表达背景决定净效应。",
         "groups": [
           "pd1",
           "cd28",
@@ -364,21 +364,56 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
           "nkg2a",
           "nkg2d",
           "tnfrsf",
+          "tnfrsf2",
           "icos",
           "cd40",
           "cd47",
           "vista",
           "btla",
+          "cd2",
+          "cd5",
+          "cd6",
+          "slam",
+          "cell"
+        ]
+      },
+      {
+        "id": "innate",
+        "name": "先天 / 代谢检查点",
+        "desc": "先天免疫检查点、吞噬检查点与代谢免疫：CD47/SIRPα、CD24/SIGLEC10、Siglec-15、B7-H3/B7-H4、KIR/HLA、CD39/CD73/腺苷 A2AR。它们常与 PD-1/PD-L1 互补，决定 NK、巨噬细胞与 T 细胞的协同抑制。",
+        "groups": [
+          "phagocytosis",
+          "nk",
+          "b7",
+          "siglec",
+          "metabolic",
+          "cd47",
+          "tigit",
+          "nkg2a",
+          "nkg2d",
+          "tim3",
+          "vista",
+          "btla",
+          "slam",
           "cell"
         ]
       },
       {
         "id": "cytokine",
-        "name": "细胞因子 / 趋化因子",
-        "desc": "细胞因子通过多亚基受体复合物传递信号，同一细胞因子可因受体组合、浓度和细胞类型产生相反效应（如 IL-2 低剂量扩增 Treg、高剂量激活效应 T/NK）。趋化因子主要决定细胞迁移而非直接杀伤。",
+        "name": "细胞因子",
+        "desc": "细胞因子通过多亚基受体复合物传递信号，同一因子可因受体组合、浓度和细胞类型产生相反效应。覆盖 IL-2/IL-7/IL-15、TGF-β、IL-10、IL-6、IL-1/IL-18/IL-36、IL-12/IL-23/IL-27、IL-4/IL-13/IL-33/TSLP、IL-17、IL-5、IFN、TNF 与 GM-CSF 等轴。",
         "groups": [
+          "pd1",
           "il2",
+          "il7",
           "il15",
+          "il18",
+          "il21",
+          "il27",
+          "il33",
+          "tslp",
+          "gmcsf",
+          "il36",
           "tgf",
           "il10",
           "il6",
@@ -392,6 +427,28 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
           "chemokine",
           "cell"
         ]
+      },
+      {
+        "id": "chemokine",
+        "name": "趋化因子 / 归巢",
+        "desc": "趋化因子主要决定免疫细胞迁移、组织驻留与三级淋巴结构，而不是直接杀伤。覆盖 CCR8/CCL1、CCR4/CCL17/22、CCR7/CCL19/21、CXCR5/CXCL13、CXCR6/CXCL16、CCR6/CCL20、CX3CR1/CX3CL1、CCR9/CCL25、CXCR3/CXCL9/10/11、CXCR4/CXCL12、CCR2/CCL2、CCR5/CCL5 与 CXCR1/2/CXCL8。",
+        "groups": [
+          "ccr8",
+          "ccr4",
+          "ccr7",
+          "cxcr5",
+          "cxcr6",
+          "ccr6",
+          "cx3cr1",
+          "ccr9",
+          "cxcr3",
+          "cxcr4",
+          "ccr2",
+          "ccr5",
+          "cxcr1_2",
+          "chemokine",
+          "cell"
+        ]
       }
     ]
   },
@@ -399,7 +456,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
     {
       "id": "checkpoint",
       "name": "检查点 / 共刺激",
-      "desc": "共抑制受体（PD-1、CTLA-4、LAG-3、TIGIT、TIM-3、NKG2A 等）与共刺激受体（CD28、4-1BB、OX40、ICOS、CD40 等）共同决定 T/NK 细胞的净激活阈值。注意：同一配体常被多个受体共享，亲和力差异决定竞争方向。",
+      "desc": "适应性免疫的共抑制与共刺激受体决定 T/B 细胞活化阈值。重点展示 PD-1、CTLA-4、LAG-3、TIGIT、TIM-3、CD2、CD5/CD6、SLAMF7、CD30、DR3、RANK、BAFF 与 CD40 等轴；同一配体常被多个受体共享，亲和力与表达背景决定净效应。",
       "groups": [
         "pd1",
         "cd28",
@@ -410,21 +467,56 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "nkg2a",
         "nkg2d",
         "tnfrsf",
+        "tnfrsf2",
         "icos",
         "cd40",
         "cd47",
         "vista",
         "btla",
+        "cd2",
+        "cd5",
+        "cd6",
+        "slam",
+        "cell"
+      ]
+    },
+    {
+      "id": "innate",
+      "name": "先天 / 代谢检查点",
+      "desc": "先天免疫检查点、吞噬检查点与代谢免疫：CD47/SIRPα、CD24/SIGLEC10、Siglec-15、B7-H3/B7-H4、KIR/HLA、CD39/CD73/腺苷 A2AR。它们常与 PD-1/PD-L1 互补，决定 NK、巨噬细胞与 T 细胞的协同抑制。",
+      "groups": [
+        "phagocytosis",
+        "nk",
+        "b7",
+        "siglec",
+        "metabolic",
+        "cd47",
+        "tigit",
+        "nkg2a",
+        "nkg2d",
+        "tim3",
+        "vista",
+        "btla",
+        "slam",
         "cell"
       ]
     },
     {
       "id": "cytokine",
-      "name": "细胞因子 / 趋化因子",
-      "desc": "细胞因子通过多亚基受体复合物传递信号，同一细胞因子可因受体组合、浓度和细胞类型产生相反效应（如 IL-2 低剂量扩增 Treg、高剂量激活效应 T/NK）。趋化因子主要决定细胞迁移而非直接杀伤。",
+      "name": "细胞因子",
+      "desc": "细胞因子通过多亚基受体复合物传递信号，同一因子可因受体组合、浓度和细胞类型产生相反效应。覆盖 IL-2/IL-7/IL-15、TGF-β、IL-10、IL-6、IL-1/IL-18/IL-36、IL-12/IL-23/IL-27、IL-4/IL-13/IL-33/TSLP、IL-17、IL-5、IFN、TNF 与 GM-CSF 等轴。",
       "groups": [
+        "pd1",
         "il2",
+        "il7",
         "il15",
+        "il18",
+        "il21",
+        "il27",
+        "il33",
+        "tslp",
+        "gmcsf",
+        "il36",
         "tgf",
         "il10",
         "il6",
@@ -435,6 +527,28 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "il5",
         "ifn",
         "tnf",
+        "chemokine",
+        "cell"
+      ]
+    },
+    {
+      "id": "chemokine",
+      "name": "趋化因子 / 归巢",
+      "desc": "趋化因子主要决定免疫细胞迁移、组织驻留与三级淋巴结构，而不是直接杀伤。覆盖 CCR8/CCL1、CCR4/CCL17/22、CCR7/CCL19/21、CXCR5/CXCL13、CXCR6/CXCL16、CCR6/CCL20、CX3CR1/CX3CL1、CCR9/CCL25、CXCR3/CXCL9/10/11、CXCR4/CXCL12、CCR2/CCL2、CCR5/CCL5 与 CXCR1/2/CXCL8。",
+      "groups": [
+        "ccr8",
+        "ccr4",
+        "ccr7",
+        "cxcr5",
+        "cxcr6",
+        "ccr6",
+        "cx3cr1",
+        "ccr9",
+        "cxcr3",
+        "cxcr4",
+        "ccr2",
+        "ccr5",
+        "cxcr1_2",
         "chemokine",
         "cell"
       ]
@@ -645,6 +759,136 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "cite": "ClinicalTrials.gov 注册试验信息",
       "id": "ClinicalTrials.gov",
       "url": "https://clinicaltrials.gov/"
+    },
+    "binder2020": {
+      "cite": "Binder C, et al. CD2 Immunobiology. Front Immunol. 2020;11:1090.",
+      "id": "doi:10.3389/fimmu.2020.01090",
+      "url": "https://doi.org/10.3389/fimmu.2020.01090"
+    },
+    "voisinne2018": {
+      "cite": "Voisinne G, et al. CD5, an undercover regulator of TCR signaling. Front Immunol. 2018;9:2908.",
+      "id": "doi:10.3389/fimmu.2018.02908",
+      "url": "https://doi.org/10.3389/fimmu.2018.02908"
+    },
+    "consuegra2018": {
+      "cite": "Consuegra-Fernández M, et al. CD6 as a therapeutic target in autoimmune diseases. Expert Opin Ther Targets. 2018;22(2):137-148.",
+      "id": "CD6 综述",
+      "url": ""
+    },
+    "lonial2015": {
+      "cite": "Lonial S, et al. Elotuzumab therapy for relapsed or refractory multiple myeloma. N Engl J Med. 2015;373(7):621-631.",
+      "id": "PMID 26214244",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/26214244/"
+    },
+    "younes2010": {
+      "cite": "Younes A, et al. Brentuximab vedotin (SGN-35) for relapsed CD30-positive lymphomas. N Engl J Med. 2010;363(19):1812-1821.",
+      "id": "PMID 21047225",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/21047225/"
+    },
+    "castellanos2017": {
+      "cite": "Castellanos JR, et al. B7-H3 role in the immune landscape of cancer. Am J Clin Exp Immunol. 2017;6(4):66-75.",
+      "id": "B7-H3 综述",
+      "url": ""
+    },
+    "sica2003": {
+      "cite": "Sica GL, et al. B7-H4, a molecule of the B7 family, negatively regulates T cell immunity. Immunity. 2003;18(6):849-861.",
+      "id": "B7-H4 原始鉴定",
+      "url": ""
+    },
+    "wang_siglec15_2019": {
+      "cite": "Wang J, et al. Siglec-15 as an immune suppressor and potential target for normalization cancer immunotherapy. Nat Med. 2019;25(4):656-666.",
+      "id": "Siglec-15 原始鉴定",
+      "url": ""
+    },
+    "barkal2019": {
+      "cite": "Barkal AA, et al. CD24 signalling through macrophage Siglec-10 is a target for cancer immunotherapy. Nature. 2019;572(7769):392-396.",
+      "id": "PMID 31367043",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/31367043/"
+    },
+    "allard2017": {
+      "cite": "Allard B, et al. The ectonucleotidases CD39 and CD73: novel checkpoint inhibitor targets. Immunol Rev. 2017;276(1):121-144.",
+      "id": "CD39/CD73 综述",
+      "url": ""
+    },
+    "ohta2001": {
+      "cite": "Ohta A, Sitkovsky M. Role of G-protein-coupled adenosine receptors in downregulation of inflammation and protection from tissue damage. Nature. 2001;414(6866):916-920.",
+      "id": "腺苷/A2A 原始研究",
+      "url": ""
+    },
+    "campbell2011": {
+      "cite": "Campbell KS, Purdy AK. Structure/function of human killer cell immunoglobulin-like receptors: lessons from polymorphisms, evolution, crystal structures and mutations. Immunology. 2011;132(3):315-325.",
+      "id": "KIR 综述",
+      "url": ""
+    },
+    "yoshie2015": {
+      "cite": "Yoshie O, Matsushima K. CCR4 and its ligands: from bench to bedside. Int Immunol. 2015;27(1):11-20.",
+      "id": "CCR4 综述",
+      "url": ""
+    },
+    "forster1999": {
+      "cite": "Förster R, et al. CCR7 coordinates the primary immune response by establishing functional microenvironments in secondary lymphoid organs. Cell. 1999;99(1):23-33.",
+      "id": "CCR7 原始研究",
+      "url": ""
+    },
+    "ansel2000": {
+      "cite": "Ansel KM, et al. A chemokine-driven positive feedback loop organizes lymphoid follicles. Nature. 2000;406(6793):309-314.",
+      "id": "CXCR5/CXCL13 原始研究",
+      "url": ""
+    },
+    "cook2000": {
+      "cite": "Cook DN, et al. CCR6 mediates dendritic cell localization, lymphocyte homeostasis, and immune responses in mucosal tissue. Immunity. 2000;12(5):495-503.",
+      "id": "CCR6 原始研究",
+      "url": ""
+    },
+    "jung2000": {
+      "cite": "Jung S, et al. Analysis of fractalkine receptor CX3CR1 function by targeted deletion and green fluorescent protein reporter gene insertion. Mol Cell Biol. 2000;20(11):4106-4114.",
+      "id": "CX3CR1 原始研究",
+      "url": ""
+    },
+    "mackall2011": {
+      "cite": "Mackall CL, et al. Harnessing the biology of IL-7 for therapeutic application. Nat Rev Immunol. 2011;11(5):330-342.",
+      "id": "IL-7 综述",
+      "url": ""
+    },
+    "dinarello2013": {
+      "cite": "Dinarello CA, et al. Interleukin-18 and IL-18 binding protein. Front Immunol. 2013;4:289.",
+      "id": "IL-18 综述",
+      "url": ""
+    },
+    "spolski2014": {
+      "cite": "Spolski R, Leonard WJ. Interleukin-21: a double-edged sword with therapeutic potential. Nat Rev Drug Discov. 2014;13(5):379-395.",
+      "id": "IL-21 综述",
+      "url": ""
+    },
+    "hunter2012": {
+      "cite": "Hunter CA, Kastelein R. Interleukin-27: balancing protective and pathological immunity. Immunity. 2012;37(6):960-969.",
+      "id": "IL-27 综述",
+      "url": ""
+    },
+    "liew2016": {
+      "cite": "Liew FY, et al. Interleukin-33 in health and disease. Nat Rev Immunol. 2016;16(11):676-689.",
+      "id": "IL-33 综述",
+      "url": ""
+    },
+    "corren2017": {
+      "cite": "Corren J, et al. Tezepelumab in adults with uncontrolled asthma. N Engl J Med. 2017;377(10):936-946.",
+      "id": "PMID 28877011",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28877011/"
+    },
+    "hamilton2020": {
+      "cite": "Hamilton JA. GM-CSF in inflammation. J Exp Med. 2020;217(1):e20190945.",
+      "id": "GM-CSF 综述",
+      "url": ""
+    },
+    "towne2011": {
+      "cite": "Towne JE, et al. Interleukin-36 (IL-36) ligands require processing for full agonist activity and act as IL-36 receptor agonists. J Biol Chem. 2011;286(49):42594-42604.",
+      "id": "IL-36 加工与受体",
+      "url": ""
+    },
+    "nagarsheth2017": {
+      "cite": "Nagarsheth N, Wicha MS, Zou W. Chemokines in the cancer microenvironment and their relevance in cancer immunotherapy. Nat Rev Immunol. 2017;17(9):559-572.",
+      "id": "肿瘤趋化因子综述",
+      "url": ""
     }
   },
   "nodes": [
@@ -699,7 +943,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "tigit",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "T/NK/Treg；耗竭 CD8 T 高表达",
       "note": "ITIM/ITT 抑制性受体；与 CD226 竞争 CD155，也可结合 CD112、Nectin-4。TIGIT/CD226 表达比值影响 CD8 功能。",
@@ -714,7 +959,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "tigit",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "T/NK/血小板",
       "note": "活化性受体，与 TIGIT/CD96 共享 CD155；ITAM 样信号促进细胞毒与 IFN-γ。",
@@ -728,7 +974,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "tigit",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "T/NK",
       "note": "与 CD155 结合，NK 细胞以抑制性为主；与 TIGIT 协同限制早期 NK 反应。",
@@ -742,7 +989,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "tim3",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "耗竭 T/NK/DC；Treg",
       "note": "配体包括 Galectin-9、CEACAM1、HMGB1 与磷脂酰丝氨酸；与 PD-1 共表达于耗竭 T 细胞，但单药阻断的临床获益有限。",
@@ -757,7 +1005,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "nkg2a",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "NK/CD8 T；部分 Treg",
       "note": "CD94/NKG2A 异二聚体识别 HLA-E，ITIM 抑制；肿瘤 HLA-E 过表达是 NK 逃逸机制之一。",
@@ -771,7 +1020,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "nkg2a",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "NK（适应性 NK）",
       "note": "活化性 HLA-E 受体，与 NKG2A 竞争；CMV 扩增的适应性 NK 细胞常高表达。",
@@ -785,7 +1035,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "nkg2d",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "NK/活化 CD8 T/γδ T",
       "note": "识别应激配体 MICA/B、ULBP；肿瘤可脱落 MICA 或下调配体逃逸。",
@@ -795,7 +1046,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
     },
     {
       "id": "TNFRSF9",
-      "label": "4-1BB",
+      "label": "4-1BB (CD137)",
       "kind": "receptor",
       "group": "tnfrsf",
       "modules": [
@@ -810,7 +1061,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
     },
     {
       "id": "TNFRSF4",
-      "label": "OX40",
+      "label": "OX40 (CD134)",
       "kind": "receptor",
       "group": "tnfrsf",
       "modules": [
@@ -855,7 +1106,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
     },
     {
       "id": "CD27",
-      "label": "CD27",
+      "label": "CD27 (TNFRSF7)",
       "kind": "receptor",
       "group": "tnfrsf",
       "modules": [
@@ -869,7 +1120,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
     },
     {
       "id": "TNFRSF18",
-      "label": "GITR",
+      "label": "GITR (CD357)",
       "kind": "receptor",
       "group": "tnfrsf",
       "modules": [
@@ -887,7 +1138,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "btla",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "T/B/DC",
       "note": "配体 HVEM；ITIM 抑制。HVEM 同时是 LIGHT/CD160 的配体，构成双向信号网络。",
@@ -901,7 +1153,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "vista",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "T/髓系/肿瘤",
       "note": "配体 PSGL-1（酸性 pH 依赖）与 VSIG-3；兼具抑制与激活报道，机制仍有争议。",
@@ -917,7 +1170,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "receptor",
       "group": "cd47",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "巨噬/DC/中性粒",
       "note": "配体 CD47；ITIM 招募 SHP-1/2，抑制吞噬。CD47/SIRPα 是「别吃我」轴的核心。",
@@ -1050,7 +1304,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "tim3",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "肿瘤/基质/免疫细胞",
       "note": "TIM-3 配体；多价半乳糖凝集素，可诱导 T 细胞凋亡或功能耗竭。",
@@ -1064,7 +1319,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "tim3",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "T/肿瘤/内皮",
       "note": "TIM-3 配体；也可与 TIM-3 形成顺式/反式复合物，调节 T 细胞抑制。",
@@ -1078,7 +1334,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "tigit",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "肿瘤/APC/内皮",
       "note": "TIGIT/CD226/CD96 的共享配体；TIGIT 亲和力最高（1–3 nM），CD226 约 100–200 nM。",
@@ -1093,7 +1350,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "tigit",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "肿瘤/APC",
       "note": "结合 TIGIT/CD226/CD112R，亲和力差异大；TIGIT–CD112 极弱，功能贡献通常低于 CD155。",
@@ -1107,7 +1365,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "tigit",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "肿瘤（尿路上皮等）",
       "note": "TIGIT 配体；也是 ADC（恩诺单抗）的靶抗原，治疗策略需考虑与 TIGIT 轴的交互。",
@@ -1121,7 +1380,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "nkg2a",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "广泛；肿瘤常过表达",
       "note": "非经典 MHC-I，呈递 MHC-I leader peptide；NKG2A 抑制、NKG2C 激活，是 NK 教育的重要配体。",
@@ -1135,7 +1395,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "nkg2d",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "肿瘤/应激/感染",
       "note": "NKG2D 配体；肿瘤可通过脱落或下调 MICA/B 逃逸 NKG2D 识别。",
@@ -1233,7 +1494,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "vista",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "髓系/T/血小板",
       "note": "VISTA 的酸性 pH 选择性配体；同时是 P-selectin 配体，参与白细胞滚动。",
@@ -1247,7 +1509,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "cd47",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "广泛表达；红细胞/肿瘤高表达",
       "note": "「别吃我」信号；结合 SIRPα 抑制巨噬细胞吞噬，也结合 TSP-1。红细胞高表达导致抗 CD47 药物贫血风险。",
@@ -1262,7 +1525,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "ligand",
       "group": "btla",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "expr": "APC/T",
       "note": "结合 BTLA、CD160 与 LIGHT；既可传递抑制也可传递激活信号，方向取决于配体与细胞背景。",
@@ -1277,7 +1541,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "group": "cell",
       "modules": [
         "checkpoint",
-        "cytokine"
+        "cytokine",
+        "innate",
+        "chemokine"
       ],
       "expr": "细胞毒 T 细胞",
       "note": "通过 TCR、共刺激/共抑制信号整合决定增殖、细胞因子与杀伤。PD-1、CTLA-4、LAG-3、TIGIT、TIM-3 等负信号会提高激活阈值。",
@@ -1293,7 +1559,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "group": "cell",
       "modules": [
         "checkpoint",
-        "cytokine"
+        "cytokine",
+        "innate",
+        "chemokine"
       ],
       "expr": "固有免疫淋巴细胞",
       "note": "整合活化性（NKG2D、CD226、NKG2C）与抑制性（NKG2A、KIR、CD96）信号；ADCC 依赖 FcγRIIIa。",
@@ -1309,7 +1577,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "group": "cell",
       "modules": [
         "checkpoint",
-        "cytokine"
+        "cytokine",
+        "innate",
+        "chemokine"
       ],
       "expr": "Foxp3+ CD4 T",
       "note": "通过 CTLA-4、IL-2Rα、IL-10/TGF-β 等限制自身免疫；肿瘤内 Treg 富集是免疫治疗耐药机制之一。",
@@ -1325,7 +1595,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "group": "cell",
       "modules": [
         "checkpoint",
-        "cytokine"
+        "cytokine",
+        "innate"
       ],
       "expr": "肿瘤相关巨噬细胞/组织巨噬",
       "note": "FcγR 介导的 ADCP 与吞噬；CD47/SIRPα 提供抑制性「别吃我」信号。M1/M2 极化受 IFN-γ、IL-10、TGF-β 调控。",
@@ -1341,7 +1612,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "group": "cell",
       "modules": [
         "checkpoint",
-        "cytokine"
+        "cytokine",
+        "innate",
+        "chemokine"
       ],
       "expr": "树突状细胞",
       "note": "CD40/CD40L、TLR 与细胞因子决定 DC 成熟；成熟 DC 上调共刺激分子并启动 T 细胞。",
@@ -1832,9 +2105,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "id": "CXCL12",
       "label": "CXCL12",
       "kind": "cytokine",
-      "group": "chemokine",
+      "group": "cxcr4",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "骨髓基质/肿瘤",
       "note": "组成型趋化因子；CXCR4 轴驱动造血干细胞归巢、免疫细胞定位与肿瘤转移。",
@@ -1846,9 +2119,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "id": "CXCR4",
       "label": "CXCR4",
       "kind": "receptor",
-      "group": "chemokine",
+      "group": "cxcr4",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "造血细胞/肿瘤",
       "note": "CXCL12 受体；也是 HIV 共受体之一。",
@@ -1860,9 +2133,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "id": "CCL2",
       "label": "CCL2",
       "kind": "cytokine",
-      "group": "chemokine",
+      "group": "ccr2",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "肿瘤/基质/髓系",
       "note": "CCR2 配体；招募单核细胞与 TAM，与免疫抑制和转移相关。",
@@ -1874,9 +2147,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "id": "CCR2",
       "label": "CCR2",
       "kind": "receptor",
-      "group": "chemokine",
+      "group": "ccr2",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "单核/巨噬/未成熟 DC",
       "note": "CCL2/CCR2 轴是单核细胞动员的主要通道。",
@@ -1890,7 +2163,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "cytokine",
       "group": "chemokine",
       "modules": [
-        "cytokine"
+        "cytokine",
+        "chemokine"
       ],
       "expr": "IFN-γ 诱导的基质/髓系",
       "note": "CXCR3 配体；招募效应 T/NK，也参与 T 细胞滞留与耗竭微环境。",
@@ -1902,9 +2176,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "id": "CXCR3",
       "label": "CXCR3",
       "kind": "receptor",
-      "group": "chemokine",
+      "group": "cxcr3",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "活化 T/NK/ILC",
       "note": "CXCL9/10/11 受体；效应 T 浸润的关键趋化轴。",
@@ -1916,9 +2190,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "id": "CCL5",
       "label": "CCL5",
       "kind": "cytokine",
-      "group": "chemokine",
+      "group": "ccr5",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "T/NK/血小板/肿瘤",
       "note": "CCR5 配体；招募 T/NK/单核，也参与免疫突触与肿瘤侵袭。",
@@ -1930,9 +2204,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "id": "CCR5",
       "label": "CCR5",
       "kind": "receptor",
-      "group": "chemokine",
+      "group": "ccr5",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "T/单核/巨噬/DC",
       "note": "CCL3/4/5 受体；也是 HIV 共受体，maraviroc 为变构拮抗剂。",
@@ -1944,9 +2218,9 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "id": "CXCL8",
       "label": "CXCL8 (IL-8)",
       "kind": "cytokine",
-      "group": "chemokine",
+      "group": "cxcr1_2",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "肿瘤/巨噬/内皮",
       "note": "CXCR1/2 配体；招募中性粒细胞，促进血管生成与免疫抑制。",
@@ -1956,11 +2230,11 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
     },
     {
       "id": "CXCR2",
-      "label": "CXCR1/2",
+      "label": "CXCR2",
       "kind": "receptor",
-      "group": "chemokine",
+      "group": "cxcr1_2",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "中性粒/内皮/肿瘤",
       "note": "CXCL8 受体；中性粒细胞募集与 NET 形成相关。",
@@ -1974,7 +2248,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "cell",
       "group": "cell",
       "modules": [
-        "cytokine"
+        "cytokine",
+        "chemokine"
       ],
       "expr": "CD4 Th17/γδ T/ILC3",
       "note": "IL-23/IL-1/IL-6 驱动，分泌 IL-17/IL-22；参与屏障免疫与自身免疫。",
@@ -1989,7 +2264,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "cell",
       "group": "cell",
       "modules": [
-        "cytokine"
+        "cytokine",
+        "chemokine"
       ],
       "expr": "CD4 Th2/ILC2",
       "note": "IL-4/IL-13 驱动，支持 IgE、嗜酸粒与黏液分泌；过敏与寄生虫免疫核心。",
@@ -2046,7 +2322,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "kind": "cell",
       "group": "cell",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "expr": "T/NK/髓系",
       "note": "趋化因子–受体轴决定细胞定位；肿瘤可通过趋化因子谱改变免疫浸润表型。",
@@ -2066,6 +2342,961 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "note": "TGF-β 驱动 ECM 沉积与上皮–间质转化；也是免疫排斥的物理屏障。",
       "refs": [
         "massague2012"
+      ]
+    },
+    {
+      "id": "CD2",
+      "label": "CD2",
+      "kind": "receptor",
+      "group": "cd2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/NK/胸腺细胞",
+      "note": "CD2 与 CD58（LFA-3）结合，增强 TCR 信号与免疫突触形成；CD2/CD58 是 T 细胞黏附与共刺激轴。",
+      "refs": [
+        "binder2020"
+      ]
+    },
+    {
+      "id": "CD58",
+      "label": "CD58 (LFA-3)",
+      "kind": "ligand",
+      "group": "cd2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/基质/红细胞",
+      "note": "CD2 的高亲和力配体；CD58 也可作为 CD2 信号的反向调节分子。",
+      "refs": [
+        "binder2020"
+      ]
+    },
+    {
+      "id": "CD5",
+      "label": "CD5",
+      "kind": "receptor",
+      "group": "cd5",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/B1",
+      "note": "与 CD72 等配体结合，招募 SHP-1 负调 TCR 信号；CD5 高表达与 T 细胞低反应性/耗竭相关。",
+      "refs": [
+        "voisinne2018"
+      ]
+    },
+    {
+      "id": "CD72",
+      "label": "CD72",
+      "kind": "ligand",
+      "group": "cd5",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "B 细胞",
+      "note": "CD5 的抑制性配体，含 ITIM；CD72 也参与 BCR 信号阈值调控。",
+      "refs": [
+        "voisinne2018"
+      ]
+    },
+    {
+      "id": "CD6",
+      "label": "CD6",
+      "kind": "receptor",
+      "group": "cd6",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/NK",
+      "note": "与 ALCAM 结合，调节免疫突触与 T 细胞活化；CD6 也是自身免疫病与 T 细胞淋巴瘤靶点。",
+      "refs": [
+        "consuegra2018"
+      ]
+    },
+    {
+      "id": "ALCAM",
+      "label": "ALCAM (CD166)",
+      "kind": "ligand",
+      "group": "cd6",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/上皮/内皮",
+      "note": "CD6 配体，参与 T 细胞与 APC/上皮的黏附；肿瘤 ALCAM 与侵袭相关。",
+      "refs": [
+        "consuegra2018"
+      ]
+    },
+    {
+      "id": "SLAMF7",
+      "label": "SLAMF7 (CS1)",
+      "kind": "receptor",
+      "group": "slam",
+      "modules": [
+        "checkpoint",
+        "innate"
+      ],
+      "expr": "NK/浆细胞",
+      "note": "SLAMF7 在 NK 与骨髓瘤细胞表达；elotuzumab 通过 Fc 效应增强 NK 杀伤。",
+      "refs": [
+        "lonial2015"
+      ]
+    },
+    {
+      "id": "TNFRSF8",
+      "label": "CD30 (TNFRSF8)",
+      "kind": "receptor",
+      "group": "tnfrsf2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "活化 T/B/NK",
+      "note": "CD30 是 TNFRSF 共刺激受体；Brentuximab vedotin 为抗 CD30 ADC。",
+      "refs": [
+        "younes2010"
+      ]
+    },
+    {
+      "id": "TNFSF8",
+      "label": "CD30L (TNFSF8)",
+      "kind": "ligand",
+      "group": "tnfrsf2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "活化 T/APC",
+      "note": "CD30L 结合 CD30；在炎症、淋巴瘤微环境与 T 细胞活化中起作用。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFRSF25",
+      "label": "DR3 (TNFRSF25)",
+      "kind": "receptor",
+      "group": "tnfrsf2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/NK/ILC",
+      "note": "DR3 结合 TL1A，促进效应 T/ILC 活化；也是 IBD 与肿瘤免疫靶点。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFSF15",
+      "label": "TL1A (TNFSF15)",
+      "kind": "ligand",
+      "group": "tnfrsf2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "内皮/APC/活化 T",
+      "note": "TL1A 是 DR3 配体；与 Th1/Th17、纤维化及肠道炎症相关。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFRSF11A",
+      "label": "RANK (TNFRSF11A)",
+      "kind": "receptor",
+      "group": "tnfrsf2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "DC/破骨前体/T",
+      "note": "RANK 结合 RANKL；参与 DC 存活、Treg 与骨代谢，肿瘤中可影响免疫抑制。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFSF11",
+      "label": "RANKL (TNFSF11)",
+      "kind": "ligand",
+      "group": "tnfrsf2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/成骨细胞/基质",
+      "note": "RANKL 是 denosumab 靶点；同时参与 DC 与 Treg 调控。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFRSF13C",
+      "label": "BAFF-R (TNFRSF13C)",
+      "kind": "receptor",
+      "group": "tnfrsf2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "B 细胞",
+      "note": "BAFF-R 结合 BAFF，维持 B 细胞存活；belimumab 中和 BAFF。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFSF13B",
+      "label": "BAFF (TNFSF13B)",
+      "kind": "ligand",
+      "group": "tnfrsf2",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "髓系/基质",
+      "note": "BAFF 是 B 细胞存活因子；也在自身免疫与 B 细胞肿瘤中起作用。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "BCELL",
+      "label": "B 细胞",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "checkpoint",
+        "chemokine"
+      ],
+      "expr": "B 细胞",
+      "note": "CD40/CD40L、BAFF/BAFF-R 与 BCR 信号共同决定 B 细胞活化与存活。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "CD24",
+      "label": "CD24",
+      "kind": "ligand",
+      "group": "siglec",
+      "modules": [
+        "innate"
+      ],
+      "expr": "肿瘤/干细胞/免疫细胞",
+      "note": "CD24 与巨噬细胞 SIGLEC10 结合，传递‘别吃我’信号；肿瘤 CD24 是先天免疫检查点。",
+      "refs": [
+        "barkal2019"
+      ]
+    },
+    {
+      "id": "SIGLEC10",
+      "label": "Siglec-10",
+      "kind": "receptor",
+      "group": "siglec",
+      "modules": [
+        "innate"
+      ],
+      "expr": "巨噬细胞/DC",
+      "note": "识别 CD24/唾液酸，含 ITIM，抑制吞噬；CD24/SIGLEC10 是 CD47/SIRPα 之外的吞噬检查点。",
+      "refs": [
+        "barkal2019"
+      ]
+    },
+    {
+      "id": "SIGLEC15",
+      "label": "Siglec-15",
+      "kind": "ligand",
+      "group": "siglec",
+      "modules": [
+        "innate"
+      ],
+      "expr": "髓系/肿瘤",
+      "note": "Siglec-15 抑制 T 细胞，与 PD-L1 互补；NC318 等抗体在临床探索。",
+      "refs": [
+        "wang_siglec15_2019"
+      ]
+    },
+    {
+      "id": "KIR2DL1",
+      "label": "KIR2DL1",
+      "kind": "receptor",
+      "group": "nk",
+      "modules": [
+        "innate"
+      ],
+      "expr": "NK",
+      "note": "抑制性 KIR，识别 HLA-C；KIR/HLA 组合决定 NK 教育状态。",
+      "refs": [
+        "campbell2011"
+      ]
+    },
+    {
+      "id": "KIR3DL1",
+      "label": "KIR3DL1",
+      "kind": "receptor",
+      "group": "nk",
+      "modules": [
+        "innate"
+      ],
+      "expr": "NK",
+      "note": "抑制性 KIR，识别 HLA-Bw4；与 NK 教育及抗肿瘤活性相关。",
+      "refs": [
+        "campbell2011"
+      ]
+    },
+    {
+      "id": "HLA_C",
+      "label": "HLA-C",
+      "kind": "ligand",
+      "group": "nk",
+      "modules": [
+        "innate"
+      ],
+      "expr": "有核细胞",
+      "note": "HLA-C 是 KIR2DL1/2/3 的配体；肿瘤下调 HLA-I 可解除 KIR 抑制，但也触发 NKG2D 等通路。",
+      "refs": [
+        "campbell2011"
+      ]
+    },
+    {
+      "id": "HLA_B",
+      "label": "HLA-Bw4",
+      "kind": "ligand",
+      "group": "nk",
+      "modules": [
+        "innate"
+      ],
+      "expr": "有核细胞",
+      "note": "HLA-Bw4 是 KIR3DL1 的配体；HLA-I/KIR 互作影响 NK 反应。",
+      "refs": [
+        "campbell2011"
+      ]
+    },
+    {
+      "id": "CD276",
+      "label": "B7-H3 (CD276)",
+      "kind": "ligand",
+      "group": "b7",
+      "modules": [
+        "innate"
+      ],
+      "expr": "肿瘤/APC",
+      "note": "B7-H3 与免疫抑制和肿瘤进展相关；enoblituzumab、ifinatamab deruxtecan 等靶向。",
+      "refs": [
+        "castellanos2017"
+      ]
+    },
+    {
+      "id": "VTCN1",
+      "label": "B7-H4 (VTCN1)",
+      "kind": "ligand",
+      "group": "b7",
+      "modules": [
+        "innate"
+      ],
+      "expr": "肿瘤/APC",
+      "note": "B7-H4 抑制 T 细胞；与 PD-L1 表达可互补，是潜在检查点。",
+      "refs": [
+        "sica2003"
+      ]
+    },
+    {
+      "id": "ENTPD1",
+      "label": "CD39 (ENTPD1)",
+      "kind": "receptor",
+      "group": "metabolic",
+      "modules": [
+        "innate"
+      ],
+      "expr": "Treg/肿瘤/内皮",
+      "note": "CD39 将 ATP/ADP 水解为 AMP，与 CD73 协同生成腺苷。",
+      "refs": [
+        "allard2017"
+      ]
+    },
+    {
+      "id": "NT5E",
+      "label": "CD73 (NT5E)",
+      "kind": "receptor",
+      "group": "metabolic",
+      "modules": [
+        "innate"
+      ],
+      "expr": "Treg/肿瘤/基质",
+      "note": "CD73 将 AMP 转化为腺苷，激活 A2AR 抑制效应 T/NK。",
+      "refs": [
+        "allard2017"
+      ]
+    },
+    {
+      "id": "ADENOSINE",
+      "label": "腺苷",
+      "kind": "ligand",
+      "group": "metabolic",
+      "modules": [
+        "innate"
+      ],
+      "expr": "肿瘤微环境",
+      "note": "腺苷通过 A2AR 升高 cAMP，抑制 TCR 信号与细胞毒。",
+      "refs": [
+        "ohta2001"
+      ]
+    },
+    {
+      "id": "ADORA2A",
+      "label": "A2A 受体 (ADORA2A)",
+      "kind": "receptor",
+      "group": "metabolic",
+      "modules": [
+        "innate"
+      ],
+      "expr": "T/NK/DC",
+      "note": "A2A 腺苷受体，免疫抑制；小分子拮抗剂在临床探索。",
+      "refs": [
+        "ohta2001"
+      ]
+    },
+    {
+      "id": "PVRIG",
+      "label": "PVRIG (CD112R)",
+      "kind": "receptor",
+      "group": "tigit",
+      "modules": [
+        "innate",
+        "checkpoint"
+      ],
+      "expr": "T/NK",
+      "note": "PVRIG 结合 CD112，传递抑制信号；与 TIGIT/CD96 共同构成 CD155/CD112 检查点网络。",
+      "refs": [
+        "anderson2016"
+      ]
+    },
+    {
+      "id": "IL7",
+      "label": "IL-7",
+      "kind": "cytokine",
+      "group": "il7",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "基质/上皮",
+      "note": "IL-7 支持 T 细胞存活与稳态，增强过继 T 细胞；与 IL-7Rα 结合。",
+      "refs": [
+        "mackall2011"
+      ]
+    },
+    {
+      "id": "IL7R",
+      "label": "IL-7Rα/γc",
+      "kind": "complex",
+      "group": "il7",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/ILC",
+      "note": "IL-7Rα/γc；功能获得突变与 ALL 相关，阻断用于自身免疫。",
+      "refs": [
+        "mackall2011"
+      ]
+    },
+    {
+      "id": "IL18",
+      "label": "IL-18",
+      "kind": "cytokine",
+      "group": "il18",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "髓系/上皮",
+      "note": "IL-18 诱导 IFN-γ，与 IL-12 协同；也受 IL-18BP 调控。",
+      "refs": [
+        "dinarello2013"
+      ]
+    },
+    {
+      "id": "IL18R",
+      "label": "IL-18Rα/β",
+      "kind": "complex",
+      "group": "il18",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/NK",
+      "note": "IL-18Rα/β，信号经 MyD88/NF-κB。",
+      "refs": [
+        "dinarello2013"
+      ]
+    },
+    {
+      "id": "IL21",
+      "label": "IL-21",
+      "kind": "cytokine",
+      "group": "il21",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "CD4 T/Tfh",
+      "note": "IL-21 促进 B 细胞分化、CD8 效应与 NK 活性；也可扩增 Treg，取决于环境。",
+      "refs": [
+        "spolski2014"
+      ]
+    },
+    {
+      "id": "IL21R",
+      "label": "IL-21R/γc",
+      "kind": "complex",
+      "group": "il21",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/B/NK",
+      "note": "IL-21R/γc，JAK-STAT3 信号。",
+      "refs": [
+        "spolski2014"
+      ]
+    },
+    {
+      "id": "IL27",
+      "label": "IL-27",
+      "kind": "cytokine",
+      "group": "il27",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "APC",
+      "note": "IL-27 促进 Th1/IFN-γ，也抑制 Th17；具有双向免疫调节。",
+      "refs": [
+        "hunter2012"
+      ]
+    },
+    {
+      "id": "IL27R",
+      "label": "IL-27Rα/gp130",
+      "kind": "complex",
+      "group": "il27",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/NK",
+      "note": "IL-27Rα/gp130，JAK-STAT1/3 信号。",
+      "refs": [
+        "hunter2012"
+      ]
+    },
+    {
+      "id": "IL33",
+      "label": "IL-33",
+      "kind": "cytokine",
+      "group": "il33",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "上皮/基质",
+      "note": "IL-33 是警报素，激活 ST2+ Th2/ILC2 与肥大细胞。",
+      "refs": [
+        "liew2016"
+      ]
+    },
+    {
+      "id": "IL1RL1",
+      "label": "ST2 (IL1RL1)",
+      "kind": "receptor",
+      "group": "il33",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Th2/ILC2/肥大",
+      "note": "ST2 是 IL-33 受体；可溶型 ST2 可中和 IL-33。",
+      "refs": [
+        "liew2016"
+      ]
+    },
+    {
+      "id": "TSLP",
+      "label": "TSLP",
+      "kind": "cytokine",
+      "group": "tslp",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "上皮/基质",
+      "note": "TSLP 激活 DC 与 ILC2，是特应性炎症与哮喘靶点。",
+      "refs": [
+        "corren2017"
+      ]
+    },
+    {
+      "id": "TSLPR",
+      "label": "TSLPR/IL-7Rα",
+      "kind": "complex",
+      "group": "tslp",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "DC/ILC2",
+      "note": "TSLPR/IL-7Rα 异二聚体；tezepelumab 阻断 TSLP。",
+      "refs": [
+        "corren2017"
+      ]
+    },
+    {
+      "id": "CSF2",
+      "label": "GM-CSF (CSF2)",
+      "kind": "cytokine",
+      "group": "gmcsf",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/基质/肿瘤",
+      "note": "GM-CSF 促进髓系分化与 DC 成熟；也可招募 MDSC。",
+      "refs": [
+        "hamilton2020"
+      ]
+    },
+    {
+      "id": "CSF2RA",
+      "label": "GM-CSF 受体 (CSF2RA)",
+      "kind": "complex",
+      "group": "gmcsf",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "髓系",
+      "note": "GM-CSF 受体 α/βc；sargramostim 为重组 GM-CSF。",
+      "refs": [
+        "hamilton2020"
+      ]
+    },
+    {
+      "id": "IL36G",
+      "label": "IL-36γ",
+      "kind": "cytokine",
+      "group": "il36",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "角质/上皮",
+      "note": "IL-36 家族促炎，激活 IL-36R；spesolimab 用于 GPP。",
+      "refs": [
+        "towne2011"
+      ]
+    },
+    {
+      "id": "IL1RL2",
+      "label": "IL-36R (IL1RL2)",
+      "kind": "receptor",
+      "group": "il36",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "上皮/免疫",
+      "note": "IL-36R 与 IL-1RAcP 组成受体复合物。",
+      "refs": [
+        "towne2011"
+      ]
+    },
+    {
+      "id": "CCL1",
+      "label": "CCL1",
+      "kind": "cytokine",
+      "group": "ccr8",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "T/髓系/肿瘤",
+      "note": "CCR8 配体，招募 CCR8+ Treg 与 Th2。",
+      "refs": [
+        "nagarsheth2017"
+      ]
+    },
+    {
+      "id": "CCR8",
+      "label": "CCR8",
+      "kind": "receptor",
+      "group": "ccr8",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "Treg/Th2/肿瘤",
+      "note": "CCR8 高表达于肿瘤浸润 Treg；CCL1/CCR8 轴是 Treg 清除靶点。",
+      "refs": [
+        "nagarsheth2017"
+      ]
+    },
+    {
+      "id": "CCL17",
+      "label": "CCL17 (TARC)",
+      "kind": "cytokine",
+      "group": "ccr4",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "DC/上皮",
+      "note": "CCR4 配体，招募 Th2/Treg。",
+      "refs": [
+        "yoshie2015"
+      ]
+    },
+    {
+      "id": "CCL22",
+      "label": "CCL22 (MDC)",
+      "kind": "cytokine",
+      "group": "ccr4",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "DC/巨噬/肿瘤",
+      "note": "CCR4 配体，肿瘤相关 Treg 招募。",
+      "refs": [
+        "yoshie2015"
+      ]
+    },
+    {
+      "id": "CCR4",
+      "label": "CCR4",
+      "kind": "receptor",
+      "group": "ccr4",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "Th2/Treg",
+      "note": "CCR4 介导 Th2/Treg 归巢；mogamulizumab 靶点。",
+      "refs": [
+        "yoshie2015"
+      ]
+    },
+    {
+      "id": "CCL19",
+      "label": "CCL19",
+      "kind": "cytokine",
+      "group": "ccr7",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "成纤维/DC",
+      "note": "CCR7 配体，引导 DC/T 进入淋巴结。",
+      "refs": [
+        "forster1999"
+      ]
+    },
+    {
+      "id": "CCL21",
+      "label": "CCL21",
+      "kind": "cytokine",
+      "group": "ccr7",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "淋巴内皮",
+      "note": "CCR7 配体，建立淋巴组织区室。",
+      "refs": [
+        "forster1999"
+      ]
+    },
+    {
+      "id": "CCR7",
+      "label": "CCR7",
+      "kind": "receptor",
+      "group": "ccr7",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "T/DC",
+      "note": "CCR7 介导淋巴结归巢；肿瘤 CCR7 与转移相关。",
+      "refs": [
+        "forster1999"
+      ]
+    },
+    {
+      "id": "CXCL13",
+      "label": "CXCL13",
+      "kind": "cytokine",
+      "group": "cxcr5",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "滤泡 DC/基质",
+      "note": "CXCR5 配体，组织 B 细胞滤泡与 Tfh。",
+      "refs": [
+        "ansel2000"
+      ]
+    },
+    {
+      "id": "CXCR5",
+      "label": "CXCR5",
+      "kind": "receptor",
+      "group": "cxcr5",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "B/Tfh",
+      "note": "CXCR5 引导 B/Tfh 进入滤泡；也可标记肿瘤浸润 Tfh。",
+      "refs": [
+        "ansel2000"
+      ]
+    },
+    {
+      "id": "CXCL16",
+      "label": "CXCL16",
+      "kind": "cytokine",
+      "group": "cxcr6",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "APC/内皮/肿瘤",
+      "note": "CXCR6 配体，可溶型趋化、膜型介导黏附。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCR6",
+      "label": "CXCR6",
+      "kind": "receptor",
+      "group": "cxcr6",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "T/NK/ILC",
+      "note": "CXCR6 促进效应 T/NK 在组织内驻留。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CCL20",
+      "label": "CCL20",
+      "kind": "cytokine",
+      "group": "ccr6",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "上皮/免疫",
+      "note": "CCR6 配体，招募 Th17/DC/ILC3。",
+      "refs": [
+        "cook2000"
+      ]
+    },
+    {
+      "id": "CCR6",
+      "label": "CCR6",
+      "kind": "receptor",
+      "group": "ccr6",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "Th17/DC/ILC3",
+      "note": "CCR6 介导黏膜与炎症部位归巢。",
+      "refs": [
+        "cook2000"
+      ]
+    },
+    {
+      "id": "CX3CL1",
+      "label": "CX3CL1",
+      "kind": "cytokine",
+      "group": "cx3cr1",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "内皮/神经元/肿瘤",
+      "note": "膜结合趋化因子，介导 CX3CR1+ 细胞黏附与浸润。",
+      "refs": [
+        "jung2000"
+      ]
+    },
+    {
+      "id": "CX3CR1",
+      "label": "CX3CR1",
+      "kind": "receptor",
+      "group": "cx3cr1",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "CD8/NK/单核",
+      "note": "CX3CR1 标记效应/驻留细胞，与肿瘤浸润相关。",
+      "refs": [
+        "jung2000"
+      ]
+    },
+    {
+      "id": "CCL25",
+      "label": "CCL25",
+      "kind": "cytokine",
+      "group": "ccr9",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "肠上皮/胸腺",
+      "note": "CCR9 配体，介导肠道归巢。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CCR9",
+      "label": "CCR9",
+      "kind": "receptor",
+      "group": "ccr9",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "T/胸腺/肠道",
+      "note": "CCR9 介导肠黏膜归巢；肠道肿瘤中可促侵袭。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCL9",
+      "label": "CXCL9 (MIG)",
+      "kind": "cytokine",
+      "group": "cxcr3",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "IFN-γ 诱导的内皮/APC",
+      "note": "CXCR3 配体，招募效应 T/NK。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCL11",
+      "label": "CXCL11 (I-TAC)",
+      "kind": "cytokine",
+      "group": "cxcr3",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "IFN-γ 诱导的内皮/APC",
+      "note": "CXCR3 配体，高亲和力，参与 Th1 招募。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCR1",
+      "label": "CXCR1",
+      "kind": "receptor",
+      "group": "cxcr1_2",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "中性粒/NK",
+      "note": "CXCL8 受体，介导中性粒募集；与 CXCR2 功能部分冗余。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "TFH",
+      "label": "Tfh 细胞",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "chemokine"
+      ],
+      "expr": "Tfh",
+      "note": "CXCR5+ PD-1+ Tfh 支持 B 细胞与三级淋巴结构。",
+      "refs": [
+        "ansel2000"
       ]
     }
   ],
@@ -2229,7 +3460,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "das2017"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2245,7 +3477,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "das2017"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2262,7 +3495,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "yu2009"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2278,7 +3512,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2294,7 +3529,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2310,7 +3546,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2326,7 +3563,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2342,7 +3580,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2358,7 +3597,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "braud1998"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2374,7 +3614,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "braud1998"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2390,7 +3631,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "raulet2003"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2505,7 +3747,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "johnston2019"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2522,7 +3765,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "weiskopf2013"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2538,7 +3782,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "sedy2005"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2654,7 +3899,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "yu2009"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2670,7 +3916,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2686,7 +3933,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2703,7 +3951,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "das2017"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2719,7 +3968,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "braud1998"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2735,7 +3985,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "braud1998"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2751,7 +4002,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "raulet2003"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2767,7 +4019,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "raulet2003"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2930,7 +4183,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "sedy2005"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2947,7 +4201,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "johnston2019"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2981,7 +4236,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "weiskopf2013"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -2997,7 +4253,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -3013,7 +4270,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -3030,7 +4288,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "yu2009"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -3046,7 +4305,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "ge2021"
       ],
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ]
     },
     {
@@ -3385,7 +4645,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
@@ -3401,7 +4661,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
@@ -3417,7 +4677,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
@@ -3433,7 +4693,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
@@ -3449,7 +4709,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
@@ -3986,7 +5246,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
     {
       "source": "CXCR4",
       "target": "MIGRATION",
-      "rel": "activate",
+      "rel": "recruit",
       "label": "CXCL12 驱动归巢/转移",
       "affinity": "—",
       "assay": "功能/临床",
@@ -3996,13 +5256,13 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
       "source": "CCR2",
       "target": "MIGRATION",
-      "rel": "activate",
+      "rel": "recruit",
       "label": "CCL2 招募单核",
       "affinity": "—",
       "assay": "功能",
@@ -4012,13 +5272,13 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
       "source": "CXCR3",
       "target": "MIGRATION",
-      "rel": "activate",
+      "rel": "recruit",
       "label": "CXCL10 招募效应 T/NK",
       "affinity": "—",
       "assay": "功能",
@@ -4028,13 +5288,13 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
       "source": "CCR5",
       "target": "MIGRATION",
-      "rel": "activate",
+      "rel": "recruit",
       "label": "CCL5 招募 T/NK",
       "affinity": "—",
       "assay": "功能",
@@ -4044,13 +5304,13 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
       "source": "CXCR2",
       "target": "MIGRATION",
-      "rel": "activate",
+      "rel": "recruit",
       "label": "CXCL8 招募中性粒",
       "affinity": "—",
       "assay": "功能",
@@ -4060,7 +5320,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
         "griffith2014"
       ],
       "modules": [
-        "cytokine"
+        "chemokine"
       ]
     },
     {
@@ -4094,6 +5354,1433 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       ],
       "modules": [
         "cytokine"
+      ]
+    },
+    {
+      "source": "CD58",
+      "target": "CD2",
+      "rel": "bind",
+      "label": "CD58 → CD2",
+      "affinity": "KD ≈ 0.4–1 µM（CD2/CD58）",
+      "assay": "细胞黏附/SPR",
+      "evidence": "A",
+      "note": "CD2/CD58 是低亲和力、快速解离的黏附轴，适合免疫突触的动态扫描。",
+      "refs": [
+        "binder2020"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD2",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "CD2 → CD8+ T",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "CD2 共刺激增强 TCR 信号与细胞毒；CD2 阻断可用于 T 细胞介导的自身免疫。",
+      "refs": [
+        "binder2020"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD2",
+      "target": "NK",
+      "rel": "activate",
+      "label": "CD2 → NK",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "CD2 也参与 NK 细胞黏附与活化。",
+      "refs": [
+        "binder2020"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD72",
+      "target": "CD5",
+      "rel": "bind",
+      "label": "CD72 → CD5",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "B",
+      "note": "CD72 是 CD5 的抑制性配体；该轴提高 TCR 活化阈值。",
+      "refs": [
+        "voisinne2018"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD5",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "CD5 → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "CD5 招募 SHP-1，负调 TCR 信号；CD5 高表达常见于耗竭 T 细胞。",
+      "refs": [
+        "voisinne2018"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "ALCAM",
+      "target": "CD6",
+      "rel": "bind",
+      "label": "ALCAM → CD6",
+      "affinity": "—",
+      "assay": "细胞黏附",
+      "evidence": "B",
+      "note": "CD6/ALCAM 参与免疫突触与 T 细胞迁移。",
+      "refs": [
+        "consuegra2018"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD6",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "CD6 → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "CD6 共刺激增强 T 细胞活化，是自身免疫病与 T 细胞淋巴瘤靶点。",
+      "refs": [
+        "consuegra2018"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "SLAMF7",
+      "target": "NK",
+      "rel": "activate",
+      "label": "SLAMF7 → NK",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "SLAMF7 在 NK 与浆细胞表达；elotuzumab 通过 Fc 效应增强 NK 杀伤。",
+      "refs": [
+        "lonial2015"
+      ],
+      "modules": [
+        "checkpoint",
+        "innate"
+      ]
+    },
+    {
+      "source": "TNFSF8",
+      "target": "TNFRSF8",
+      "rel": "bind",
+      "label": "CD30L → CD30",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "B",
+      "note": "CD30/CD30L 属于 TNFRSF 共刺激轴，也是 CD30+ 淋巴瘤的治疗靶点。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF8",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "CD30 → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "CD30 信号可增强活化 T 细胞存活，但依细胞背景可呈双向效应。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFSF15",
+      "target": "TNFRSF25",
+      "rel": "bind",
+      "label": "TL1A → DR3",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "B",
+      "note": "TL1A/DR3 促进 Th1/Th17 与 ILC 活化，是 IBD 与肿瘤免疫靶点。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF25",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "DR3 → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "DR3 共刺激增强效应 T 细胞反应。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFSF11",
+      "target": "TNFRSF11A",
+      "rel": "bind",
+      "label": "RANKL → RANK",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "B",
+      "note": "RANKL/RANK 参与 DC 存活、Treg 与骨代谢。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF11A",
+      "target": "DC",
+      "rel": "activate",
+      "label": "RANK → DC",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "RANK 信号支持 DC 存活与成熟，影响 T 细胞启动。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFSF13B",
+      "target": "TNFRSF13C",
+      "rel": "bind",
+      "label": "BAFF → BAFF-R",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "B",
+      "note": "BAFF/BAFF-R 维持 B 细胞存活；belimumab 中和 BAFF。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF13C",
+      "target": "BCELL",
+      "rel": "activate",
+      "label": "BAFF-R → B 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "BAFF-R 信号与 BCR 协同促进 B 细胞存活。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD40",
+      "target": "BCELL",
+      "rel": "activate",
+      "label": "CD40 → B 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "A",
+      "note": "CD40/CD40L 是 B 细胞活化、类别转换与生发中心反应的核心共刺激轴。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD24",
+      "target": "SIGLEC10",
+      "rel": "bind",
+      "label": "CD24 → Siglec-10",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CD24 与 SIGLEC10 结合，传递抑制性‘别吃我’信号。",
+      "refs": [
+        "barkal2019"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "SIGLEC10",
+      "target": "MAC",
+      "rel": "inhibit",
+      "label": "Siglec-10 → 巨噬细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "SIGLEC10 的 ITIM 信号抑制巨噬细胞对 CD24+ 肿瘤细胞的吞噬。",
+      "refs": [
+        "barkal2019"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "SIGLEC15",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "Siglec-15 → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "Siglec-15 抑制 T 细胞增殖与功能，与 PD-L1 可互补。",
+      "refs": [
+        "wang_siglec15_2019"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "HLA_C",
+      "target": "KIR2DL1",
+      "rel": "bind",
+      "label": "HLA-C → KIR2DL1",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "KIR2DL1 识别 HLA-C，传递抑制性信号。",
+      "refs": [
+        "campbell2011"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "HLA_B",
+      "target": "KIR3DL1",
+      "rel": "bind",
+      "label": "HLA-Bw4 → KIR3DL1",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "KIR3DL1 识别 HLA-Bw4，影响 NK 教育。",
+      "refs": [
+        "campbell2011"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "KIR2DL1",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "KIR2DL1 → NK",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "A",
+      "note": "抑制性 KIR 限制 NK 对 HLA-I+ 细胞的杀伤。",
+      "refs": [
+        "campbell2011"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "KIR3DL1",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "KIR3DL1 → NK",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "A",
+      "note": "抑制性 KIR 与 HLA-Bw4 互作，设定 NK 反应阈值。",
+      "refs": [
+        "campbell2011"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "CD276",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "B7-H3 → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "B7-H3 在多种肿瘤高表达，抑制 T 细胞并促进免疫逃逸。",
+      "refs": [
+        "castellanos2017"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "CD276",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "B7-H3 → NK",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "B7-H3 也可抑制 NK 功能，是广谱先天免疫检查点。",
+      "refs": [
+        "castellanos2017"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "VTCN1",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "B7-H4 → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "B7-H4 负调 T 细胞免疫，肿瘤中与 PD-L1 可互补。",
+      "refs": [
+        "sica2003"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "ENTPD1",
+      "target": "ADENOSINE",
+      "rel": "regulate",
+      "label": "CD39 → 腺苷",
+      "affinity": "—",
+      "assay": "酶促反应",
+      "evidence": "A",
+      "note": "CD39 将 ATP/ADP 水解为 AMP，为 CD73 生成腺苷提供底物。",
+      "refs": [
+        "allard2017"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "NT5E",
+      "target": "ADENOSINE",
+      "rel": "activate",
+      "label": "CD73 → 腺苷",
+      "affinity": "—",
+      "assay": "酶促反应",
+      "evidence": "A",
+      "note": "CD73 将 AMP 去磷酸化为腺苷。",
+      "refs": [
+        "allard2017"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "ADENOSINE",
+      "target": "ADORA2A",
+      "rel": "bind",
+      "label": "腺苷 → A2A",
+      "affinity": "—",
+      "assay": "药理学",
+      "evidence": "A",
+      "note": "腺苷激活 A2A 受体，升高 cAMP。",
+      "refs": [
+        "ohta2001"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "ADORA2A",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "A2A → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "A",
+      "note": "A2A 信号抑制 TCR 与细胞毒功能。",
+      "refs": [
+        "ohta2001"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "ADORA2A",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "A2A → NK",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "腺苷/A2A 也抑制 NK 细胞杀伤。",
+      "refs": [
+        "ohta2001"
+      ],
+      "modules": [
+        "innate"
+      ]
+    },
+    {
+      "source": "NECTIN2",
+      "target": "PVRIG",
+      "rel": "bind",
+      "label": "CD112 → PVRIG",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "B",
+      "note": "PVRIG 结合 CD112，传递抑制信号。",
+      "refs": [
+        "anderson2016"
+      ],
+      "modules": [
+        "innate",
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "PVRIG",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "PVRIG → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "PVRIG 与 TIGIT/CD96 共同限制 T/NK 反应。",
+      "refs": [
+        "anderson2016"
+      ],
+      "modules": [
+        "innate",
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "IL7",
+      "target": "IL7R",
+      "rel": "bind",
+      "label": "IL-7 → IL-7R",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "IL-7/IL-7R 支持 T 细胞存活与稳态。",
+      "refs": [
+        "mackall2011"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL7R",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "IL-7R → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-7R 信号增强 T 细胞存活与代谢适应。",
+      "refs": [
+        "mackall2011"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL18",
+      "target": "IL18R",
+      "rel": "bind",
+      "label": "IL-18 → IL-18R",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "IL-18/IL-18R 通过 MyD88 促进 IFN-γ。",
+      "refs": [
+        "dinarello2013"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL18R",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "IL-18R → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-18 与 IL-12 协同增强 Th1/CTL 反应。",
+      "refs": [
+        "dinarello2013"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL18R",
+      "target": "NK",
+      "rel": "activate",
+      "label": "IL-18R → NK",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-18 促进 NK 细胞 IFN-γ 与细胞毒。",
+      "refs": [
+        "dinarello2013"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL21",
+      "target": "IL21R",
+      "rel": "bind",
+      "label": "IL-21 → IL-21R",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "IL-21/IL-21R 经 JAK-STAT3 传递信号。",
+      "refs": [
+        "spolski2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL21R",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "IL-21R → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-21 增强 CD8 效应与 NK 活性。",
+      "refs": [
+        "spolski2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL21R",
+      "target": "NK",
+      "rel": "activate",
+      "label": "IL-21R → NK",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-21 可直接增强 NK 细胞杀伤。",
+      "refs": [
+        "spolski2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL27",
+      "target": "IL27R",
+      "rel": "bind",
+      "label": "IL-27 → IL-27R",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "IL-27/IL-27R 激活 JAK-STAT1/3。",
+      "refs": [
+        "hunter2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL27R",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "IL-27R → T 细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-27 促进 Th1/IFN-γ，但也可诱导抑制性受体。",
+      "refs": [
+        "hunter2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL27",
+      "target": "TH17",
+      "rel": "inhibit",
+      "label": "IL-27 ⊣ Th17",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-27 抑制 Th17 分化，是双向免疫调节因子。",
+      "refs": [
+        "hunter2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL33",
+      "target": "IL1RL1",
+      "rel": "bind",
+      "label": "IL-33 → ST2",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "IL-33/ST2 激活 Th2/ILC2。",
+      "refs": [
+        "liew2016"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1RL1",
+      "target": "TH2",
+      "rel": "activate",
+      "label": "ST2 → Th2",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-33 促进 Th2 型炎症。",
+      "refs": [
+        "liew2016"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1RL1",
+      "target": "EOS",
+      "rel": "activate",
+      "label": "ST2 → 嗜酸粒",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-33 可活化嗜酸粒与肥大细胞。",
+      "refs": [
+        "liew2016"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1RL1",
+      "target": "INFLAM",
+      "rel": "activate",
+      "label": "ST2 → 炎症",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-33 是上皮警报素，放大 2 型炎症。",
+      "refs": [
+        "liew2016"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TSLP",
+      "target": "TSLPR",
+      "rel": "bind",
+      "label": "TSLP → TSLPR",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "TSLP/TSLPR 激活 DC 与 ILC2。",
+      "refs": [
+        "corren2017"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TSLPR",
+      "target": "DC",
+      "rel": "activate",
+      "label": "TSLPR → DC",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "TSLP 促进 DC 成熟与 Th2 极化。",
+      "refs": [
+        "corren2017"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TSLPR",
+      "target": "TH2",
+      "rel": "activate",
+      "label": "TSLPR → Th2",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "TSLP 促进 2 型炎症。",
+      "refs": [
+        "corren2017"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CSF2",
+      "target": "CSF2RA",
+      "rel": "bind",
+      "label": "GM-CSF → CSF2R",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "GM-CSF/CSF2R 促进髓系分化与 DC 成熟。",
+      "refs": [
+        "hamilton2020"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CSF2RA",
+      "target": "MAC",
+      "rel": "activate",
+      "label": "CSF2R → 巨噬细胞",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "A",
+      "note": "GM-CSF 促进巨噬细胞活化与抗原呈递。",
+      "refs": [
+        "hamilton2020"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CSF2RA",
+      "target": "DC",
+      "rel": "activate",
+      "label": "CSF2R → DC",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "A",
+      "note": "GM-CSF 是 DC 分化与成熟的关键因子。",
+      "refs": [
+        "hamilton2020"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL36G",
+      "target": "IL1RL2",
+      "rel": "bind",
+      "label": "IL-36γ → IL-36R",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "IL-36/IL-36R 促炎，参与银屑病与 GPP。",
+      "refs": [
+        "towne2011"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1RL2",
+      "target": "TH17",
+      "rel": "activate",
+      "label": "IL-36R → Th17",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-36 促进 Th17/中性粒炎症。",
+      "refs": [
+        "towne2011"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1RL2",
+      "target": "INFLAM",
+      "rel": "activate",
+      "label": "IL-36R → 炎症",
+      "affinity": "—",
+      "assay": "功能实验",
+      "evidence": "B",
+      "note": "IL-36R 信号放大上皮炎症。",
+      "refs": [
+        "towne2011"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CCL1",
+      "target": "CCR8",
+      "rel": "bind",
+      "label": "CCL1 → CCR8",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "B",
+      "note": "CCL1/CCR8 招募 CCR8+ Treg/Th2。",
+      "refs": [
+        "nagarsheth2017"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR8",
+      "target": "TREG",
+      "rel": "recruit",
+      "label": "CCR8 → Treg",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CCR8 高表达于肿瘤浸润 Treg，是 Treg 清除策略的靶点。",
+      "refs": [
+        "nagarsheth2017"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR8",
+      "target": "TH2",
+      "rel": "recruit",
+      "label": "CCR8 → Th2",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "C",
+      "note": "CCR8 也参与 Th2 细胞募集。",
+      "refs": [
+        "nagarsheth2017"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCL17",
+      "target": "CCR4",
+      "rel": "bind",
+      "label": "CCL17 → CCR4",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CCL17/CCR4 招募 Th2/Treg。",
+      "refs": [
+        "yoshie2015"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCL22",
+      "target": "CCR4",
+      "rel": "bind",
+      "label": "CCL22 → CCR4",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CCL22/CCR4 在肿瘤中招募 Treg。",
+      "refs": [
+        "yoshie2015"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR4",
+      "target": "TH2",
+      "rel": "recruit",
+      "label": "CCR4 → Th2",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CCR4 介导 Th2 归巢。",
+      "refs": [
+        "yoshie2015"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR4",
+      "target": "TREG",
+      "rel": "recruit",
+      "label": "CCR4 → Treg",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CCR4 介导 Treg 归巢；mogamulizumab 可清除 CCR4+ Treg。",
+      "refs": [
+        "yoshie2015"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCL19",
+      "target": "CCR7",
+      "rel": "bind",
+      "label": "CCL19 → CCR7",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CCL19/CCR7 引导 DC/T 进入淋巴结。",
+      "refs": [
+        "forster1999"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCL21",
+      "target": "CCR7",
+      "rel": "bind",
+      "label": "CCL21 → CCR7",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CCL21/CCR7 建立淋巴组织区室。",
+      "refs": [
+        "forster1999"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR7",
+      "target": "DC",
+      "rel": "recruit",
+      "label": "CCR7 → DC",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "A",
+      "note": "CCR7 促进 DC 向引流淋巴结迁移。",
+      "refs": [
+        "forster1999"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR7",
+      "target": "TEFF",
+      "rel": "recruit",
+      "label": "CCR7 → T 细胞",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CCR7 标记中央记忆 T 并向淋巴结归巢。",
+      "refs": [
+        "forster1999"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCL13",
+      "target": "CXCR5",
+      "rel": "bind",
+      "label": "CXCL13 → CXCR5",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CXCL13/CXCR5 组织 B 细胞滤泡与 Tfh 定位。",
+      "refs": [
+        "ansel2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCR5",
+      "target": "TFH",
+      "rel": "recruit",
+      "label": "CXCR5 → Tfh",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "A",
+      "note": "CXCR5 引导 Tfh 进入滤泡。",
+      "refs": [
+        "ansel2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCR5",
+      "target": "BCELL",
+      "rel": "recruit",
+      "label": "CXCR5 → B 细胞",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "A",
+      "note": "CXCR5 引导 B 细胞进入滤泡。",
+      "refs": [
+        "ansel2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCL16",
+      "target": "CXCR6",
+      "rel": "bind",
+      "label": "CXCL16 → CXCR6",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "B",
+      "note": "CXCL16/CXCR6 参与组织内 T/NK 驻留。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCR6",
+      "target": "TEFF",
+      "rel": "recruit",
+      "label": "CXCR6 → T 细胞",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CXCR6 促进效应 T 在组织内积累。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCR6",
+      "target": "NK",
+      "rel": "recruit",
+      "label": "CXCR6 → NK",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "C",
+      "note": "CXCR6 参与 NK 组织定位。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCL20",
+      "target": "CCR6",
+      "rel": "bind",
+      "label": "CCL20 → CCR6",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CCL20/CCR6 招募 Th17/DC/ILC3。",
+      "refs": [
+        "cook2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR6",
+      "target": "TH17",
+      "rel": "recruit",
+      "label": "CCR6 → Th17",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CCR6 介导 Th17 向黏膜与炎症部位迁移。",
+      "refs": [
+        "cook2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR6",
+      "target": "DC",
+      "rel": "recruit",
+      "label": "CCR6 → DC",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CCR6 参与 DC 的黏膜定位。",
+      "refs": [
+        "cook2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CX3CL1",
+      "target": "CX3CR1",
+      "rel": "bind",
+      "label": "CX3CL1 → CX3CR1",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CX3CL1/CX3CR1 介导黏附与组织浸润。",
+      "refs": [
+        "jung2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CX3CR1",
+      "target": "TEFF",
+      "rel": "recruit",
+      "label": "CX3CR1 → T 细胞",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CX3CR1 标记效应/驻留 CD8 T。",
+      "refs": [
+        "jung2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CX3CR1",
+      "target": "NK",
+      "rel": "recruit",
+      "label": "CX3CR1 → NK",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "C",
+      "note": "CX3CR1 参与 NK 组织定位。",
+      "refs": [
+        "jung2000"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCL25",
+      "target": "CCR9",
+      "rel": "bind",
+      "label": "CCL25 → CCR9",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CCL25/CCR9 介导肠道归巢。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CCR9",
+      "target": "TEFF",
+      "rel": "recruit",
+      "label": "CCR9 → T 细胞",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CCR9 引导 T 细胞进入肠道。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCL9",
+      "target": "CXCR3",
+      "rel": "bind",
+      "label": "CXCL9 → CXCR3",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CXCL9/CXCR3 招募效应 T/NK。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCL11",
+      "target": "CXCR3",
+      "rel": "bind",
+      "label": "CXCL11 → CXCR3",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CXCL11 是高亲和力 CXCR3 配体。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCR3",
+      "target": "TEFF",
+      "rel": "recruit",
+      "label": "CXCR3 → T 细胞",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "A",
+      "note": "CXCR3 标记 Th1/效应 CD8 并向炎症部位迁移。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCR3",
+      "target": "NK",
+      "rel": "recruit",
+      "label": "CXCR3 → NK",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CXCR3 参与 NK 组织募集。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCL8",
+      "target": "CXCR1",
+      "rel": "bind",
+      "label": "CXCL8 → CXCR1",
+      "affinity": "—",
+      "assay": "细胞结合",
+      "evidence": "A",
+      "note": "CXCL8 结合 CXCR1，招募中性粒/NK。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
+      ]
+    },
+    {
+      "source": "CXCR1",
+      "target": "MIGRATION",
+      "rel": "recruit",
+      "label": "CXCR1 → 迁移",
+      "affinity": "—",
+      "assay": "迁移实验",
+      "evidence": "B",
+      "note": "CXCR1 介导中性粒与 NK 迁移。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "chemokine"
       ]
     }
   ],
@@ -4606,7 +7293,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "trial": "ENHANCE 等",
       "note": "阻断 CD47/SIRPα 增强 ADCP；2024 年多项 III 期因无效或安全性问题停止，提示该轴并非单药万能。",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "graph": true,
       "refs": [
@@ -4628,7 +7316,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "trial": "ASPEN 系列",
       "note": "SIRPα 变体阻断 CD47，同时避免 Fc 效应；与抗体联合增强吞噬。",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "graph": false,
       "refs": [
@@ -4650,7 +7339,8 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "trial": "联合研究",
       "note": "设计上减少与红细胞结合以降低贫血风险；CD47 靶向的共同挑战是抗原 sink 与血液毒性。",
       "modules": [
-        "checkpoint"
+        "checkpoint",
+        "innate"
       ],
       "graph": false,
       "refs": [
@@ -5690,7 +8380,7 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "trial": "干细胞动员",
       "note": "阻断 CXCL12/CXCR4 使造血干细胞释放入血；是趋化因子轴药物化的成功案例。",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "graph": true,
       "refs": [
@@ -5712,11 +8402,765 @@ footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:
       "trial": "HIV 治疗",
       "note": "结合 CCR5 的变构位点，阻断 HIV 利用共受体；说明趋化因子受体也可被小分子精准调控。",
       "modules": [
-        "cytokine"
+        "chemokine"
       ],
       "graph": false,
       "refs": [
         "fda"
+      ]
+    },
+    {
+      "id": "alefacept",
+      "label": "阿法西普",
+      "inn": "alefacept",
+      "targets": [
+        "CD2"
+      ],
+      "mechanism": "block",
+      "modality": "LFA-3/CD2 融合蛋白",
+      "stage": "撤市（2011）",
+      "approved": "2003（FDA）",
+      "region": "美国（已撤市）",
+      "trial": "银屑病",
+      "note": "通过可溶性 LFA-3 竞争 CD2，抑制 T 细胞共刺激；因商业原因撤市，但仍是 CD2 通路的临床验证。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda",
+        "binder2020"
+      ]
+    },
+    {
+      "id": "siplizumab",
+      "label": "西利珠单抗",
+      "inn": "siplizumab",
+      "targets": [
+        "CD2"
+      ],
+      "mechanism": "block",
+      "modality": "人源化抗 CD2",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "移植/自身免疫",
+      "note": "抗 CD2 清除/调节 T 细胞，临床开发集中在移植与 T 细胞介导疾病。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "binder2020"
+      ]
+    },
+    {
+      "id": "itolizumab",
+      "label": "伊托利珠单抗",
+      "inn": "itolizumab",
+      "targets": [
+        "CD6"
+      ],
+      "mechanism": "block",
+      "modality": "人源化抗 CD6",
+      "stage": "已上市",
+      "approved": "2013（印度）",
+      "region": "印度/古巴",
+      "trial": "银屑病",
+      "note": "抗 CD6 调节 T 细胞活化；不同地区批准状态与适应证需以当地说明书为准。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "consuegra2018"
+      ]
+    },
+    {
+      "id": "elotuzumab",
+      "label": "埃罗妥珠单抗",
+      "inn": "elotuzumab",
+      "targets": [
+        "SLAMF7"
+      ],
+      "mechanism": "agonist",
+      "modality": "人源化 IgG1 抗 SLAMF7（ADCC）",
+      "stage": "已上市",
+      "approved": "2015（FDA）",
+      "region": "全球",
+      "trial": "ELOQUENT-2",
+      "note": "靶向 SLAMF7，通过 Fc 效应增强 NK 对骨髓瘤细胞的杀伤；机制不是单纯阻断。",
+      "modules": [
+        "checkpoint",
+        "innate"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "lonial2015"
+      ]
+    },
+    {
+      "id": "brentuximab",
+      "label": "维布妥昔单抗",
+      "inn": "brentuximab vedotin",
+      "targets": [
+        "TNFRSF8"
+      ],
+      "mechanism": "block",
+      "modality": "抗 CD30-MMAE ADC",
+      "stage": "已上市",
+      "approved": "2011（FDA）",
+      "region": "全球",
+      "trial": "CD30+ 淋巴瘤",
+      "note": "抗 CD30 抗体偶联 MMAE，主要机制是递送细胞毒药物而非单纯信号阻断。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda",
+        "younes2010"
+      ]
+    },
+    {
+      "id": "denosumab",
+      "label": "地舒单抗",
+      "inn": "denosumab",
+      "targets": [
+        "TNFSF11"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG2 抗 RANKL",
+      "stage": "已上市",
+      "approved": "2010（FDA）",
+      "region": "全球",
+      "trial": "骨转移/骨质疏松",
+      "note": "中和 RANKL，抑制破骨细胞；RANKL/RANK 也参与 DC 与 Treg 调控。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "belimumab",
+      "label": "贝利尤单抗",
+      "inn": "belimumab",
+      "targets": [
+        "TNFSF13B"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 BAFF",
+      "stage": "已上市",
+      "approved": "2011（FDA）",
+      "region": "全球",
+      "trial": "SLE",
+      "note": "中和 BAFF，减少 B 细胞存活与自身抗体；BAFF 轴是 B 细胞耐受的重要节点。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "lirilumab",
+      "label": "利鲁单抗",
+      "inn": "lirilumab",
+      "targets": [
+        "KIR2DL1",
+        "KIR3DL1"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG4 抗 KIR2DL1/2/3",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "肿瘤免疫联合",
+      "note": "阻断抑制性 KIR，解除 NK 的 HLA-I 抑制；疗效依赖 KIR/HLA 基因型。",
+      "modules": [
+        "innate"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "campbell2011"
+      ]
+    },
+    {
+      "id": "enoblituzumab",
+      "label": "依诺妥珠单抗",
+      "inn": "enoblituzumab",
+      "targets": [
+        "CD276"
+      ],
+      "mechanism": "block",
+      "modality": "人源化抗 B7-H3",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "前列腺癌等",
+      "note": "靶向 B7-H3，兼具阻断与 Fc 效应；B7-H3 在多种肿瘤高表达。",
+      "modules": [
+        "innate"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "castellanos2017"
+      ]
+    },
+    {
+      "id": "ifinatamab",
+      "label": "伊非妥单抗德鲁替康",
+      "inn": "ifinatamab deruxtecan",
+      "targets": [
+        "CD276"
+      ],
+      "mechanism": "block",
+      "modality": "B7-H3 ADC",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "SCLC 等",
+      "note": "B7-H3 抗体偶联 DXd，主要机制是递送细胞毒载荷。",
+      "modules": [
+        "innate"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "nc318",
+      "label": "NC318",
+      "inn": "NC318",
+      "targets": [
+        "SIGLEC15"
+      ],
+      "mechanism": "block",
+      "modality": "抗 Siglec-15",
+      "stage": "I/II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "实体瘤",
+      "note": "阻断 Siglec-15 的免疫抑制；Siglec-15 被视为 PD-L1 的互补检查点。",
+      "modules": [
+        "innate"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "wang_siglec15_2019"
+      ]
+    },
+    {
+      "id": "oleclumab",
+      "label": "奥雷鲁单抗",
+      "inn": "oleclumab",
+      "targets": [
+        "NT5E"
+      ],
+      "mechanism": "block",
+      "modality": "抗 CD73",
+      "stage": "II/III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "NSCLC 等",
+      "note": "抑制 CD73 减少腺苷生成，逆转 A2AR 介导的免疫抑制。",
+      "modules": [
+        "innate"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "allard2017"
+      ]
+    },
+    {
+      "id": "etrumadenant",
+      "label": "依曲马德",
+      "inn": "etrumadenant",
+      "targets": [
+        "ADORA2A"
+      ],
+      "mechanism": "block",
+      "modality": "小分子 A2AR 拮抗剂",
+      "stage": "II/III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "肿瘤免疫联合",
+      "note": "阻断腺苷 A2A 受体，恢复 T/NK 功能；常与 PD-1/PD-L1 联合。",
+      "modules": [
+        "innate"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "ohta2001"
+      ]
+    },
+    {
+      "id": "ttx030",
+      "label": "TTX-030",
+      "inn": "TTX-030",
+      "targets": [
+        "ENTPD1"
+      ],
+      "mechanism": "block",
+      "modality": "抗 CD39",
+      "stage": "I 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "实体瘤",
+      "note": "抑制 CD39 的 ATP 水解，减少腺苷前体；与 CD73/A2AR 轴形成组合逻辑。",
+      "modules": [
+        "innate"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "allard2017"
+      ]
+    },
+    {
+      "id": "cyt107",
+      "label": "CYT107",
+      "inn": "CYT107",
+      "targets": [
+        "IL7R"
+      ],
+      "mechanism": "agonist",
+      "modality": "重组糖基化 IL-7",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "免疫重建/肿瘤",
+      "note": "增强 T 细胞存活与扩增；IL-7 也可扩增 Treg，剂量与背景决定净效应。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "mackall2011"
+      ]
+    },
+    {
+      "id": "iboctadekin",
+      "label": "伊波他白介素",
+      "inn": "iboctadekin",
+      "targets": [
+        "IL18R"
+      ],
+      "mechanism": "agonist",
+      "modality": "重组 IL-18",
+      "stage": "I 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "实体瘤",
+      "note": "激活 IL-18R 促进 IFN-γ 与 NK/CTL；受 IL-18BP 缓冲，单药活性有限。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "dinarello2013"
+      ]
+    },
+    {
+      "id": "denenicokin",
+      "label": "地尼白介素",
+      "inn": "denenicokin",
+      "targets": [
+        "IL21R"
+      ],
+      "mechanism": "agonist",
+      "modality": "重组 IL-21",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "黑色素瘤/肾癌",
+      "note": "增强 CD8/NK 效应；IL-21 也可影响 B 细胞与 Treg，需看细胞背景。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "spolski2014"
+      ]
+    },
+    {
+      "id": "astegolimab",
+      "label": "阿斯格鲁单抗",
+      "inn": "astegolimab",
+      "targets": [
+        "IL33"
+      ],
+      "mechanism": "block",
+      "modality": "抗 IL-33",
+      "stage": "II/III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "COPD/哮喘",
+      "note": "中和 IL-33 警报素，减少 2 型炎症；临床适应证仍在扩展。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "liew2016"
+      ]
+    },
+    {
+      "id": "tezepelumab",
+      "label": "特泽鲁单抗",
+      "inn": "tezepelumab",
+      "targets": [
+        "TSLP"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG2 抗 TSLP",
+      "stage": "已上市",
+      "approved": "2021（FDA）",
+      "region": "全球",
+      "trial": "NAVIGATOR",
+      "note": "阻断 TSLP，覆盖上游 2 型炎症；是 TSLP 通路首个获批生物制剂。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "corren2017"
+      ]
+    },
+    {
+      "id": "sargramostim",
+      "label": "沙格司亭",
+      "inn": "sargramostim",
+      "targets": [
+        "CSF2RA"
+      ],
+      "mechanism": "agonist",
+      "modality": "重组 GM-CSF",
+      "stage": "已上市",
+      "approved": "1991（FDA）",
+      "region": "全球",
+      "trial": "髓系恢复",
+      "note": "激活 GM-CSF 受体，促进髓系恢复与 DC 成熟；也可招募抑制性髓系细胞。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda",
+        "hamilton2020"
+      ]
+    },
+    {
+      "id": "otilimab",
+      "label": "奥替利单抗",
+      "inn": "otilimab",
+      "targets": [
+        "CSF2"
+      ],
+      "mechanism": "block",
+      "modality": "人源化抗 GM-CSF",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "类风湿关节炎",
+      "note": "中和 GM-CSF，减少髓系炎症；III 期结果提示适应证与联合策略仍需优化。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "hamilton2020"
+      ]
+    },
+    {
+      "id": "spesolimab",
+      "label": "司柏索单抗",
+      "inn": "spesolimab",
+      "targets": [
+        "IL1RL2"
+      ],
+      "mechanism": "block",
+      "modality": "人源化抗 IL-36R",
+      "stage": "已上市",
+      "approved": "2022（FDA）",
+      "region": "全球",
+      "trial": "GPP",
+      "note": "阻断 IL-36R，用于泛发性脓疱型银屑病；是 IL-36 轴的首个获批药物。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda",
+        "towne2011"
+      ]
+    },
+    {
+      "id": "tozorakimab",
+      "label": "托佐鲁单抗",
+      "inn": "tozorakimab",
+      "targets": [
+        "IL33"
+      ],
+      "mechanism": "block",
+      "modality": "抗 IL-33",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "COPD",
+      "note": "中和 IL-33，减少上皮驱动的炎症；与 IL-33/ST2 轴相关。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "liew2016"
+      ]
+    },
+    {
+      "id": "etokimab",
+      "label": "依托金单抗",
+      "inn": "etokimab",
+      "targets": [
+        "IL33"
+      ],
+      "mechanism": "block",
+      "modality": "抗 IL-33",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "特应性皮炎/哮喘",
+      "note": "阻断 IL-33；临床结果显示不同适应证差异明显。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov",
+        "liew2016"
+      ]
+    },
+    {
+      "id": "mogamulizumab",
+      "label": "莫格利珠单抗",
+      "inn": "mogamulizumab",
+      "targets": [
+        "CCR4"
+      ],
+      "mechanism": "block",
+      "modality": "人源化抗 CCR4（去岩藻糖）",
+      "stage": "已上市",
+      "approved": "2012（日本）/ 2018（FDA）",
+      "region": "全球",
+      "trial": "CTCL/ATLL",
+      "note": "通过 ADCC 清除 CCR4+ Treg/肿瘤细胞，不是单纯阻断趋化。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "yoshie2015"
+      ]
+    },
+    {
+      "id": "leronlimab",
+      "label": "乐利单抗",
+      "inn": "leronlimab",
+      "targets": [
+        "CCR5"
+      ],
+      "mechanism": "block",
+      "modality": "人源化抗 CCR5",
+      "stage": "III 期（部分暂停）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "HIV/肿瘤",
+      "note": "阻断 CCR5；肿瘤适应证与 HIV 开发状态不同，需分别看试验。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "balixafortide",
+      "label": "巴利福肽",
+      "inn": "balixafortide",
+      "targets": [
+        "CXCR4"
+      ],
+      "mechanism": "block",
+      "modality": "环肽 CXCR4 拮抗剂",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "乳腺癌",
+      "note": "阻断 CXCR4/CXCL12，动员肿瘤细胞并增强化疗/免疫浸润。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "cenicriviroc",
+      "label": "西尼克里韦",
+      "inn": "cenicriviroc",
+      "targets": [
+        "CCR2",
+        "CCR5"
+      ],
+      "mechanism": "block",
+      "modality": "小分子 CCR2/CCR5 拮抗剂",
+      "stage": "II/III 期（部分终止）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "NASH/HIV",
+      "note": "同时阻断 CCR2/CCR5，减少单核/巨噬浸润；NASH 研究未达主要终点。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "navarixin",
+      "label": "纳瓦利新",
+      "inn": "navarixin",
+      "targets": [
+        "CXCR1",
+        "CXCR2"
+      ],
+      "mechanism": "block",
+      "modality": "小分子 CXCR1/2 拮抗剂",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "实体瘤",
+      "note": "阻断 CXCL8 轴，减少中性粒/MDSC 募集。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "reparixin",
+      "label": "瑞帕利新",
+      "inn": "reparixin",
+      "targets": [
+        "CXCR1",
+        "CXCR2"
+      ],
+      "mechanism": "block",
+      "modality": "小分子 CXCR1/2 拮抗剂",
+      "stage": "II/III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "乳腺癌/移植",
+      "note": "阻断 CXCR1/2；不同适应证与终点差异较大。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "vercirnon",
+      "label": "维塞利农",
+      "inn": "vercirnon",
+      "targets": [
+        "CCR9"
+      ],
+      "mechanism": "block",
+      "modality": "小分子 CCR9 拮抗剂",
+      "stage": "III 期（终止）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "克罗恩病",
+      "note": "阻断 CCR9 的肠道归巢；III 期未达主要终点，提示趋化因子阻断的复杂性。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "gs1811",
+      "label": "GS-1811",
+      "inn": "GS-1811",
+      "targets": [
+        "CCR8"
+      ],
+      "mechanism": "block",
+      "modality": "抗 CCR8",
+      "stage": "I 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "实体瘤",
+      "note": "靶向 CCR8+ Treg，常与 PD-1 联合；机制可能包含 Fc 效应清除 Treg。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov",
+        "nagarsheth2017"
+      ]
+    },
+    {
+      "id": "plozalizumab",
+      "label": "普洛珠单抗",
+      "inn": "plozalizumab",
+      "targets": [
+        "CCR2"
+      ],
+      "mechanism": "block",
+      "modality": "人源化抗 CCR2",
+      "stage": "I 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "实体瘤",
+      "note": "阻断 CCR2，减少单核细胞募集；早期临床活性有限。",
+      "modules": [
+        "chemokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
       ]
     }
   ]
@@ -5740,7 +9184,8 @@ const REL_META = {
   compete:   { label: "竞争",       color: "#d97706", marker: "arrow-amber" },
   block:     { label: "药物阻断",   color: "#7c3aed", marker: "tbar-purple" },
   agonist:   { label: "药物激动",   color: "#db2777", marker: "arrow-pink" },
-  regulate:  { label: "表达调控",   color: "#0891b2", marker: "arrow-cyan" }
+  regulate:  { label: "表达调控",   color: "#0891b2", marker: "arrow-cyan" },
+  recruit:   { label: "招募/迁移",   color: "#0d9488", marker: "arrow-teal" }
 };
 const KIND_LABEL = { receptor: "受体", ligand: "配体", cytokine: "细胞因子", complex: "受体复合物", cell: "细胞效应", drug: "药物" };
 const KIND_FILL = {
@@ -5986,7 +9431,7 @@ function renderGraph() {
   const markers = [
     ["arrow-slate", "#64748b", "arrow"], ["arrow-green", "#15803d", "arrow"],
     ["arrow-amber", "#d97706", "arrow"], ["arrow-pink", "#db2777", "arrow"],
-    ["arrow-cyan", "#0891b2", "arrow"], ["tbar-red", "#dc2626", "tbar"],
+    ["arrow-cyan", "#0891b2", "arrow"], ["arrow-teal", "#0d9488", "arrow"], ["tbar-red", "#dc2626", "tbar"],
     ["tbar-purple", "#7c3aed", "tbar"]
   ];
   for (const [id, color, type] of markers) {
@@ -6243,6 +9688,7 @@ function renderLegend() {
     <span><i class="tbar" style="color:#7c3aed"></i>药物阻断</span>
     <span><i style="border-color:#db2777"></i>药物激动</span>
     <span><i style="border-color:#0891b2"></i>表达调控</span>
+    <span><i style="border-color:#0d9488"></i>招募/迁移</span>
     <span style="color:#94a3b8">虚线框 = 药物节点</span>`;
 }
 

@@ -1,6 +1,6 @@
 # 免疫靶点关系图谱
 
-单文件、离线可用的免疫靶点机制图谱，覆盖检查点/共刺激与细胞因子/趋化因子两个模块。
+单文件、离线可用的免疫靶点机制图谱，覆盖检查点/共刺激、先天/代谢检查点、细胞因子与趋化因子/归巢四个模块。当前快照包含 167 个节点、214 条关系、106 个药物和 67 条文献。
 
 `index.html` 可直接用浏览器打开，不需要服务器、npm、CDN 或网络连接。
 
@@ -20,6 +20,13 @@
 | `icon.svg` / `icon-*.png` | 页面图标与 PWA 安装图标 |
 | `build.js` | 零依赖构建脚本，将数据和模板合并为 `index.html` |
 | `tests/run.js` | 零依赖数据、构建产物与 PWA 作用域校验 |
+
+## 覆盖范围
+
+- **检查点 / 共刺激**：PD-1/PD-L1/PD-L2、CTLA-4/CD28、LAG-3、TIGIT/CD226/CD96/PVRIG、TIM-3、NKG2A/NKG2C/NKG2D、4-1BB、OX40、GITR、ICOS、CD27、CD40/CD40L、CD2/CD58、CD5/CD72、CD6/ALCAM、SLAMF7、CD30、DR3/TL1A、RANK/RANKL、BAFF/BAFF-R 等。
+- **先天 / 代谢检查点**：CD47/SIRPα、CD24/SIGLEC10、Siglec-15、B7-H3、B7-H4、KIR/HLA、CD39/CD73/腺苷/A2AR，以及 NK、巨噬细胞与吞噬检查点。
+- **细胞因子**：IL-2、IL-7、IL-15、IL-18、IL-21、IL-27、IL-33、TSLP、GM-CSF、IL-36、TGF-β、IL-10、IL-6、IL-1、IL-12/IL-23、IL-4/IL-13、IL-17、IL-5、IFN、TNF 等。
+- **趋化因子 / 归巢**：CCR8/CCL1、CCR4/CCL17/22、CCR7/CCL19/21、CXCR5/CXCL13、CXCR6/CXCL16、CCR6/CCL20、CX3CR1/CX3CL1、CCR9/CCL25、CXCR3/CXCL9/10/11、CXCR4/CXCL12、CCR2/CCL2、CCR5/CCL5、CXCR1/2/CXCL8。
 
 ## 使用方法
 
@@ -48,7 +55,7 @@ xdg-open index.html
 
 ## 页面功能
 
-- 两个模块切换：检查点/共刺激、细胞因子/趋化因子。
+- 四个模块切换：检查点/共刺激、先天/代谢检查点、细胞因子、趋化因子/归巢。
 - 按关系类型、证据等级筛选，支持显示/隐藏药物节点与边标签。
 - 搜索靶点、配体、药物或机制关键词。
 - 点击节点查看表达、机制说明、关系、相关药物和文献。
@@ -59,7 +66,7 @@ xdg-open index.html
 
 ## 数据口径
 
-- 关系类型：`bind`（结合）、`activate`（激活/共刺激）、`inhibit`（抑制）、`compete`（竞争）、`regulate`（表达调控）。
+- 关系类型：`bind`（结合）、`activate`（激活/共刺激）、`inhibit`（抑制）、`compete`（竞争）、`regulate`（表达调控）、`recruit`（招募/迁移）。
 - 药物机制：`block`（阻断）或 `agonist`（激动）。
 - 证据等级：
   - `A`：结构与生化、功能实验及人体/临床药物数据相互支持。
