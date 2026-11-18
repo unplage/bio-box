@@ -1,0 +1,19 @@
+{
+  "title": "免疫靶点关系图谱",
+  "snapshot": "2026-11",
+  "disclaimer": "机制梳理与假设生成工具，非临床决策依据。亲和力受测定体系影响；监管状态以最新说明书与注册平台为准。",
+  "modules": [
+    {
+      "id": "checkpoint",
+      "name": "检查点 / 共刺激",
+      "desc": "共抑制受体（PD-1、CTLA-4、LAG-3、TIGIT、TIM-3、NKG2A 等）与共刺激受体（CD28、4-1BB、OX40、ICOS、CD40 等）共同决定 T/NK 细胞的净激活阈值。注意：同一配体常被多个受体共享，亲和力差异决定竞争方向。",
+      "groups": ["pd1", "cd28", "ctla4", "lag3", "tigit", "tim3", "nkg2a", "nkg2d", "tnfrsf", "icos", "cd40", "cd47", "vista", "btla", "cell"]
+    },
+    {
+      "id": "cytokine",
+      "name": "细胞因子 / 趋化因子",
+      "desc": "细胞因子通过多亚基受体复合物传递信号，同一细胞因子可因受体组合、浓度和细胞类型产生相反效应（如 IL-2 低剂量扩增 Treg、高剂量激活效应 T/NK）。趋化因子主要决定细胞迁移而非直接杀伤。",
+      "groups": ["il2", "il15", "tgf", "il10", "il6", "il1", "il12", "il4", "il17", "il5", "ifn", "tnf", "chemokine", "cell"]
+    }
+  ]
+}

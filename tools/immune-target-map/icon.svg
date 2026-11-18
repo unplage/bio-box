@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="免疫靶点关系图谱">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset=".55" stop-color="#172554"/>
+      <stop offset="1" stop-color="#312e81"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".25" cy=".15" r=".9">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M256 256 152 164M256 256 152 348M256 256 360 164M256 256 360 348M152 164 360 348M152 348 360 164" stroke="#38bdf8" stroke-width="13" opacity=".72"/>
+    <path d="M152 164 360 164M152 348 360 348" stroke="#a78bfa" stroke-width="8" opacity=".48"/>
+  </g>
+  <g stroke="#e0f2fe" stroke-width="8">
+    <circle cx="152" cy="164" r="42" fill="#0f766e"/>
+    <circle cx="152" cy="348" r="42" fill="#4338ca"/>
+    <circle cx="360" cy="164" r="42" fill="#4338ca"/>
+    <circle cx="360" cy="348" r="42" fill="#0f766e"/>
+    <circle cx="256" cy="256" r="62" fill="#1d4ed8"/>
+  </g>
+  <g fill="#f8fafc">
+    <circle cx="256" cy="256" r="18"/>
+    <circle cx="152" cy="164" r="12"/>
+    <circle cx="152" cy="348" r="12"/>
+    <circle cx="360" cy="164" r="12"/>
+    <circle cx="360" cy="348" r="12"/>
+  </g>
+</svg>

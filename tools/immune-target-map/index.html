@@ -1,0 +1,6552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1d4ed8">
+<meta name="description" content="免疫靶点关系图谱：检查点/共刺激与细胞因子/趋化因子的配体-受体-药物证据网络，标注亲和力、机制与文献来源。">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="免疫图谱">
+<title>免疫靶点关系图谱 · Immune Target Atlas</title>
+<style>
+:root{
+  --ink:#0f172a; --muted:#64748b; --muted2:#94a3b8;
+  --bg:#f3f6fb; --card:#ffffff; --line:#e2e8f0;
+  --blue:#1d4ed8; --blue-soft:#e8effd; --teal:#0f766e; --teal-soft:#e6f7f4;
+  --orange:#c2410c; --orange-soft:#fff2e8; --indigo:#4338ca; --indigo-soft:#eef2ff;
+  --green:#15803d; --green-soft:#ecfdf3; --red:#b91c1c;
+  --purple:#6d28d9; --purple-soft:#f5f0ff; --amber:#b45309;
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 12px 32px rgba(15,23,42,.07);
+  --radius:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6;padding-bottom:48px}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+button,select,input{font:inherit}
+.wrap{max-width:1440px;margin:0 auto;padding:0 20px}
+
+/* Hero */
+.hero{
+  background:
+    radial-gradient(900px 420px at 18% -20%,rgba(56,189,248,.30),transparent 60%),
+    radial-gradient(760px 360px at 82% -10%,rgba(167,139,250,.28),transparent 60%),
+    linear-gradient(135deg,#0f172a 0%,#172554 52%,#312e81 100%);
+  color:#fff;padding:38px 0 34px;position:relative;overflow:hidden;
+}
+.hero::after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.08) 1px,transparent 1px);background-size:22px 22px;opacity:.45;pointer-events:none}
+.hero .wrap{position:relative;z-index:1}
+.hero-top{display:flex;justify-content:space-between;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.hero h1{font-size:clamp(1.5rem,2.4vw,2.15rem);letter-spacing:.01em;font-weight:750}
+.hero .sub{color:#c7d2fe;margin-top:8px;font-size:.95rem;max-width:850px}
+.snapshot{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:12px;padding:10px 14px;font-size:.72rem;color:#c7d2fe;text-align:right;white-space:nowrap}
+.snapshot strong{display:block;font-size:1.02rem;color:#fff;font-weight:650;letter-spacing:.03em}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.stat{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.17);border-radius:11px;padding:8px 13px;font-size:.76rem;color:#dbeafe;min-width:96px}
+.stat b{display:block;color:#fff;font-size:1.25rem;line-height:1.15;font-variant-numeric:tabular-nums}
+
+/* Cards */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid rgba(226,232,240,.8)}
+.intro{margin-top:20px;padding:16px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.intro-item{display:flex;gap:11px;align-items:flex-start}
+.intro-num{flex:0 0 auto;width:27px;height:27px;border-radius:9px;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;font-weight:750;font-size:.8rem}
+.intro h3{font-size:.85rem;font-weight:700;margin-bottom:2px}
+.intro p{font-size:.76rem;color:var(--muted);line-height:1.5}
+
+/* Module bar */
+.modulebar{margin-top:18px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;background:#e9eef7;border:1px solid var(--line);padding:4px;border-radius:12px}
+.tab{border:0;background:transparent;color:var(--muted);padding:8px 15px;border-radius:9px;font-size:.82rem;font-weight:650;cursor:pointer;transition:.15s;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.active{background:#fff;color:var(--blue);box-shadow:0 1px 5px rgba(15,23,42,.12)}
+.searchbox{position:relative;flex:1;max-width:380px;min-width:220px}
+.searchbox input{width:100%;padding:10px 13px 10px 36px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);font-size:.82rem;outline:none;transition:.15s}
+.searchbox input:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.13)}
+.searchbox::before{content:"⌕";position:absolute;left:12px;top:50%;transform:translateY(-52%);color:var(--muted2);font-size:1.05rem}
+
+/* Workspace */
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:16px;margin-top:16px;align-items:start}
+.graph-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid rgba(226,232,240,.8);overflow:hidden}
+.graph-toolbar{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#fbfdff}
+.chip{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:999px;padding:5px 10px;font-size:.71rem;font-weight:650;cursor:pointer;display:inline-flex;gap:6px;align-items:center;transition:.14s;user-select:none}
+.chip .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.chip.on{background:#f8fafc;color:var(--ink);border-color:#cbd5e1;box-shadow:inset 0 0 0 1px rgba(148,163,184,.12)}
+.chip.off{opacity:.42;filter:grayscale(.4)}
+.tool-sep{width:1px;height:22px;background:var(--line);margin:0 2px}
+.control{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;font-size:.73rem;color:var(--muted);cursor:pointer;transition:.14s;font-weight:600}
+.control:hover{border-color:#cbd5e1;color:var(--ink)}
+.control.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.control.primary:hover{background:#1e40af}
+.control:disabled{opacity:.4;cursor:not-allowed}
+.graph-wrap{position:relative;height:clamp(540px,72vh,860px);overflow:hidden;background:radial-gradient(circle at 35% 25%,rgba(232,240,254,.85),transparent 55%),radial-gradient(circle at 75% 75%,rgba(236,253,243,.65),transparent 55%),#fdfefe;cursor:grab;touch-action:none}
+.graph-wrap.dragging{cursor:grabbing}
+#graph{width:100%;height:100%;display:block;touch-action:none}
+.zoom-hint{position:absolute;left:12px;bottom:10px;background:rgba(255,255,255,.88);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:.66rem;color:var(--muted2);pointer-events:none;backdrop-filter:blur(4px)}
+.tip{position:absolute;z-index:20;pointer-events:none;max-width:300px;background:rgba(15,23,42,.94);color:#e2e8f0;border-radius:9px;padding:8px 10px;font-size:.71rem;line-height:1.45;box-shadow:0 8px 24px rgba(2,6,23,.28);opacity:0;transform:translate(-50%,-115%);transition:opacity .1s}
+.tip.on{opacity:1}
+.tip b{color:#fff}
+.legend{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:13px;flex-wrap:wrap;font-size:.68rem;color:var(--muted);background:#fbfdff}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:18px;height:0;border-top:2.4px solid #64748b;display:inline-block}
+.legend i.dash{border-top-style:dashed}
+.legend i.tbar{position:relative}
+.legend i.tbar::after{content:"";position:absolute;right:-1px;top:-5px;height:9px;border-right:2.4px solid currentColor}
+
+/* Detail */
+.detail{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid rgba(226,232,240,.8);padding:17px;position:sticky;top:16px;max-height:calc(clamp(540px,72vh,860px) + 100px);overflow:auto}
+.detail::-webkit-scrollbar{width:8px}
+.detail::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+.detail-empty h2{font-size:1rem;margin-bottom:7px}
+.detail-empty p{font-size:.78rem;color:var(--muted);margin-bottom:11px}
+.kv{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.kv-row{display:grid;grid-template-columns:76px 1fr;gap:9px;font-size:.76rem}
+.kv-row dt{color:var(--muted2);font-weight:600}
+.kv-row dd{color:#334155;min-width:0;word-break:break-word}
+.detail-title{font-size:1.12rem;font-weight:750;line-height:1.25}
+.detail-sub{font-size:.73rem;color:var(--muted);margin-top:3px}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.badge{font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.01em}
+.badge.receptor{background:var(--blue-soft);color:#1e40af}
+.badge.ligand{background:var(--teal-soft);color:#115e59}
+.badge.cytokine{background:var(--orange-soft);color:#9a3412}
+.badge.complex{background:var(--indigo-soft);color:#3730a3}
+.badge.cell{background:var(--green-soft);color:#166534}
+.badge.drug{background:var(--purple-soft);color:#5b21b6}
+.badge.evA{background:#dcfce7;color:#166534}
+.badge.evB{background:#fef3c7;color:#92400e}
+.badge.evC{background:#fee2e2;color:#991b1b}
+.badge.rel{background:#f1f5f9;color:#334155}
+.section-h{font-size:.7rem;font-weight:750;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;margin:16px 0 7px}
+.note-box{font-size:.77rem;color:#334155;background:#f8fafc;border:1px solid #eef2f7;border-radius:10px;padding:10px 11px}
+.rel-list,.ref-list,.drug-list{list-style:none;display:flex;flex-direction:column;gap:5px}
+.rel-list li,.drug-list li{font-size:.74rem;border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;display:flex;gap:7px;align-items:flex-start;transition:.13s;background:#fff}
+.rel-list li:hover,.drug-list li:hover{border-color:#bfdbfe;background:#f8fbff}
+.rel-dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;margin-top:6px}
+.rel-txt{flex:1;min-width:0}
+.rel-txt b{font-weight:650}
+.rel-txt small{display:block;color:var(--muted2);font-size:.66rem;line-height:1.35}
+.ref-list li{font-size:.7rem;color:var(--muted);line-height:1.45;padding-left:11px;position:relative}
+.ref-list li::before{content:"·";position:absolute;left:2px;color:#94a3b8}
+.tag-list{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:.68rem;border:1px solid var(--line);border-radius:999px;padding:3px 8px;background:#f8fafc;color:#334155;cursor:pointer}
+.tag:hover{border-color:#bfdbfe;color:var(--blue)}
+.back-link{background:none;border:0;color:var(--blue);font-size:.72rem;cursor:pointer;padding:0;margin-bottom:8px;font-weight:650}
+.disclaimer{font-size:.68rem;color:var(--muted2);margin-top:14px;border-top:1px dashed var(--line);padding-top:10px;line-height:1.5}
+
+/* Table */
+.table-card{margin-top:16px;padding:17px 18px}
+.table-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:11px}
+.table-head h2{font-size:.98rem;font-weight:750}
+.table-head p{font-size:.72rem;color:var(--muted);margin-top:2px}
+.table-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.table-tools select{border:1px solid var(--line);border-radius:9px;padding:6px 9px;font-size:.73rem;background:#fff;color:#334155}
+.table-scroll{overflow:auto;border:1px solid var(--line);border-radius:11px}
+table{width:100%;border-collapse:collapse;font-size:.73rem;min-width:980px}
+thead th{position:sticky;top:0;background:#f8fafc;color:var(--muted);font-weight:700;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr{cursor:pointer;transition:.1s}
+tbody tr:hover{background:#f8fbff}
+.drug-name{font-weight:700;color:#1e293b;white-space:nowrap}
+.drug-inn{display:block;font-weight:400;color:var(--muted2);font-size:.66rem}
+.status{font-size:.64rem;font-weight:700;padding:2px 6px;border-radius:5px;white-space:nowrap;display:inline-block}
+.status.approved{background:#dcfce7;color:#166534}
+.status.clinical{background:#dbeafe;color:#1e40af}
+.status.terminated{background:#fee2e2;color:#991b1b}
+.mech{font-size:.64rem;font-weight:700;padding:2px 6px;border-radius:5px;white-space:nowrap}
+.mech.block{background:#ede9fe;color:#5b21b6}
+.mech.agonist{background:#fce7f3;color:#9d174d}
+td .small{color:var(--muted2);font-size:.66rem;display:block;margin-top:1px}
+.table-note{font-size:.68rem;color:var(--muted2);margin-top:9px;line-height:1.5}
+
+/* Notes & sources */
+.notes{margin-top:16px;padding:18px 20px}
+.notes h2{font-size:1rem;margin-bottom:6px}
+.notes .lead{font-size:.78rem;color:var(--muted);margin-bottom:6px}
+details{border-top:1px solid var(--line);padding:11px 0}
+details:last-child{border-bottom:0;padding-bottom:0}
+summary{cursor:pointer;font-weight:700;font-size:.83rem;color:#1e293b;list-style:none;display:flex;align-items:center;gap:7px}
+summary::before{content:"＋";color:var(--blue);font-weight:800;font-size:.8rem;width:14px}
+details[open] summary::before{content:"－"}
+details p,details li{font-size:.75rem;color:#475569;line-height:1.6}
+details ul{padding-left:19px;margin-top:7px}
+details li{margin-bottom:4px}
+.grade-table{width:100%;border-collapse:collapse;font-size:.72rem;margin-top:8px;min-width:0}
+.grade-table th,.grade-table td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.grade-table th{background:#f8fafc;color:var(--muted);font-weight:700}
+.sources{padding:16px 20px}
+.source-list{columns:2;column-gap:26px;margin-top:10px}
+.source-list li{font-size:.69rem;color:var(--muted);line-height:1.5;break-inside:avoid;margin-bottom:6px;list-style:none;padding-left:10px;position:relative}
+.source-list li::before{content:"·";position:absolute;left:0;color:#94a3b8}
+footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:var(--muted2);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+@media (max-width:1100px){
+  .workspace{grid-template-columns:1fr}
+  .detail{position:static;max-height:none}
+  .intro{grid-template-columns:1fr}
+  .source-list{columns:1}
+}
+@media (max-width:640px){
+  .wrap{padding:0 12px}
+  .hero{padding:26px 0 24px}
+  .hero h1{font-size:1.35rem}
+  .graph-wrap{height:66vh}
+  .graph-toolbar{padding:8px}
+  .legend{gap:8px}
+  .detail{padding:14px}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-top">
+      <div>
+        <h1>免疫靶点关系图谱</h1>
+        <p class="sub">把配体–受体、共刺激/共抑制、竞争性阻断与激动剂放进同一张可追溯的证据网络。每个关系都标注机制方向、亲和力口径与文献来源。</p>
+      </div>
+      <div class="snapshot">数据快照<strong id="snapshot">—</strong></div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card intro">
+    <div class="intro-item">
+      <div class="intro-num">1</div>
+      <div><h3>先看方向</h3><p>箭头表示关系方向：配体→受体、受体→细胞效应、药物→靶点。红色 T 形是抑制/阻断，绿色箭头是激活/共刺激。</p></div>
+    </div>
+    <div class="intro-item">
+      <div class="intro-num">2</div>
+      <div><h3>再看竞争</h3><p>同一配体被多个受体共享时，亲和力差异决定谁占优势。例如 CTLA-4 与 CD28 竞争 CD80/86，TIGIT 与 CD226 竞争 CD155。</p></div>
+    </div>
+    <div class="intro-item">
+      <div class="intro-num">3</div>
+      <div><h3>最后看证据</h3><p>点击节点或连线查看亲和力、测定体系、证据等级与文献。药物表给出机制、最高阶段与首次批准年份。</p></div>
+    </div>
+  </section>
+
+  <section class="modulebar">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="searchbox"><input id="search" type="search" placeholder="搜索靶点、配体、药物或机制关键词…" autocomplete="off" aria-label="搜索"></div>
+  </section>
+
+  <section class="workspace">
+    <div class="graph-card">
+      <div class="graph-toolbar" id="relChips"></div>
+      <div class="graph-wrap" id="graphWrap">
+        <svg id="graph" role="img" aria-label="免疫靶点关系网络图"></svg>
+        <div class="tip" id="tip"></div>
+        <div class="zoom-hint">滚轮缩放 · 拖动空白平移 · 拖动节点调整 · 点击查看证据</div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <aside class="detail" id="detail" aria-live="polite"></aside>
+  </section>
+
+  <section class="card table-card">
+    <div class="table-head">
+      <div>
+        <h2>药物–靶点证据表</h2>
+        <p id="tableCount"></p>
+      </div>
+      <div class="table-tools">
+        <select id="statusFilter" aria-label="按阶段筛选">
+          <option value="all">全部阶段</option>
+          <option value="approved">已上市</option>
+          <option value="clinical">临床阶段</option>
+          <option value="terminated">终止 / 失败</option>
+        </select>
+        <select id="mechFilter" aria-label="按机制筛选">
+          <option value="all">全部机制</option>
+          <option value="block">阻断 / 拮抗</option>
+          <option value="agonist">激动</option>
+        </select>
+        <button class="control" id="exportDrugCsv">导出药物表 CSV</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>药物</th><th>靶点</th><th>机制</th><th>类型</th><th>阶段（快照）</th><th>首次批准</th><th>关键试验 / 备注</th></tr>
+        </thead>
+        <tbody id="drugBody"></tbody>
+      </table>
+    </div>
+    <p class="table-note">阶段列是公开资料快照，不等于实时监管状态；已上市药物仍可能因适应证撤回或安全性问题改变标签。点击任一行可在图中定位（若该药物已作为图节点显示）。</p>
+  </section>
+
+  <section class="card notes">
+    <h2>如何读这张图</h2>
+    <p class="lead">这张图刻意区分「结合」「信号方向」「竞争」「药物干预」四件事——它们经常被混为一谈。</p>
+
+    <details open>
+      <summary>关系类型与视觉编码</summary>
+      <ul>
+        <li><b>灰色箭头（结合）</b>：配体与受体的物理结合，不代表净激活或抑制。例如 PD-L1→PD-1 是结合，PD-1→T 细胞才是抑制信号。</li>
+        <li><b>绿色箭头（激活/共刺激）</b>：受体 engagement 后增强 T/NK/APC 功能。箭头指向细胞效应节点。</li>
+        <li><b>红色 T 形（抑制）</b>：抑制性受体传递负信号，或阻断关键共刺激。</li>
+        <li><b>橙色虚线（竞争）</b>：两个受体共享同一配体，或配体与天然拮抗剂竞争同一受体。虚线不表示物理结合。</li>
+        <li><b>紫色 T 形 / 粉色箭头</b>：药物阻断 / 药物激动。药物节点靠近其靶点放置，虚线边框表示「干预者」而非内源分子。</li>
+        <li><b>青色箭头（表达调控）</b>：一个通路改变另一个分子的表达，例如 IFN-γ 诱导 PD-L1。</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>亲和力（KD）为什么不能直接横向比较</summary>
+      <p>KD 是体系依赖的：单体 vs 二价 Fc 融合蛋白、固定方式、温度、缓冲液、受体密度都会改变表观值。二价融合蛋白的表观 KD 常比单体低 10–100 倍。本工具优先标注测定体系；没有可靠数值时只写「定性结合」，不强行给出数字。</p>
+      <p style="margin-top:6px">例如 PD-1/PD-L1：二价 SPR 表观 KD 约 10 nM，而单体相互作用在 2–8 µM 范围——相差近三个数量级。CTLA-4/CD80 的单体 KD 约 0.42 µM，CD28/CD80 约 4 µM，因此 CTLA-4 在竞争中占优。</p>
+    </details>
+
+    <details>
+      <summary>证据等级</summary>
+      <table class="grade-table">
+        <thead><tr><th>等级</th><th>含义</th><th>典型支持</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge evA">A</span></td><td>机制与人体相关性较明确</td><td>结构/生化 + 功能实验 + 遗传或临床药物数据</td></tr>
+          <tr><td><span class="badge evB">B</span></td><td>功能证据较强，人体因果性有限</td><td>体外功能、动物模型、多个独立体系</td></tr>
+          <tr><td><span class="badge evC">C</span></td><td>关联性或存在争议</td><td>表达相关性、单一体系、机制仍有分歧</td></tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>几个容易误读的点</summary>
+      <ul>
+        <li><b>「高表达」不等于「高活性」</b>：受体的信号强度取决于配体密度、亲和力、胞内结构域和共受体背景。</li>
+        <li><b>「阻断」不等于「抑制」</b>：阻断 CTLA-4 解除抑制，净效应是激活；阻断 4-1BB 则相反。</li>
+        <li><b>同一分子可以双向</b>：TGF-β 既抑制效应 T/NK，又维持 Treg；IL-2 低剂量优先扩增 Treg，高剂量激活效应细胞。</li>
+        <li><b>激动剂需要交联</b>：4-1BB、CD40、OX40 等 TNFR 家族成员的激动抗体常依赖 FcγR 交联或膜结合配体，体外单体激动数据不能直接外推。</li>
+        <li><b>Fc 效应会改变机制</b>：抗 CTLA-4、抗 CD40、抗 CD25 的 Fc 设计可能通过 ADCC/ADCP 清除靶细胞，而不是单纯阻断信号。</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>局限与免责声明</summary>
+      <p>本工具用于机制梳理与靶点组合假设生成，不是临床决策工具。亲和力数值来自公开文献，可能因实验体系不同而与实际生理条件有差异；临床阶段与监管状态会随时间变化。药物适应证、联合用药与安全性请以最新说明书、NMPA/FDA 公告和注册临床试验为准。</p>
+    </details>
+  </section>
+
+  <details class="card sources" id="sourcesCard">
+    <summary>文献与数据来源（可检索标识）</summary>
+    <ul class="source-list" id="sourceList"></ul>
+  </details>
+</main>
+
+<footer>
+  <span>Immune Target Atlas · 单文件离线工具 · 无外部依赖</span>
+  <span>数据快照 <span id="snapshot2">—</span> · 仅用于科研与机制讨论</span>
+</footer>
+
+<script id="immune-data" type="application/json">{
+  "meta": {
+    "title": "免疫靶点关系图谱",
+    "snapshot": "2026-11",
+    "disclaimer": "机制梳理与假设生成工具，非临床决策依据。亲和力受测定体系影响；监管状态以最新说明书与注册平台为准。",
+    "modules": [
+      {
+        "id": "checkpoint",
+        "name": "检查点 / 共刺激",
+        "desc": "共抑制受体（PD-1、CTLA-4、LAG-3、TIGIT、TIM-3、NKG2A 等）与共刺激受体（CD28、4-1BB、OX40、ICOS、CD40 等）共同决定 T/NK 细胞的净激活阈值。注意：同一配体常被多个受体共享，亲和力差异决定竞争方向。",
+        "groups": [
+          "pd1",
+          "cd28",
+          "ctla4",
+          "lag3",
+          "tigit",
+          "tim3",
+          "nkg2a",
+          "nkg2d",
+          "tnfrsf",
+          "icos",
+          "cd40",
+          "cd47",
+          "vista",
+          "btla",
+          "cell"
+        ]
+      },
+      {
+        "id": "cytokine",
+        "name": "细胞因子 / 趋化因子",
+        "desc": "细胞因子通过多亚基受体复合物传递信号，同一细胞因子可因受体组合、浓度和细胞类型产生相反效应（如 IL-2 低剂量扩增 Treg、高剂量激活效应 T/NK）。趋化因子主要决定细胞迁移而非直接杀伤。",
+        "groups": [
+          "il2",
+          "il15",
+          "tgf",
+          "il10",
+          "il6",
+          "il1",
+          "il12",
+          "il4",
+          "il17",
+          "il5",
+          "ifn",
+          "tnf",
+          "chemokine",
+          "cell"
+        ]
+      }
+    ]
+  },
+  "modules": [
+    {
+      "id": "checkpoint",
+      "name": "检查点 / 共刺激",
+      "desc": "共抑制受体（PD-1、CTLA-4、LAG-3、TIGIT、TIM-3、NKG2A 等）与共刺激受体（CD28、4-1BB、OX40、ICOS、CD40 等）共同决定 T/NK 细胞的净激活阈值。注意：同一配体常被多个受体共享，亲和力差异决定竞争方向。",
+      "groups": [
+        "pd1",
+        "cd28",
+        "ctla4",
+        "lag3",
+        "tigit",
+        "tim3",
+        "nkg2a",
+        "nkg2d",
+        "tnfrsf",
+        "icos",
+        "cd40",
+        "cd47",
+        "vista",
+        "btla",
+        "cell"
+      ]
+    },
+    {
+      "id": "cytokine",
+      "name": "细胞因子 / 趋化因子",
+      "desc": "细胞因子通过多亚基受体复合物传递信号，同一细胞因子可因受体组合、浓度和细胞类型产生相反效应（如 IL-2 低剂量扩增 Treg、高剂量激活效应 T/NK）。趋化因子主要决定细胞迁移而非直接杀伤。",
+      "groups": [
+        "il2",
+        "il15",
+        "tgf",
+        "il10",
+        "il6",
+        "il1",
+        "il12",
+        "il4",
+        "il17",
+        "il5",
+        "ifn",
+        "tnf",
+        "chemokine",
+        "cell"
+      ]
+    }
+  ],
+  "refs": {
+    "ghiotto2010": {
+      "cite": "Ghiotto M, et al. PD-L1 and PD-L2 differ in their molecular mechanisms of interaction with PD-1. Int Immunol. 2010;22(8):651-660.",
+      "id": "PMC3168865",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3168865/"
+    },
+    "vandermerwe1997": {
+      "cite": "van der Merwe PA, et al. CD80 (B7-1) binds both CD28 and CTLA-4 with a low affinity and very fast kinetics. J Exp Med. 1997;185(3):393-404.",
+      "id": "PMID 9053440",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/9053440/"
+    },
+    "rudd2009": {
+      "cite": "Rudd CE, Taylor A, Schneider H. CD28 and CTLA-4 coreceptor expression and signal transduction. Immunol Rev. 2009;229(1):12-26.",
+      "id": "PMC4186963",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4186963/"
+    },
+    "yu2009": {
+      "cite": "Yu X, et al. The surface protein TIGIT suppresses T cell activation by promoting the generation of mature immunoregulatory dendritic cells. Nat Immunol. 2009;10(1):48-57.",
+      "id": "TIGIT 原始鉴定",
+      "url": ""
+    },
+    "ge2021": {
+      "cite": "Ge Z, et al. TIGIT, the next step towards successful combination immune checkpoint therapy in cancer. Front Immunol. 2021;12:699895.",
+      "id": "PMC8339559",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8339559/"
+    },
+    "huard1997": {
+      "cite": "Huard B, et al. Characterization of the major histocompatibility complex class II binding site on LAG-3 protein. Proc Natl Acad Sci USA. 1997;94(11):5744-5749.",
+      "id": "PNAS 94:5744",
+      "url": ""
+    },
+    "ming2024": {
+      "cite": "Ming Q, et al. Structural basis for mouse LAG3 interactions with the MHC class II molecule I-Ab. Nat Commun. 2024;15:7423.",
+      "id": "doi:10.1038/s41467-024-51930-5",
+      "url": "https://doi.org/10.1038/s41467-024-51930-5"
+    },
+    "maruhashi2022": {
+      "cite": "Maruhashi T, et al. Binding of LAG-3 to stable peptide-MHC class II limits T cell function and suppresses autoimmunity and anti-cancer immunity. Immunity. 2022;55(5):912-924.",
+      "id": "Immunity 2022",
+      "url": ""
+    },
+    "weiskopf2013": {
+      "cite": "Weiskopf K, et al. Engineered SIRPα variants as immunotherapeutic adjuvants to anticancer antibodies. Science. 2013;341(6141):88-91.",
+      "id": "PMID 23722425",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/23722425/"
+    },
+    "hatherley2007": {
+      "cite": "Hatherley D, et al. The structure of the macrophage signal regulatory protein alpha (SIRPalpha) inhibitory receptor reveals a binding face reminiscent of that used by T cell receptors. J Biol Chem. 2007;282(19):14567-14575.",
+      "id": "PMID 17369261",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/17369261/"
+    },
+    "suntharalingam2006": {
+      "cite": "Suntharalingam G, et al. Cytokine storm in a phase 1 trial of the anti-CD28 monoclonal antibody TGN1412. N Engl J Med. 2006;355(10):1018-1028.",
+      "id": "PMID 16946033",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/16946033/"
+    },
+    "sharpe2002": {
+      "cite": "Sharpe AH, Freeman GJ. The B7-CD28 superfamily. Nat Rev Immunol. 2002;2(2):116-126.",
+      "id": "B7-CD28 综述",
+      "url": ""
+    },
+    "malek2008": {
+      "cite": "Malek TR. The biology of interleukin-2. Annu Rev Immunol. 2008;26:453-479.",
+      "id": "IL-2 综述",
+      "url": ""
+    },
+    "waldmann2006": {
+      "cite": "Waldmann TA. The biology of interleukin-2 and interleukin-15: implications for cancer therapy and vaccine design. Nat Rev Immunol. 2006;6(8):595-601.",
+      "id": "IL-2/IL-15 综述",
+      "url": ""
+    },
+    "massague2012": {
+      "cite": "Massagué J. TGFβ signalling in context. Nat Rev Mol Cell Biol. 2012;13(10):616-630.",
+      "id": "TGF-β 综述",
+      "url": ""
+    },
+    "stark1998": {
+      "cite": "Stark GR, et al. How cells respond to interferons. Annu Rev Biochem. 1998;67:227-264.",
+      "id": "干扰素综述",
+      "url": ""
+    },
+    "bradley2008": {
+      "cite": "Bradley JR. TNF-mediated inflammatory disease. J Pathol. 2008;214(2):149-160.",
+      "id": "TNF 综述",
+      "url": ""
+    },
+    "kishimoto2005": {
+      "cite": "Kishimoto T. Interleukin-6: from basic science to medicine—40 years in immunology. Annu Rev Immunol. 2005;23:1-21.",
+      "id": "IL-6 综述",
+      "url": ""
+    },
+    "dinarello2009": {
+      "cite": "Dinarello CA. Immunological and inflammatory functions of the interleukin-1 family. Annu Rev Immunol. 2009;27:519-550.",
+      "id": "IL-1 家族综述",
+      "url": ""
+    },
+    "saraiva2010": {
+      "cite": "Saraiva M, O'Garra A. The regulation of IL-10 production by immune cells. Nat Rev Immunol. 2010;10(3):170-181.",
+      "id": "IL-10 综述",
+      "url": ""
+    },
+    "teng2015": {
+      "cite": "Teng MW, et al. IL-12 and IL-23 cytokines: from biology to targeted therapies. Nat Rev Drug Discov. 2015;14(8):571-584.",
+      "id": "IL-12/IL-23 综述",
+      "url": ""
+    },
+    "junttila2008": {
+      "cite": "Junttila IS, et al. Tuning sensitivity to IL-4 and IL-13: differential expression of IL-4Rα, IL-13Rα1, and γc regulates relative cytokine sensitivity. J Exp Med. 2008;205(11):2595-2608.",
+      "id": "IL-4/IL-13 综述",
+      "url": ""
+    },
+    "gaffen2009": {
+      "cite": "Gaffen SL. Structure and signalling in the IL-17 receptor family. Nat Rev Immunol. 2009;9(8):556-567.",
+      "id": "IL-17 综述",
+      "url": ""
+    },
+    "takatsu2008": {
+      "cite": "Takatsu K, Nakajima H. IL-5 and eosinophilia. Curr Opin Immunol. 2008;20(3):288-294.",
+      "id": "IL-5 综述",
+      "url": ""
+    },
+    "griffith2014": {
+      "cite": "Griffith JW, et al. Chemokines and chemokine receptors: positioning cells for host defense and immunity. Annu Rev Immunol. 2014;32:659-702.",
+      "id": "趋化因子综述",
+      "url": ""
+    },
+    "braud1998": {
+      "cite": "Braud VM, et al. HLA-E binds to natural killer cell receptors CD94/NKG2A, B and C. Nature. 1998;391(6669):795-799.",
+      "id": "HLA-E/NKG2 原始鉴定",
+      "url": ""
+    },
+    "anderson2016": {
+      "cite": "Anderson AC, et al. Lag-3, Tim-3, and TIGIT: co-inhibitory receptors with specialized functions in immune regulation. Immunity. 2016;44(5):989-1004.",
+      "id": "共抑制受体综述",
+      "url": ""
+    },
+    "das2017": {
+      "cite": "Das M, et al. Tim-3 and its role in regulating anti-tumor immunity. Immunol Rev. 2017;276(1):97-111.",
+      "id": "TIM-3 综述",
+      "url": ""
+    },
+    "croft2009": {
+      "cite": "Croft M. The role of TNF superfamily members in T-cell function and diseases. Nat Rev Immunol. 2009;9(4):271-285.",
+      "id": "TNF 超家族综述",
+      "url": ""
+    },
+    "vinay2011": {
+      "cite": "Vinay DS, Kwon BS. 4-1BB signaling beyond T cells. Cell Mol Immunol. 2011;8(4):281-284.",
+      "id": "4-1BB 综述",
+      "url": ""
+    },
+    "gramaglia1998": {
+      "cite": "Gramaglia I, et al. Ox-40 ligand: a potent costimulatory molecule for sustaining primary CD4 T cell responses. J Immunol. 1998;161(12):6510-6517.",
+      "id": "OX40L 功能",
+      "url": ""
+    },
+    "raulet2003": {
+      "cite": "Raulet DH. Roles of the NKG2D immunoreceptor and its ligands. Nat Rev Immunol. 2003;3(10):781-790.",
+      "id": "NKG2D 综述",
+      "url": ""
+    },
+    "sedy2005": {
+      "cite": "Sedy JR, et al. B and T lymphocyte attenuator regulates T cell activation through interaction with herpesvirus entry mediator. Nat Immunol. 2005;6(1):90-98.",
+      "id": "BTLA/HVEM",
+      "url": ""
+    },
+    "lines2014": {
+      "cite": "Lines JL, et al. VISTA is an immune checkpoint molecule for human T cells. Cancer Res. 2014;74(7):1924-1932.",
+      "id": "VISTA 功能",
+      "url": ""
+    },
+    "nowak2017": {
+      "cite": "Nowak EC, et al. VISTA nonredundantly controls the generation of peripheral Foxp3+ regulatory T cells. J Immunol. 2017;198(1):1-8.",
+      "id": "VISTA/Treg",
+      "url": ""
+    },
+    "johnston2019": {
+      "cite": "Johnston RJ, et al. VISTA is an acidic pH-selective ligand for PSGL-1. Nature. 2019;574(7779):565-570.",
+      "id": "VISTA/PSGL-1",
+      "url": ""
+    },
+    "wang2019": {
+      "cite": "Wang J, et al. Fibrinogen-like protein 1 is a major immune inhibitory ligand of LAG-3. Cell. 2019;176(1-2):334-347.",
+      "id": "FGL1/LAG-3",
+      "url": ""
+    },
+    "vonderheide2013": {
+      "cite": "Vonderheide RH, Glennie MJ. Agonistic CD40 antibodies and cancer therapy. Clin Cancer Res. 2013;19(5):1035-1043.",
+      "id": "CD40 激动剂综述",
+      "url": ""
+    },
+    "fda": {
+      "cite": "FDA prescribing information / Drugs@FDA（各药品说明书与审批信息）",
+      "id": "Drugs@FDA",
+      "url": "https://www.accessdata.fda.gov/scripts/cder/daf/"
+    },
+    "nmpa": {
+      "cite": "国家药品监督管理局（NMPA）药品批准信息",
+      "id": "NMPA",
+      "url": "https://www.nmpa.gov.cn/"
+    },
+    "ctgov": {
+      "cite": "ClinicalTrials.gov 注册试验信息",
+      "id": "ClinicalTrials.gov",
+      "url": "https://clinicaltrials.gov/"
+    }
+  },
+  "nodes": [
+    {
+      "id": "PDCD1",
+      "label": "PD-1",
+      "kind": "receptor",
+      "group": "pd1",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "活化 T/NK/B 细胞；耗竭 T 细胞高表达",
+      "note": "抑制性共受体，胞内 ITIM/ITSM 招募 SHP-2，削弱 TCR/CD28 信号。配体为 PD-L1/PD-L2。",
+      "refs": [
+        "ghiotto2010",
+        "anderson2016"
+      ]
+    },
+    {
+      "id": "CTLA4",
+      "label": "CTLA-4",
+      "kind": "receptor",
+      "group": "ctla4",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "Treg 组成型高表达；活化 T 细胞诱导表达",
+      "note": "与 CD28 共享 CD80/CD86，但亲和力高约 10 倍；可通过 trans-endocytosis 清除配体。Treg 的 CTLA-4 是维持免疫耐受的关键。",
+      "refs": [
+        "vandermerwe1997",
+        "rudd2009"
+      ]
+    },
+    {
+      "id": "LAG3",
+      "label": "LAG-3",
+      "kind": "receptor",
+      "group": "lag3",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "活化 T/NK/Treg；耗竭 T 细胞",
+      "note": "CD4 同源分子，主要配体 MHC-II 与 FGL1；与 CD4 结合 MHC-II 的界面重叠，可竞争 CD4–MHC-II 互作。",
+      "refs": [
+        "huard1997",
+        "anderson2016"
+      ]
+    },
+    {
+      "id": "TIGIT",
+      "label": "TIGIT",
+      "kind": "receptor",
+      "group": "tigit",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/NK/Treg；耗竭 CD8 T 高表达",
+      "note": "ITIM/ITT 抑制性受体；与 CD226 竞争 CD155，也可结合 CD112、Nectin-4。TIGIT/CD226 表达比值影响 CD8 功能。",
+      "refs": [
+        "ge2021",
+        "yu2009"
+      ]
+    },
+    {
+      "id": "CD226",
+      "label": "CD226 (DNAM-1)",
+      "kind": "receptor",
+      "group": "tigit",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/NK/血小板",
+      "note": "活化性受体，与 TIGIT/CD96 共享 CD155；ITAM 样信号促进细胞毒与 IFN-γ。",
+      "refs": [
+        "ge2021"
+      ]
+    },
+    {
+      "id": "CD96",
+      "label": "CD96",
+      "kind": "receptor",
+      "group": "tigit",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/NK",
+      "note": "与 CD155 结合，NK 细胞以抑制性为主；与 TIGIT 协同限制早期 NK 反应。",
+      "refs": [
+        "ge2021"
+      ]
+    },
+    {
+      "id": "HAVCR2",
+      "label": "TIM-3",
+      "kind": "receptor",
+      "group": "tim3",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "耗竭 T/NK/DC；Treg",
+      "note": "配体包括 Galectin-9、CEACAM1、HMGB1 与磷脂酰丝氨酸；与 PD-1 共表达于耗竭 T 细胞，但单药阻断的临床获益有限。",
+      "refs": [
+        "anderson2016",
+        "das2017"
+      ]
+    },
+    {
+      "id": "KLRC1",
+      "label": "NKG2A",
+      "kind": "receptor",
+      "group": "nkg2a",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "NK/CD8 T；部分 Treg",
+      "note": "CD94/NKG2A 异二聚体识别 HLA-E，ITIM 抑制；肿瘤 HLA-E 过表达是 NK 逃逸机制之一。",
+      "refs": [
+        "braud1998"
+      ]
+    },
+    {
+      "id": "KLRC2",
+      "label": "NKG2C",
+      "kind": "receptor",
+      "group": "nkg2a",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "NK（适应性 NK）",
+      "note": "活化性 HLA-E 受体，与 NKG2A 竞争；CMV 扩增的适应性 NK 细胞常高表达。",
+      "refs": [
+        "braud1998"
+      ]
+    },
+    {
+      "id": "KLRK1",
+      "label": "NKG2D",
+      "kind": "receptor",
+      "group": "nkg2d",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "NK/活化 CD8 T/γδ T",
+      "note": "识别应激配体 MICA/B、ULBP；肿瘤可脱落 MICA 或下调配体逃逸。",
+      "refs": [
+        "raulet2003"
+      ]
+    },
+    {
+      "id": "TNFRSF9",
+      "label": "4-1BB",
+      "kind": "receptor",
+      "group": "tnfrsf",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "活化 T/NK/Treg",
+      "note": "共刺激受体，配体 4-1BBL；激动抗体常需 FcγR 交联或多聚化，单药活性与肝毒性限制并存。",
+      "refs": [
+        "croft2009",
+        "vinay2011"
+      ]
+    },
+    {
+      "id": "TNFRSF4",
+      "label": "OX40",
+      "kind": "receptor",
+      "group": "tnfrsf",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "活化 T/Treg",
+      "note": "共刺激受体，配体 OX40L；可增强效应 T 与记忆，但在 Treg 上可扩增 Treg，净效应依赖上下文与 Fc 设计。",
+      "refs": [
+        "croft2009",
+        "gramaglia1998"
+      ]
+    },
+    {
+      "id": "ICOS",
+      "label": "ICOS",
+      "kind": "receptor",
+      "group": "icos",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "活化 T/Tfh/Treg",
+      "note": "配体 ICOSL；PI3K 信号，支持 Tfh/生发中心与效应 T。ICOS 激动与 Treg 扩增的风险需平衡。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "CD28",
+      "label": "CD28",
+      "kind": "receptor",
+      "group": "cd28",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T 细胞组成型；部分 NK",
+      "note": "经典共刺激受体，配体 CD80/CD86；与 CTLA-4 竞争同一配体。CD28 超激动剂曾导致严重细胞因子风暴。",
+      "refs": [
+        "vandermerwe1997",
+        "rudd2009",
+        "suntharalingam2006"
+      ]
+    },
+    {
+      "id": "CD27",
+      "label": "CD27",
+      "kind": "receptor",
+      "group": "tnfrsf",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/B/NK",
+      "note": "配体 CD70；共刺激，支持 T 细胞记忆与 B 细胞分化。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFRSF18",
+      "label": "GITR",
+      "kind": "receptor",
+      "group": "tnfrsf",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/Treg",
+      "note": "配体 GITRL；激动可增强效应 T、削弱 Treg 抑制；Fc 效应可能清除 GITR 高表达 Treg。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "BTLA",
+      "label": "BTLA",
+      "kind": "receptor",
+      "group": "btla",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/B/DC",
+      "note": "配体 HVEM；ITIM 抑制。HVEM 同时是 LIGHT/CD160 的配体，构成双向信号网络。",
+      "refs": [
+        "sedy2005"
+      ]
+    },
+    {
+      "id": "VSIR",
+      "label": "VISTA",
+      "kind": "receptor",
+      "group": "vista",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/髓系/肿瘤",
+      "note": "配体 PSGL-1（酸性 pH 依赖）与 VSIG-3；兼具抑制与激活报道，机制仍有争议。",
+      "refs": [
+        "lines2014",
+        "nowak2017",
+        "johnston2019"
+      ]
+    },
+    {
+      "id": "SIRPA",
+      "label": "SIRPα",
+      "kind": "receptor",
+      "group": "cd47",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "巨噬/DC/中性粒",
+      "note": "配体 CD47；ITIM 招募 SHP-1/2，抑制吞噬。CD47/SIRPα 是「别吃我」轴的核心。",
+      "refs": [
+        "hatherley2007",
+        "weiskopf2013"
+      ]
+    },
+    {
+      "id": "CD40",
+      "label": "CD40",
+      "kind": "receptor",
+      "group": "cd40",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/B/内皮",
+      "note": "配体 CD40L；激活 DC 成熟、B 细胞与抗原呈递。激动抗体需交联，系统给药有毒性。",
+      "refs": [
+        "croft2009",
+        "vonderheide2013"
+      ]
+    },
+    {
+      "id": "CD4",
+      "label": "CD4",
+      "kind": "receptor",
+      "group": "lag3",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "CD4 T/单核/DC",
+      "note": "MHC-II 共受体，稳定 TCR–MHC-II 互作；与 LAG-3 竞争 MHC-II 的结合界面。",
+      "refs": [
+        "ming2024"
+      ]
+    },
+    {
+      "id": "CD274",
+      "label": "PD-L1",
+      "kind": "ligand",
+      "group": "pd1",
+      "modules": [
+        "checkpoint",
+        "cytokine"
+      ],
+      "expr": "肿瘤/APC/基质；IFN-γ 诱导",
+      "note": "PD-1 的主要配体，也可结合 CD80；存在膜型、可溶型与外泌体型。肿瘤 PD-L1 可为适应性（IFN-γ 诱导）或组成型。",
+      "refs": [
+        "ghiotto2010",
+        "ge2021"
+      ]
+    },
+    {
+      "id": "PDCD1LG2",
+      "label": "PD-L2",
+      "kind": "ligand",
+      "group": "pd1",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/肿瘤；IL-4/IL-13 诱导",
+      "note": "结合 PD-1，与 PD-L1 结合动力学不同；抗 PD-L1 不阻断 PD-L2，是两类药物差异之一。",
+      "refs": [
+        "ghiotto2010"
+      ]
+    },
+    {
+      "id": "CD80",
+      "label": "CD80 (B7-1)",
+      "kind": "ligand",
+      "group": "cd28",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC（活化）",
+      "note": "结合 CD28/CTLA-4，也可与 PD-L1 结合；CTLA-4 亲和力显著高于 CD28。",
+      "refs": [
+        "vandermerwe1997"
+      ]
+    },
+    {
+      "id": "CD86",
+      "label": "CD86 (B7-2)",
+      "kind": "ligand",
+      "group": "cd28",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC（组成型/早期活化）",
+      "note": "结合 CD28/CTLA-4；单体亲和力低于 CD80，但表达更早，是初始 T 细胞启动的重要配体。",
+      "refs": [
+        "vandermerwe1997",
+        "rudd2009"
+      ]
+    },
+    {
+      "id": "MHC2",
+      "label": "MHC-II",
+      "kind": "ligand",
+      "group": "lag3",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/肿瘤（部分）",
+      "note": "LAG-3 与 CD4 的重叠结合界面；LAG-3 以二聚体提高亲合力，单体 pMHC-II 亲和力仅 2–14 µM。",
+      "refs": [
+        "huard1997",
+        "ming2024",
+        "maruhashi2022"
+      ]
+    },
+    {
+      "id": "FGL1",
+      "label": "FGL1",
+      "kind": "ligand",
+      "group": "lag3",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "肝细胞/肿瘤",
+      "note": "LAG-3 的主要独立配体，结合表位不同于 MHC-II；肿瘤 FGL1 升高与 LAG-3 依赖的免疫逃逸相关。",
+      "refs": [
+        "wang2019"
+      ]
+    },
+    {
+      "id": "LGALS9",
+      "label": "Galectin-9",
+      "kind": "ligand",
+      "group": "tim3",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "肿瘤/基质/免疫细胞",
+      "note": "TIM-3 配体；多价半乳糖凝集素，可诱导 T 细胞凋亡或功能耗竭。",
+      "refs": [
+        "das2017"
+      ]
+    },
+    {
+      "id": "CEACAM1",
+      "label": "CEACAM1",
+      "kind": "ligand",
+      "group": "tim3",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "T/肿瘤/内皮",
+      "note": "TIM-3 配体；也可与 TIM-3 形成顺式/反式复合物，调节 T 细胞抑制。",
+      "refs": [
+        "das2017"
+      ]
+    },
+    {
+      "id": "PVR",
+      "label": "CD155 (PVR)",
+      "kind": "ligand",
+      "group": "tigit",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "肿瘤/APC/内皮",
+      "note": "TIGIT/CD226/CD96 的共享配体；TIGIT 亲和力最高（1–3 nM），CD226 约 100–200 nM。",
+      "refs": [
+        "ge2021",
+        "yu2009"
+      ]
+    },
+    {
+      "id": "NECTIN2",
+      "label": "CD112 (Nectin-2)",
+      "kind": "ligand",
+      "group": "tigit",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "肿瘤/APC",
+      "note": "结合 TIGIT/CD226/CD112R，亲和力差异大；TIGIT–CD112 极弱，功能贡献通常低于 CD155。",
+      "refs": [
+        "ge2021"
+      ]
+    },
+    {
+      "id": "NECTIN4",
+      "label": "Nectin-4",
+      "kind": "ligand",
+      "group": "tigit",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "肿瘤（尿路上皮等）",
+      "note": "TIGIT 配体；也是 ADC（恩诺单抗）的靶抗原，治疗策略需考虑与 TIGIT 轴的交互。",
+      "refs": [
+        "ge2021"
+      ]
+    },
+    {
+      "id": "HLAE",
+      "label": "HLA-E",
+      "kind": "ligand",
+      "group": "nkg2a",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "广泛；肿瘤常过表达",
+      "note": "非经典 MHC-I，呈递 MHC-I leader peptide；NKG2A 抑制、NKG2C 激活，是 NK 教育的重要配体。",
+      "refs": [
+        "braud1998"
+      ]
+    },
+    {
+      "id": "MICA",
+      "label": "MICA/B",
+      "kind": "ligand",
+      "group": "nkg2d",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "肿瘤/应激/感染",
+      "note": "NKG2D 配体；肿瘤可通过脱落或下调 MICA/B 逃逸 NKG2D 识别。",
+      "refs": [
+        "raulet2003"
+      ]
+    },
+    {
+      "id": "TNFSF9",
+      "label": "4-1BBL",
+      "kind": "ligand",
+      "group": "tnfrsf",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/肿瘤",
+      "note": "三聚体 TNF 超家族配体；膜型 4-1BBL 的交联能力通常强于可溶型。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFSF4",
+      "label": "OX40L",
+      "kind": "ligand",
+      "group": "tnfrsf",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/内皮",
+      "note": "与 OX40 结合，参与 T 细胞共刺激与记忆形成。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "ICOSLG",
+      "label": "ICOSL (B7-H2)",
+      "kind": "ligand",
+      "group": "icos",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/基质",
+      "note": "结合 ICOS；也可低亲和力结合 CD28/CTLA-4，是 B7 家族共享配体的又一例。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "CD70",
+      "label": "CD70",
+      "kind": "ligand",
+      "group": "tnfrsf",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/肿瘤",
+      "note": "结合 CD27；异常高表达可驱动 T 细胞耗竭或淋巴瘤发生。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "TNFSF18",
+      "label": "GITRL",
+      "kind": "ligand",
+      "group": "tnfrsf",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/内皮",
+      "note": "结合 GITR；参与 Treg 与效应 T 的平衡。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "CD40LG",
+      "label": "CD40L (CD154)",
+      "kind": "ligand",
+      "group": "cd40",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "活化 T/血小板",
+      "note": "结合 CD40；CD40L 缺陷导致高 IgM 综合征，说明该轴对人类免疫至关重要。",
+      "refs": [
+        "croft2009"
+      ]
+    },
+    {
+      "id": "SELPLG",
+      "label": "PSGL-1",
+      "kind": "ligand",
+      "group": "vista",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "髓系/T/血小板",
+      "note": "VISTA 的酸性 pH 选择性配体；同时是 P-selectin 配体，参与白细胞滚动。",
+      "refs": [
+        "johnston2019"
+      ]
+    },
+    {
+      "id": "CD47",
+      "label": "CD47",
+      "kind": "ligand",
+      "group": "cd47",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "广泛表达；红细胞/肿瘤高表达",
+      "note": "「别吃我」信号；结合 SIRPα 抑制巨噬细胞吞噬，也结合 TSP-1。红细胞高表达导致抗 CD47 药物贫血风险。",
+      "refs": [
+        "hatherley2007",
+        "weiskopf2013"
+      ]
+    },
+    {
+      "id": "TNFRSF14",
+      "label": "HVEM",
+      "kind": "ligand",
+      "group": "btla",
+      "modules": [
+        "checkpoint"
+      ],
+      "expr": "APC/T",
+      "note": "结合 BTLA、CD160 与 LIGHT；既可传递抑制也可传递激活信号，方向取决于配体与细胞背景。",
+      "refs": [
+        "sedy2005"
+      ]
+    },
+    {
+      "id": "TEFF",
+      "label": "CD8+ T 杀伤",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "checkpoint",
+        "cytokine"
+      ],
+      "expr": "细胞毒 T 细胞",
+      "note": "通过 TCR、共刺激/共抑制信号整合决定增殖、细胞因子与杀伤。PD-1、CTLA-4、LAG-3、TIGIT、TIM-3 等负信号会提高激活阈值。",
+      "refs": [
+        "sharpe2002",
+        "anderson2016"
+      ]
+    },
+    {
+      "id": "NK",
+      "label": "NK 细胞杀伤",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "checkpoint",
+        "cytokine"
+      ],
+      "expr": "固有免疫淋巴细胞",
+      "note": "整合活化性（NKG2D、CD226、NKG2C）与抑制性（NKG2A、KIR、CD96）信号；ADCC 依赖 FcγRIIIa。",
+      "refs": [
+        "braud1998",
+        "ge2021"
+      ]
+    },
+    {
+      "id": "TREG",
+      "label": "Treg 抑制",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "checkpoint",
+        "cytokine"
+      ],
+      "expr": "Foxp3+ CD4 T",
+      "note": "通过 CTLA-4、IL-2Rα、IL-10/TGF-β 等限制自身免疫；肿瘤内 Treg 富集是免疫治疗耐药机制之一。",
+      "refs": [
+        "rudd2009",
+        "malek2008"
+      ]
+    },
+    {
+      "id": "MAC",
+      "label": "巨噬细胞吞噬",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "checkpoint",
+        "cytokine"
+      ],
+      "expr": "肿瘤相关巨噬细胞/组织巨噬",
+      "note": "FcγR 介导的 ADCP 与吞噬；CD47/SIRPα 提供抑制性「别吃我」信号。M1/M2 极化受 IFN-γ、IL-10、TGF-β 调控。",
+      "refs": [
+        "weiskopf2013",
+        "bradley2008"
+      ]
+    },
+    {
+      "id": "DC",
+      "label": "DC 成熟/抗原呈递",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "checkpoint",
+        "cytokine"
+      ],
+      "expr": "树突状细胞",
+      "note": "CD40/CD40L、TLR 与细胞因子决定 DC 成熟；成熟 DC 上调共刺激分子并启动 T 细胞。",
+      "refs": [
+        "croft2009",
+        "vonderheide2013"
+      ]
+    },
+    {
+      "id": "IL2",
+      "label": "IL-2",
+      "kind": "cytokine",
+      "group": "il2",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "活化 CD4 T 为主；部分 CD8/NK",
+      "note": "低剂量优先结合高亲和力 IL-2Rαβγ 扩增 Treg；高剂量通过 βγ 激活效应 T/NK。半衰期短，需高频或工程化。",
+      "refs": [
+        "malek2008",
+        "waldmann2006"
+      ]
+    },
+    {
+      "id": "IL2R_HIGH",
+      "label": "IL-2Rαβγ",
+      "kind": "complex",
+      "group": "il2",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Treg/活化 T",
+      "note": "高亲和力三聚体受体（KD 约 10 pM）；CD25（IL-2Rα）是限速亚基。",
+      "refs": [
+        "malek2008"
+      ]
+    },
+    {
+      "id": "IL2R_INT",
+      "label": "IL-2Rβγ",
+      "kind": "complex",
+      "group": "il2",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "NK/静息 T/记忆 T",
+      "note": "中亲和力二聚体（KD 约 1 nM）；不依赖 CD25，是效应/NK 激活的主要通道。",
+      "refs": [
+        "malek2008",
+        "waldmann2006"
+      ]
+    },
+    {
+      "id": "IL15",
+      "label": "IL-15",
+      "kind": "cytokine",
+      "group": "il15",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "APC/基质/多种组织",
+      "note": "以 IL-15Rα 反式呈递给邻近 NK/CD8 的 βγ 受体；支持 NK 与记忆 CD8，不显著扩增 Treg。",
+      "refs": [
+        "waldmann2006"
+      ]
+    },
+    {
+      "id": "IL15R",
+      "label": "IL-15Rα/βγ",
+      "kind": "complex",
+      "group": "il15",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "APC 反式呈递；NK/CD8 接收",
+      "note": "反式呈递复合物，高亲和力（KD 约 10 pM）；可溶性 IL-15/IL-15Rα 复合物是药物开发形式。",
+      "refs": [
+        "waldmann2006"
+      ]
+    },
+    {
+      "id": "TGFB1",
+      "label": "TGF-β1",
+      "kind": "cytokine",
+      "group": "tgf",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "广泛；肿瘤/基质/Treg",
+      "note": "以潜伏复合物分泌，需整合素/蛋白酶激活；抑制效应 T/NK、促进 Treg 与纤维化，是免疫排斥与基质屏障的核心。",
+      "refs": [
+        "massague2012"
+      ]
+    },
+    {
+      "id": "TGFBR",
+      "label": "TGFBR1/2",
+      "kind": "complex",
+      "group": "tgf",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "广泛",
+      "note": "丝氨酸/苏氨酸激酶受体；TGFBRII 招募并磷酸化 TGFBRI，激活 SMAD2/3，也有非 SMAD 分支。",
+      "refs": [
+        "massague2012"
+      ]
+    },
+    {
+      "id": "IL10",
+      "label": "IL-10",
+      "kind": "cytokine",
+      "group": "il10",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Treg/巨噬/DC/肿瘤",
+      "note": "强免疫抑制因子；IL-10R→JAK1/TYK2→STAT3，抑制 APC 与效应 T。",
+      "refs": [
+        "saraiva2010"
+      ]
+    },
+    {
+      "id": "IL10R",
+      "label": "IL-10R1/2",
+      "kind": "complex",
+      "group": "il10",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "造血细胞为主",
+      "note": "异四聚体受体；信号经 STAT3，是维持免疫抑制微环境的重要通路。",
+      "refs": [
+        "saraiva2010"
+      ]
+    },
+    {
+      "id": "IL6",
+      "label": "IL-6",
+      "kind": "cytokine",
+      "group": "il6",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "巨噬/基质/肿瘤",
+      "note": "经典信号（膜型 IL-6R）与反式信号（sIL-6R）并存；驱动急性期反应、Th17 与肿瘤炎症。",
+      "refs": [
+        "kishimoto2005"
+      ]
+    },
+    {
+      "id": "IL6R",
+      "label": "IL-6R/gp130",
+      "kind": "complex",
+      "group": "il6",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "肝/免疫细胞；gp130 广泛",
+      "note": "gp130 同源二聚体是共同信号亚基；反式信号可激活不表达膜型 IL-6R 的细胞。",
+      "refs": [
+        "kishimoto2005"
+      ]
+    },
+    {
+      "id": "IL1B",
+      "label": "IL-1β",
+      "kind": "cytokine",
+      "group": "il1",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "巨噬/DC/中性粒",
+      "note": "NLRP3 炎症小体加工成熟；强促炎，激活内皮与 Th17。",
+      "refs": [
+        "dinarello2009"
+      ]
+    },
+    {
+      "id": "IL1RN",
+      "label": "IL-1Ra",
+      "kind": "cytokine",
+      "group": "il1",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "巨噬/上皮；重组药物",
+      "note": "天然竞争性拮抗剂，结合 IL-1R1 但不招募 IL-1RAcP，不触发信号。是「竞争性阻断」的经典范例。",
+      "refs": [
+        "dinarello2009"
+      ]
+    },
+    {
+      "id": "IL1R1",
+      "label": "IL-1R1",
+      "kind": "receptor",
+      "group": "il1",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "内皮/上皮/免疫细胞",
+      "note": "IL-1 受体；需 IL-1RAcP 共受体形成信号复合物。",
+      "refs": [
+        "dinarello2009"
+      ]
+    },
+    {
+      "id": "IL12",
+      "label": "IL-12 (p35/p40)",
+      "kind": "cytokine",
+      "group": "il12",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "DC/巨噬",
+      "note": "驱动 Th1、NK 与 IFN-γ；IL-12Rβ1/β2。与 IL-23 共享 p40 亚基。",
+      "refs": [
+        "teng2015"
+      ]
+    },
+    {
+      "id": "IL23",
+      "label": "IL-23 (p19/p40)",
+      "kind": "cytokine",
+      "group": "il12",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "DC/巨噬",
+      "note": "驱动 Th17/IL-17 与组织炎症；IL-23R/IL-12Rβ1。",
+      "refs": [
+        "teng2015"
+      ]
+    },
+    {
+      "id": "IL12R",
+      "label": "IL-12Rβ1/β2",
+      "kind": "complex",
+      "group": "il12",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/NK",
+      "note": "IL-12 高亲和力受体；β2 链决定 IL-12 选择性。",
+      "refs": [
+        "teng2015"
+      ]
+    },
+    {
+      "id": "IL23R",
+      "label": "IL-23R/IL-12Rβ1",
+      "kind": "complex",
+      "group": "il12",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Th17/ILC3/γδ T",
+      "note": "IL-23 受体复合物；驱动 Th17 存活与 IL-17 产生。",
+      "refs": [
+        "teng2015"
+      ]
+    },
+    {
+      "id": "IL4",
+      "label": "IL-4",
+      "kind": "cytokine",
+      "group": "il4",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Th2/嗜碱/肥大细胞",
+      "note": "I 型受体（IL-4Rα/γc）与 II 型受体（IL-4Rα/IL-13Rα1）并存；驱动 Th2、IgE 与 M2 极化。",
+      "refs": [
+        "junttila2008"
+      ]
+    },
+    {
+      "id": "IL13",
+      "label": "IL-13",
+      "kind": "cytokine",
+      "group": "il4",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Th2/ILC2/嗜碱",
+      "note": "与 IL-4 共享 IL-4Rα/IL-13Rα1；IL-13Rα2 为高亲和力诱饵受体，可负反馈。",
+      "refs": [
+        "junttila2008"
+      ]
+    },
+    {
+      "id": "IL4R",
+      "label": "IL-4Rα",
+      "kind": "complex",
+      "group": "il4",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "广泛",
+      "note": "IL-4/IL-13 的共用亚基；dupilumab 阻断该亚基可同时削弱两条通路。",
+      "refs": [
+        "junttila2008"
+      ]
+    },
+    {
+      "id": "IL13R",
+      "label": "IL-13Rα1/IL-4Rα",
+      "kind": "complex",
+      "group": "il4",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "上皮/成纤维/免疫细胞",
+      "note": "II 型 IL-4/IL-13 受体，是 IL-13 在多种细胞中的主要信号入口。",
+      "refs": [
+        "junttila2008"
+      ]
+    },
+    {
+      "id": "IL13RA2",
+      "label": "IL-13Rα2",
+      "kind": "receptor",
+      "group": "il4",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "肿瘤/纤维化组织",
+      "note": "高亲和力诱饵受体，主要隔离 IL-13；也可被用于肿瘤靶向递送。",
+      "refs": [
+        "junttila2008"
+      ]
+    },
+    {
+      "id": "IL17A",
+      "label": "IL-17A",
+      "kind": "cytokine",
+      "group": "il17",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Th17/γδ T/ILC3",
+      "note": "招募中性粒、诱导抗菌肽与基质炎症；IL-17A/F 可形成异二聚体。",
+      "refs": [
+        "gaffen2009"
+      ]
+    },
+    {
+      "id": "IL17R",
+      "label": "IL-17RA/RC",
+      "kind": "complex",
+      "group": "il17",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "上皮/成纤维/免疫细胞",
+      "note": "IL-17 受体复合物；RA 是共享亚基，RC 决定 IL-17A/F 偏好。",
+      "refs": [
+        "gaffen2009"
+      ]
+    },
+    {
+      "id": "IL5",
+      "label": "IL-5",
+      "kind": "cytokine",
+      "group": "il5",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Th2/ILC2",
+      "note": "嗜酸性粒细胞存活、分化与脱颗粒的关键因子；IL-5Rα/βc。",
+      "refs": [
+        "takatsu2008"
+      ]
+    },
+    {
+      "id": "IL5R",
+      "label": "IL-5Rα",
+      "kind": "receptor",
+      "group": "il5",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "嗜酸性粒细胞/嗜碱",
+      "note": "IL-5 特异性受体；benralizumab 结合后通过 Fc 效应清除嗜酸粒。",
+      "refs": [
+        "takatsu2008"
+      ]
+    },
+    {
+      "id": "IFNA",
+      "label": "IFN-α",
+      "kind": "cytokine",
+      "group": "ifn",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "pDC/病毒感染细胞",
+      "note": "I 型干扰素；IFNAR1/2→JAK1/TYK2→STAT1/2，诱导抗病毒状态与 MHC-I。",
+      "refs": [
+        "stark1998"
+      ]
+    },
+    {
+      "id": "IFNG",
+      "label": "IFN-γ",
+      "kind": "cytokine",
+      "group": "ifn",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "活化 T/NK/ILC1",
+      "note": "II 型干扰素；IFNGR1/2→JAK1/2→STAT1，激活巨噬细胞、上调 MHC 与 PD-L1。",
+      "refs": [
+        "stark1998"
+      ]
+    },
+    {
+      "id": "IFNAR",
+      "label": "IFNAR1/2",
+      "kind": "complex",
+      "group": "ifn",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "广泛",
+      "note": "I 型干扰素受体；几乎所有有核细胞表达。",
+      "refs": [
+        "stark1998"
+      ]
+    },
+    {
+      "id": "IFNGR",
+      "label": "IFNGR1/2",
+      "kind": "complex",
+      "group": "ifn",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "广泛；巨噬高表达",
+      "note": "II 型干扰素受体；JAK1/JAK2 与 STAT1 是核心信号节点。",
+      "refs": [
+        "stark1998"
+      ]
+    },
+    {
+      "id": "TNF",
+      "label": "TNF",
+      "kind": "cytokine",
+      "group": "tnf",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "巨噬/T/NK/基质",
+      "note": "三聚体；TNFR1 促炎/凋亡，TNFR2 免疫调节与 Treg 支持。可溶型与膜型 TNF 的受体偏好不同。",
+      "refs": [
+        "bradley2008"
+      ]
+    },
+    {
+      "id": "TNFR1",
+      "label": "TNFR1",
+      "kind": "receptor",
+      "group": "tnf",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "广泛",
+      "note": "TNFR1 含死亡结构域，驱动 NF-κB、凋亡与炎症；是类风湿等疾病的重点阻断节点。",
+      "refs": [
+        "bradley2008"
+      ]
+    },
+    {
+      "id": "TNFR2",
+      "label": "TNFR2",
+      "kind": "receptor",
+      "group": "tnf",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "Treg/内皮/免疫细胞",
+      "note": "TNFR2 支持 Treg 与组织修复；完全阻断 TNF 可能同时削弱调节性信号。",
+      "refs": [
+        "bradley2008"
+      ]
+    },
+    {
+      "id": "CXCL12",
+      "label": "CXCL12",
+      "kind": "cytokine",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "骨髓基质/肿瘤",
+      "note": "组成型趋化因子；CXCR4 轴驱动造血干细胞归巢、免疫细胞定位与肿瘤转移。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCR4",
+      "label": "CXCR4",
+      "kind": "receptor",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "造血细胞/肿瘤",
+      "note": "CXCL12 受体；也是 HIV 共受体之一。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CCL2",
+      "label": "CCL2",
+      "kind": "cytokine",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "肿瘤/基质/髓系",
+      "note": "CCR2 配体；招募单核细胞与 TAM，与免疫抑制和转移相关。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CCR2",
+      "label": "CCR2",
+      "kind": "receptor",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "单核/巨噬/未成熟 DC",
+      "note": "CCL2/CCR2 轴是单核细胞动员的主要通道。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCL10",
+      "label": "CXCL10 (IP-10)",
+      "kind": "cytokine",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "IFN-γ 诱导的基质/髓系",
+      "note": "CXCR3 配体；招募效应 T/NK，也参与 T 细胞滞留与耗竭微环境。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCR3",
+      "label": "CXCR3",
+      "kind": "receptor",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "活化 T/NK/ILC",
+      "note": "CXCL9/10/11 受体；效应 T 浸润的关键趋化轴。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CCL5",
+      "label": "CCL5",
+      "kind": "cytokine",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/NK/血小板/肿瘤",
+      "note": "CCR5 配体；招募 T/NK/单核，也参与免疫突触与肿瘤侵袭。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CCR5",
+      "label": "CCR5",
+      "kind": "receptor",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/单核/巨噬/DC",
+      "note": "CCL3/4/5 受体；也是 HIV 共受体，maraviroc 为变构拮抗剂。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCL8",
+      "label": "CXCL8 (IL-8)",
+      "kind": "cytokine",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "肿瘤/巨噬/内皮",
+      "note": "CXCR1/2 配体；招募中性粒细胞，促进血管生成与免疫抑制。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "CXCR2",
+      "label": "CXCR1/2",
+      "kind": "receptor",
+      "group": "chemokine",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "中性粒/内皮/肿瘤",
+      "note": "CXCL8 受体；中性粒细胞募集与 NET 形成相关。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "TH17",
+      "label": "Th17 炎症",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "CD4 Th17/γδ T/ILC3",
+      "note": "IL-23/IL-1/IL-6 驱动，分泌 IL-17/IL-22；参与屏障免疫与自身免疫。",
+      "refs": [
+        "gaffen2009",
+        "teng2015"
+      ]
+    },
+    {
+      "id": "TH2",
+      "label": "Th2 反应",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "CD4 Th2/ILC2",
+      "note": "IL-4/IL-13 驱动，支持 IgE、嗜酸粒与黏液分泌；过敏与寄生虫免疫核心。",
+      "refs": [
+        "junttila2008"
+      ]
+    },
+    {
+      "id": "EOS",
+      "label": "嗜酸性粒细胞",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "骨髓/血/组织",
+      "note": "IL-5 依赖；脱颗粒与组织损伤，是重度嗜酸哮喘的靶细胞。",
+      "refs": [
+        "takatsu2008"
+      ]
+    },
+    {
+      "id": "INFLAM",
+      "label": "炎症/急性期",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "组织/肝/髓系",
+      "note": "IL-6、IL-1、TNF、IL-17 汇聚的效应状态；CRP、SAA 与血管通透性升高。",
+      "refs": [
+        "kishimoto2005",
+        "bradley2008"
+      ]
+    },
+    {
+      "id": "ANTIVIRAL",
+      "label": "抗病毒状态",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "有核细胞",
+      "note": "I/II 型干扰素诱导 ISG、MHC-I 与抗原呈递；过度激活导致自身炎症。",
+      "refs": [
+        "stark1998"
+      ]
+    },
+    {
+      "id": "MIGRATION",
+      "label": "免疫细胞迁移/浸润",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "T/NK/髓系",
+      "note": "趋化因子–受体轴决定细胞定位；肿瘤可通过趋化因子谱改变免疫浸润表型。",
+      "refs": [
+        "griffith2014"
+      ]
+    },
+    {
+      "id": "FIBROSIS",
+      "label": "纤维化/组织重塑",
+      "kind": "cell",
+      "group": "cell",
+      "modules": [
+        "cytokine"
+      ],
+      "expr": "成纤维/肌成纤维/基质",
+      "note": "TGF-β 驱动 ECM 沉积与上皮–间质转化；也是免疫排斥的物理屏障。",
+      "refs": [
+        "massague2012"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "CD274",
+      "target": "PDCD1",
+      "rel": "bind",
+      "label": "PD-L1 → PD-1",
+      "affinity": "表观 KD ≈ 10 nM（二价 SPR）；单体 2–8 µM",
+      "assay": "SPR，融合蛋白/单体差异大",
+      "evidence": "A",
+      "note": "PD-1/PD-L1 是肿瘤免疫逃逸的核心轴；二价融合蛋白与单体测得的 KD 可相差近三个数量级，横向比较必须看测定体系。",
+      "refs": [
+        "ghiotto2010"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "PDCD1LG2",
+      "target": "PDCD1",
+      "rel": "bind",
+      "label": "PD-L2 → PD-1",
+      "affinity": "KD ≈ 11.3 nM（二价 SPR）",
+      "assay": "SPR",
+      "evidence": "A",
+      "note": "PD-L2 与 PD-1 的结合动力学较 PD-L1 简单；抗 PD-L1 不阻断 PD-L2，是两类药物机制差异之一。",
+      "refs": [
+        "ghiotto2010"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD80",
+      "target": "CD28",
+      "rel": "bind",
+      "label": "CD80 → CD28",
+      "affinity": "KD ≈ 4 µM（单体，37°C）",
+      "assay": "SPR，单体 CD80",
+      "evidence": "A",
+      "note": "CD28 与 CD80 的结合弱且解离极快，适合动态扫描 APC。",
+      "refs": [
+        "vandermerwe1997"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD80",
+      "target": "CTLA4",
+      "rel": "bind",
+      "label": "CD80 → CTLA-4",
+      "affinity": "KD ≈ 0.42 µM（单体，37°C）",
+      "assay": "SPR，单体 CD80",
+      "evidence": "A",
+      "note": "CTLA-4 对 CD80 的亲和力约为 CD28 的 10 倍，因此在竞争中占优。",
+      "refs": [
+        "vandermerwe1997"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD86",
+      "target": "CD28",
+      "rel": "bind",
+      "label": "CD86 → CD28",
+      "affinity": "KD ≈ 20 µM（单体）",
+      "assay": "SPR",
+      "evidence": "A",
+      "note": "CD86 与 CD28 的亲和力低于 CD80，但表达更早，参与初始 T 细胞启动。",
+      "refs": [
+        "vandermerwe1997"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD86",
+      "target": "CTLA4",
+      "rel": "bind",
+      "label": "CD86 → CTLA-4",
+      "affinity": "KD ≈ 2 µM（单体）",
+      "assay": "SPR",
+      "evidence": "A",
+      "note": "CTLA-4 对 CD86 的亲和力也高于 CD28，但低于 CD80/CTLA-4 的 dimer–dimer 亲合力。",
+      "refs": [
+        "vandermerwe1997"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD274",
+      "target": "CD80",
+      "rel": "bind",
+      "label": "PD-L1 → CD80",
+      "affinity": "KD ≈ 7.2 nM（SPR，CD80 固定）",
+      "assay": "SPR",
+      "evidence": "A",
+      "note": "PD-L1 也能结合 CD80，提示 PD-L1/PD-1 与 CD80/CD28 两个轴存在交叉调控，可能解释抗 PD-1 与抗 PD-L1 的疗效差异。",
+      "refs": [
+        "ghiotto2010"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "MHC2",
+      "target": "LAG3",
+      "rel": "bind",
+      "label": "MHC-II → LAG-3",
+      "affinity": "LAG-3-Ig 二价 KD ≈ 60 nM；单体 pMHC-II 2.8–7.4 µM",
+      "assay": "细胞黏附/SPR/BLI",
+      "evidence": "A",
+      "note": "LAG-3 通过二聚化提高对 MHC-II 的亲合力；单体亲和力低，说明膜上聚集与寡聚化对功能很重要。",
+      "refs": [
+        "huard1997",
+        "ming2024",
+        "maruhashi2022"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "FGL1",
+      "target": "LAG3",
+      "rel": "bind",
+      "label": "FGL1 → LAG-3",
+      "affinity": "定性结合（独立于 MHC-II）",
+      "assay": "蛋白结合/功能",
+      "evidence": "B",
+      "note": "FGL1 是 LAG-3 的主要独立配体，肿瘤 FGL1 升高可介导 LAG-3 依赖的免疫逃逸。",
+      "refs": [
+        "wang2019"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "LGALS9",
+      "target": "HAVCR2",
+      "rel": "bind",
+      "label": "Galectin-9 → TIM-3",
+      "affinity": "多价结合（nM–µM 级，依构建）",
+      "assay": "蛋白结合/功能",
+      "evidence": "B",
+      "note": "Galectin-9 多价性使其亲和力难以用单体 KD 描述；可诱导 TIM-3+ T 细胞凋亡或耗竭。",
+      "refs": [
+        "das2017"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CEACAM1",
+      "target": "HAVCR2",
+      "rel": "bind",
+      "label": "CEACAM1 → TIM-3",
+      "affinity": "定性结合",
+      "assay": "细胞/蛋白结合",
+      "evidence": "B",
+      "note": "CEACAM1 与 TIM-3 的顺式/反式作用可调节 T 细胞抑制，具体界面仍有争议。",
+      "refs": [
+        "das2017"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "PVR",
+      "target": "TIGIT",
+      "rel": "bind",
+      "label": "CD155 → TIGIT",
+      "affinity": "KD ≈ 1–3 nM",
+      "assay": "SPR/细胞结合",
+      "evidence": "A",
+      "note": "TIGIT 对 CD155 的亲和力约为 CD226 的 40–100 倍，是竞争性抑制的基础。",
+      "refs": [
+        "ge2021",
+        "yu2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "PVR",
+      "target": "CD226",
+      "rel": "bind",
+      "label": "CD155 → CD226",
+      "affinity": "KD ≈ 114–199 nM",
+      "assay": "SPR",
+      "evidence": "A",
+      "note": "CD226 是活化性受体；当 TIGIT 高表达时，CD226 被竞争性挤出 CD155 结合位点。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "PVR",
+      "target": "CD96",
+      "rel": "bind",
+      "label": "CD155 → CD96",
+      "affinity": "KD ≈ 38 nM",
+      "assay": "SPR",
+      "evidence": "A",
+      "note": "CD96 与 CD155 结合，NK 细胞以抑制性为主，与 TIGIT 协同限制早期 NK 反应。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "NECTIN2",
+      "target": "TIGIT",
+      "rel": "bind",
+      "label": "CD112 → TIGIT",
+      "affinity": "极弱/不可测",
+      "assay": "SPR",
+      "evidence": "B",
+      "note": "TIGIT–CD112 亲和力极低，功能贡献通常小于 CD155；不同肿瘤的配体表达谱会影响 TIGIT 阻断效果。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "NECTIN2",
+      "target": "CD226",
+      "rel": "bind",
+      "label": "CD112 → CD226",
+      "affinity": "KD ≈ 0.31–8.97 µM",
+      "assay": "SPR",
+      "evidence": "A",
+      "note": "CD112 是 CD226 的低亲和力配体；在 CD155 缺失时可能成为替代通路。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "NECTIN4",
+      "target": "TIGIT",
+      "rel": "bind",
+      "label": "Nectin-4 → TIGIT",
+      "affinity": "nM 级（重组蛋白）",
+      "assay": "SPR/细胞结合",
+      "evidence": "B",
+      "note": "Nectin-4 只结合 TIGIT，不结合 CD226/CD96；与 Nectin-4 ADC 联用时需考虑该轴。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "HLAE",
+      "target": "KLRC1",
+      "rel": "bind",
+      "label": "HLA-E → NKG2A",
+      "affinity": "定性结合（CD94/NKG2A）",
+      "assay": "细胞/蛋白结合",
+      "evidence": "A",
+      "note": "HLA-E 在肿瘤中常过表达；NKG2A 阻断可恢复 NK 与 CD8 的杀伤，但 HLA-E 缺失肿瘤可能不受益。",
+      "refs": [
+        "braud1998"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "HLAE",
+      "target": "KLRC2",
+      "rel": "bind",
+      "label": "HLA-E → NKG2C",
+      "affinity": "定性结合",
+      "assay": "细胞/蛋白结合",
+      "evidence": "A",
+      "note": "NKG2C 是活化性受体，与 NKG2A 竞争 HLA-E；CMV 扩增的适应性 NK 常高表达 NKG2C。",
+      "refs": [
+        "braud1998"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "MICA",
+      "target": "KLRK1",
+      "rel": "bind",
+      "label": "MICA/B → NKG2D",
+      "affinity": "nM–µM 级（依配体）",
+      "assay": "SPR/细胞结合",
+      "evidence": "A",
+      "note": "NKG2D 识别应激配体；肿瘤脱落 MICA 或下调配体是 NK 逃逸机制。",
+      "refs": [
+        "raulet2003"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFSF9",
+      "target": "TNFRSF9",
+      "rel": "bind",
+      "label": "4-1BBL → 4-1BB",
+      "affinity": "定性结合（三聚体/膜型）",
+      "assay": "细胞/功能",
+      "evidence": "A",
+      "note": "4-1BB 激动依赖受体聚集；可溶型 4-1BBL 或单体激动抗体往往活性不足。",
+      "refs": [
+        "croft2009",
+        "vinay2011"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFSF4",
+      "target": "TNFRSF4",
+      "rel": "bind",
+      "label": "OX40L → OX40",
+      "affinity": "定性结合（三聚体）",
+      "assay": "细胞/功能",
+      "evidence": "A",
+      "note": "OX40L 主要表达于活化 APC；OX40 信号可增强效应与记忆 T。",
+      "refs": [
+        "croft2009",
+        "gramaglia1998"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "ICOSLG",
+      "target": "ICOS",
+      "rel": "bind",
+      "label": "ICOSL → ICOS",
+      "affinity": "定性结合",
+      "assay": "细胞/功能",
+      "evidence": "A",
+      "note": "ICOSL 也可低亲和力结合 CD28/CTLA-4，是 B7 家族共享配体的例子。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD70",
+      "target": "CD27",
+      "rel": "bind",
+      "label": "CD70 → CD27",
+      "affinity": "定性结合",
+      "assay": "细胞/功能",
+      "evidence": "A",
+      "note": "CD27/CD70 共刺激支持 T 细胞记忆与 B 细胞分化；CD70 异常表达与淋巴瘤相关。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFSF18",
+      "target": "TNFRSF18",
+      "rel": "bind",
+      "label": "GITRL → GITR",
+      "affinity": "定性结合",
+      "assay": "细胞/功能",
+      "evidence": "A",
+      "note": "GITR 激动可增强效应 T，但也可能通过 Fc 效应清除 Treg，净效应取决于抗体设计。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD40LG",
+      "target": "CD40",
+      "rel": "bind",
+      "label": "CD40L → CD40",
+      "affinity": "定性结合（三聚体）",
+      "assay": "细胞/功能",
+      "evidence": "A",
+      "note": "CD40/CD40L 是 APC 成熟与 B 细胞活化的核心；人类 CD40L 缺陷导致高 IgM 综合征。",
+      "refs": [
+        "croft2009",
+        "vonderheide2013"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "SELPLG",
+      "target": "VSIR",
+      "rel": "bind",
+      "label": "PSGL-1 → VISTA",
+      "affinity": "酸性 pH 依赖（定性）",
+      "assay": "蛋白结合/功能",
+      "evidence": "B",
+      "note": "VISTA 在酸性肿瘤微环境中与 PSGL-1 结合增强；这使 VISTA 阻断的疗效可能依赖微环境 pH。",
+      "refs": [
+        "johnston2019"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD47",
+      "target": "SIRPA",
+      "rel": "bind",
+      "label": "CD47 → SIRPα",
+      "affinity": "KD ≈ 0.3–1.5 µM（重组单体/二价）",
+      "assay": "SPR/细胞黏附",
+      "evidence": "A",
+      "note": "CD47/SIRPα 是「别吃我」信号；亲和力远低于抗原–抗体，因此高亲和力 SIRPα 变体或抗体才能有效阻断。",
+      "refs": [
+        "hatherley2007",
+        "weiskopf2013"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF14",
+      "target": "BTLA",
+      "rel": "bind",
+      "label": "HVEM → BTLA",
+      "affinity": "定性结合",
+      "assay": "细胞/蛋白结合",
+      "evidence": "A",
+      "note": "HVEM–BTLA 是抑制性轴；HVEM 同时结合 LIGHT/CD160，方向取决于配体竞争。",
+      "refs": [
+        "sedy2005"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "MHC2",
+      "target": "CD4",
+      "rel": "bind",
+      "label": "MHC-II → CD4",
+      "affinity": "KD > 400 µM（单体）",
+      "assay": "SPR",
+      "evidence": "A",
+      "note": "CD4 与 MHC-II 的结合非常弱，需要 TCR 参与稳定；LAG-3 可竞争该界面。",
+      "refs": [
+        "ming2024"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "PDCD1",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "PD-1 抑制 T 细胞",
+      "affinity": "—",
+      "assay": "功能/遗传/临床",
+      "evidence": "A",
+      "note": "PD-1 招募 SHP-2，去磷酸化 TCR/CD28 信号；阻断后恢复耗竭 T 细胞功能，但受肿瘤新抗原与 IFN-γ 轴影响。",
+      "refs": [
+        "ghiotto2010",
+        "anderson2016"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "PDCD1",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "PD-1 抑制 NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "PD-1 在部分 NK 细胞表达，尤其在肿瘤微环境；对 NK 的贡献通常小于 T 细胞，但可能影响 ADCC 联合治疗。",
+      "refs": [
+        "anderson2016"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CTLA4",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "CTLA-4 抑制 T 细胞",
+      "affinity": "—",
+      "assay": "功能/遗传/临床",
+      "evidence": "A",
+      "note": "CTLA-4 通过竞争 CD28 配体、trans-endocytosis 清除 CD80/86，以及 Treg 内在功能提高激活阈值。",
+      "refs": [
+        "rudd2009",
+        "vandermerwe1997"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CTLA4",
+      "target": "TREG",
+      "rel": "activate",
+      "label": "CTLA-4 支持 Treg",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "Treg 组成型高表达 CTLA-4；CTLA-4 缺失导致致命自身免疫，说明其抑制功能不可替代。",
+      "refs": [
+        "rudd2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "LAG3",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "LAG-3 抑制 T 细胞",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "LAG-3 与 MHC-II/FGL1 结合后抑制 TCR 信号；与 PD-1 共表达于耗竭 T，联合阻断在黑色素瘤获批。",
+      "refs": [
+        "anderson2016",
+        "maruhashi2022"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TIGIT",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "TIGIT 抑制 T 细胞",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "TIGIT 通过 ITIM/ITT 信号及竞争 CD155 抑制 CD226 共刺激；TIGIT/CD226 比值是关键生物标志物假设。",
+      "refs": [
+        "ge2021",
+        "yu2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TIGIT",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "TIGIT 抑制 NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "TIGIT 抑制 NK 细胞毒与 IFN-γ；TIGIT 阻断对 NK 的恢复可能是部分疗效来源。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD96",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "CD96 抑制 NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "CD96 与 TIGIT 协同限制 NK 早期反应；单独阻断 CD96 的临床数据有限。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "HAVCR2",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "TIM-3 抑制 T 细胞",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "TIM-3 与 PD-1 共表达于耗竭 T；但单药 TIM-3 阻断在多项 III 期未显示明确获益，提示通路冗余。",
+      "refs": [
+        "anderson2016",
+        "das2017"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "KLRC1",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "NKG2A 抑制 NK",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "NKG2A 识别 HLA-E 后传递 ITIM 信号；阻断可恢复 HLA-E+ 肿瘤的 NK 杀伤。",
+      "refs": [
+        "braud1998"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "KLRC1",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "NKG2A 抑制 CD8 T",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "部分 CD8 T 表达 NKG2A，阻断可增强 TCR 信号；贡献大小依赖肿瘤 HLA-E 与 T 细胞状态。",
+      "refs": [
+        "braud1998"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "KLRK1",
+      "target": "NK",
+      "rel": "activate",
+      "label": "NKG2D 激活 NK",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "NKG2D 识别应激配体，是 NK 与 CD8 杀伤的重要活化信号；肿瘤配体脱落会削弱该轴。",
+      "refs": [
+        "raulet2003"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "KLRK1",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "NKG2D 共刺激 CD8",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "NKG2D 在活化 CD8 T 上提供共刺激；与 TCR 信号协同。",
+      "refs": [
+        "raulet2003"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF9",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "4-1BB 共刺激",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "4-1BB 激动增强 CD8 存活与记忆；肝毒性限制了 urelumab 的剂量，需考虑 Fc 设计与交联。",
+      "refs": [
+        "croft2009",
+        "vinay2011"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF9",
+      "target": "NK",
+      "rel": "activate",
+      "label": "4-1BB 激活 NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "4-1BB 也表达于 NK，激动可增强 ADCC 与 IFN-γ。",
+      "refs": [
+        "vinay2011"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF4",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "OX40 共刺激",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "OX40 激动增强效应 T 与记忆；临床单药活性有限，联合治疗是主要方向。",
+      "refs": [
+        "croft2009",
+        "gramaglia1998"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF4",
+      "target": "TREG",
+      "rel": "activate",
+      "label": "OX40 可扩增 Treg",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "OX40 在 Treg 上也可促进扩增，净效应取决于 Fc 效应与肿瘤微环境，是激动剂设计的风险点。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "ICOS",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "ICOS 共刺激",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "ICOS 支持效应 T 与 Tfh；ICOS 激动也可能扩增 Treg，需关注抗体 Fc 与细胞背景。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD28",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "CD28 共刺激",
+      "affinity": "—",
+      "assay": "功能/遗传/临床",
+      "evidence": "A",
+      "note": "CD28 是初始 T 细胞启动的关键共刺激；CD28 超激动剂 TGN1412 在 I 期引起严重细胞因子风暴。",
+      "refs": [
+        "rudd2009",
+        "suntharalingam2006"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD27",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "CD27 共刺激",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "CD27 信号支持 T 细胞记忆与存活；激动抗体的临床数据仍有限。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF18",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "GITR 共刺激",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "GITR 激动增强效应 T；同时可能通过 Fc 清除 Treg，净效应依赖抗体设计。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TNFRSF18",
+      "target": "TREG",
+      "rel": "inhibit",
+      "label": "GITR 削弱 Treg",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "GITR 信号可削弱 Treg 抑制；但 Treg 上也表达 GITR，Fc 效应可能反而清除 Treg。",
+      "refs": [
+        "croft2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "BTLA",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "BTLA 抑制 T 细胞",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "BTLA–HVEM 抑制 T 细胞；HVEM 还可通过 LIGHT 提供共刺激，方向取决于配体竞争。",
+      "refs": [
+        "sedy2005"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "VSIR",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "VISTA 抑制 T 细胞",
+      "affinity": "—",
+      "assay": "功能/临床前",
+      "evidence": "B",
+      "note": "VISTA 的抑制机制仍有争议，可能依赖 PSGL-1 与酸性 pH；单一抗体在不同模型中效果不一致。",
+      "refs": [
+        "lines2014",
+        "johnston2019"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD40",
+      "target": "DC",
+      "rel": "activate",
+      "label": "CD40 激活 DC",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "CD40 激动促进 DC 成熟、IL-12 与共刺激分子上调；系统给药毒性需要局部或 Fc 工程策略。",
+      "refs": [
+        "croft2009",
+        "vonderheide2013"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "SIRPA",
+      "target": "MAC",
+      "rel": "inhibit",
+      "label": "SIRPα 抑制吞噬",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "SIRPα 招募 SHP-1/2 抑制吞噬；阻断 CD47/SIRPα 可增强抗体依赖的细胞吞噬（ADCP）。",
+      "refs": [
+        "hatherley2007",
+        "weiskopf2013"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD226",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "CD226 共刺激",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "CD226 促进 CD8 细胞毒与 IFN-γ；TIGIT 阻断的疗效依赖 CD226 共刺激的恢复。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD226",
+      "target": "NK",
+      "rel": "activate",
+      "label": "CD226 激活 NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "CD226 是 NK 的重要活化受体；与 TIGIT/CD96 竞争 CD155。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "TIGIT",
+      "target": "CD226",
+      "rel": "compete",
+      "label": "竞争 CD155",
+      "affinity": "TIGIT 1–3 nM vs CD226 114–199 nM",
+      "assay": "SPR/功能",
+      "evidence": "A",
+      "note": "TIGIT 以更高亲和力竞争 CD155，并可破坏 CD226 同源二聚化；这是抗 TIGIT 需要联合 PD-1/PD-L1 的机制基础之一。",
+      "refs": [
+        "ge2021",
+        "yu2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CD96",
+      "target": "CD226",
+      "rel": "compete",
+      "label": "竞争 CD155",
+      "affinity": "CD96 ≈ 38 nM vs CD226 114–199 nM",
+      "assay": "SPR/功能",
+      "evidence": "B",
+      "note": "CD96 与 CD226 共享 CD155；CD96 的抑制性信号可能限制 NK 早期活化。",
+      "refs": [
+        "ge2021"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "CTLA4",
+      "target": "CD28",
+      "rel": "compete",
+      "label": "竞争 CD80/86",
+      "affinity": "CTLA-4 0.42 µM vs CD28 4 µM（CD80）",
+      "assay": "SPR/功能",
+      "evidence": "A",
+      "note": "CTLA-4 以更高亲和力竞争 CD80/86，并可通过 trans-endocytosis 清除配体；抗 CTLA-4 解除该竞争。",
+      "refs": [
+        "vandermerwe1997",
+        "rudd2009"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "LAG3",
+      "target": "CD4",
+      "rel": "compete",
+      "label": "竞争 MHC-II 界面",
+      "affinity": "LAG-3 2–14 µM vs CD4 > 400 µM",
+      "assay": "结构/SPR",
+      "evidence": "A",
+      "note": "LAG-3 与 CD4 在 MHC-II 上的结合界面重叠，LAG-3 亲和力更高，可竞争 CD4 共受体。",
+      "refs": [
+        "ming2024",
+        "maruhashi2022"
+      ],
+      "modules": [
+        "checkpoint"
+      ]
+    },
+    {
+      "source": "IL2",
+      "target": "IL2R_HIGH",
+      "rel": "bind",
+      "label": "IL-2 → IL-2Rαβγ",
+      "affinity": "KD ≈ 10 pM",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "高亲和力三聚体受体，CD25 是限速亚基；Treg 与活化 T 高表达 CD25。",
+      "refs": [
+        "malek2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL2",
+      "target": "IL2R_INT",
+      "rel": "bind",
+      "label": "IL-2 → IL-2Rβγ",
+      "affinity": "KD ≈ 1 nM",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "中亲和力二聚体受体，介导 NK/静息 T 的激活；不依赖 CD25。",
+      "refs": [
+        "malek2008",
+        "waldmann2006"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL15",
+      "target": "IL15R",
+      "rel": "bind",
+      "label": "IL-15 → IL-15Rα/βγ",
+      "affinity": "KD ≈ 10 pM（反式呈递）",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-15Rα 在 APC 上反式呈递 IL-15 给邻近 NK/CD8 的 βγ 受体；这是 IL-15 与 IL-2 的关键差异。",
+      "refs": [
+        "waldmann2006"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TGFB1",
+      "target": "TGFBR",
+      "rel": "bind",
+      "label": "TGF-β1 → TGFBR1/2",
+      "affinity": "pM 级（TGFBRII 高亲和）",
+      "assay": "结合/结构",
+      "evidence": "A",
+      "note": "TGF-β 以潜伏形式存在，需激活后结合 TGFBRII；TGFBRII 招募并激活 TGFBRI。",
+      "refs": [
+        "massague2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL10",
+      "target": "IL10R",
+      "rel": "bind",
+      "label": "IL-10 → IL-10R",
+      "affinity": "pM–nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-10R 异四聚体激活 JAK1/TYK2–STAT3，是免疫抑制微环境的核心通路。",
+      "refs": [
+        "saraiva2010"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL6",
+      "target": "IL6R",
+      "rel": "bind",
+      "label": "IL-6 → IL-6R/gp130",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-6 先结合 IL-6R，再招募 gp130 二聚化；可溶型 IL-6R 可介导反式信号。",
+      "refs": [
+        "kishimoto2005"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1B",
+      "target": "IL1R1",
+      "rel": "bind",
+      "label": "IL-1β → IL-1R1",
+      "affinity": "pM–nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-1β 结合 IL-1R1 后招募 IL-1RAcP；IL-1Ra 竞争同一受体但不招募共受体。",
+      "refs": [
+        "dinarello2009"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL12",
+      "target": "IL12R",
+      "rel": "bind",
+      "label": "IL-12 → IL-12Rβ1/β2",
+      "affinity": "pM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-12Rβ2 决定 IL-12 选择性；IL-12 驱动 Th1 与 IFN-γ。",
+      "refs": [
+        "teng2015"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL23",
+      "target": "IL23R",
+      "rel": "bind",
+      "label": "IL-23 → IL-23R/IL-12Rβ1",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-23 与 IL-12 共享 p40，但受体复合物不同；p19 抗体可选择性阻断 IL-23。",
+      "refs": [
+        "teng2015"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL4",
+      "target": "IL4R",
+      "rel": "bind",
+      "label": "IL-4 → IL-4Rα",
+      "affinity": "pM 级（I/II 型受体）",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-4 可组装 I 型（IL-4Rα/γc）或 II 型（IL-4Rα/IL-13Rα1）受体；细胞类型决定受体组合。",
+      "refs": [
+        "junttila2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL13",
+      "target": "IL13R",
+      "rel": "bind",
+      "label": "IL-13 → IL-13Rα1/IL-4Rα",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "II 型受体是 IL-13 在多数细胞中的信号入口；IL-13Rα2 为诱饵受体。",
+      "refs": [
+        "junttila2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL13",
+      "target": "IL13RA2",
+      "rel": "bind",
+      "label": "IL-13 → IL-13Rα2",
+      "affinity": "高亲和力（诱饵）",
+      "assay": "结合/功能",
+      "evidence": "B",
+      "note": "IL-13Rα2 主要隔离 IL-13，不传递经典信号；可作为肿瘤靶向递送抗原。",
+      "refs": [
+        "junttila2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL17A",
+      "target": "IL17R",
+      "rel": "bind",
+      "label": "IL-17A → IL-17RA/RC",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-17A/F 可形成异二聚体；IL-17RA 是共享亚基，RC 决定配体偏好。",
+      "refs": [
+        "gaffen2009"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL5",
+      "target": "IL5R",
+      "rel": "bind",
+      "label": "IL-5 → IL-5Rα",
+      "affinity": "pM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-5Rα 与 βc 组成信号复合物；嗜酸粒生存依赖 IL-5。",
+      "refs": [
+        "takatsu2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IFNA",
+      "target": "IFNAR",
+      "rel": "bind",
+      "label": "IFN-α → IFNAR1/2",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "I 型干扰素受体广泛表达；JAK1/TYK2–STAT1/2 诱导 ISG。",
+      "refs": [
+        "stark1998"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IFNG",
+      "target": "IFNGR",
+      "rel": "bind",
+      "label": "IFN-γ → IFNGR1/2",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IFN-γ 结合 IFNGR1，招募 IFNGR2；JAK1/JAK2–STAT1 是核心信号。",
+      "refs": [
+        "stark1998"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TNF",
+      "target": "TNFR1",
+      "rel": "bind",
+      "label": "TNF → TNFR1",
+      "affinity": "pM–nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "TNFR1 含死亡结构域，驱动 NF-κB、凋亡与炎症；可溶型 TNF 更偏好 TNFR1。",
+      "refs": [
+        "bradley2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TNF",
+      "target": "TNFR2",
+      "rel": "bind",
+      "label": "TNF → TNFR2",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "TNFR2 主要被膜型 TNF 激活，支持 Treg 与组织修复；完全中和 TNF 会同时影响该轴。",
+      "refs": [
+        "bradley2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CXCL12",
+      "target": "CXCR4",
+      "rel": "bind",
+      "label": "CXCL12 → CXCR4",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "CXCL12/CXCR4 是造血干细胞归巢与肿瘤转移的核心趋化轴。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CCL2",
+      "target": "CCR2",
+      "rel": "bind",
+      "label": "CCL2 → CCR2",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "CCL2/CCR2 招募单核细胞与 TAM，是髓系免疫抑制的候选干预点。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CXCL10",
+      "target": "CXCR3",
+      "rel": "bind",
+      "label": "CXCL10 → CXCR3",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "CXCL10 由 IFN-γ 诱导，招募 CXCR3+ 效应 T/NK；也参与 T 细胞滞留。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CCL5",
+      "target": "CCR5",
+      "rel": "bind",
+      "label": "CCL5 → CCR5",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "CCL5/CCR5 参与 T/NK/单核募集；CCR5 也是 HIV 共受体。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CXCL8",
+      "target": "CXCR2",
+      "rel": "bind",
+      "label": "CXCL8 → CXCR1/2",
+      "affinity": "nM 级",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "CXCL8 招募中性粒细胞，促进血管生成与免疫抑制。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL2R_HIGH",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "高亲和力 IL-2 激活 T",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "IL-2Rαβγ 在活化 T 上高表达，提供强增殖信号；高剂量 IL-2 的疗效与毒性均来自该轴。",
+      "refs": [
+        "malek2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL2R_HIGH",
+      "target": "TREG",
+      "rel": "activate",
+      "label": "低剂量 IL-2 扩增 Treg",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "Treg 组成型高表达 CD25，低剂量 IL-2 优先扩增 Treg；这是低剂量 IL-2 治疗自身免疫病的理论基础。",
+      "refs": [
+        "malek2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL2R_INT",
+      "target": "NK",
+      "rel": "activate",
+      "label": "IL-2Rβγ 激活 NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "NK 主要依赖 βγ 二聚体，不依赖 CD25；IL-2 与 IL-15 共享该信号模块。",
+      "refs": [
+        "waldmann2006"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL2R_INT",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "IL-2Rβγ 激活效应 T",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "静息/记忆 T 可通过 βγ 接收 IL-2；与高亲和力受体相比需要更高浓度。",
+      "refs": [
+        "malek2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL15R",
+      "target": "NK",
+      "rel": "activate",
+      "label": "IL-15 激活 NK",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "IL-15 反式呈递是 NK 发育与存活的关键；N-803 利用该轴治疗膀胱癌。",
+      "refs": [
+        "waldmann2006"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL15R",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "IL-15 支持 CD8 记忆",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "IL-15 支持记忆 CD8 存活与增殖，且不显著扩增 Treg，是比 IL-2 更偏向效应/NK 的激动策略。",
+      "refs": [
+        "waldmann2006"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TGFBR",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "TGF-β 抑制效应 T",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "TGF-β 抑制 TCR 信号、IFN-γ 与增殖；SMAD2/3 依赖与非依赖通路均参与。",
+      "refs": [
+        "massague2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TGFBR",
+      "target": "NK",
+      "rel": "inhibit",
+      "label": "TGF-β 抑制 NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "TGF-β 下调 NKG2D 与细胞毒；肿瘤基质 TGF-β 是 NK 功能抑制的重要来源。",
+      "refs": [
+        "massague2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TGFBR",
+      "target": "TREG",
+      "rel": "activate",
+      "label": "TGF-β 维持 Treg",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "TGF-β 促进 Foxp3 表达与 Treg 稳定；完全阻断 TGF-β 可能诱发自身免疫。",
+      "refs": [
+        "massague2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TGFBR",
+      "target": "DC",
+      "rel": "inhibit",
+      "label": "TGF-β 抑制 DC",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "TGF-β 抑制 DC 成熟与抗原呈递，促进耐受性 DC。",
+      "refs": [
+        "massague2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TGFBR",
+      "target": "FIBROSIS",
+      "rel": "activate",
+      "label": "TGF-β 驱动纤维化",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "TGF-β 激活成纤维细胞与 ECM 沉积，是肿瘤基质屏障与器官纤维化的核心。",
+      "refs": [
+        "massague2012"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL10R",
+      "target": "MAC",
+      "rel": "inhibit",
+      "label": "IL-10 抑制巨噬",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "IL-10 抑制 MHC-II、TNF 与 IL-12，促进 M2 样表型；是肿瘤免疫抑制的关键节点。",
+      "refs": [
+        "saraiva2010"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL10R",
+      "target": "DC",
+      "rel": "inhibit",
+      "label": "IL-10 抑制 DC",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "IL-10 抑制 DC 成熟与 IL-12，削弱 T 细胞启动。",
+      "refs": [
+        "saraiva2010"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL10R",
+      "target": "TEFF",
+      "rel": "inhibit",
+      "label": "IL-10 间接抑制 T",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "IL-10 对 T 的直接作用有限，主要通过 APC 与 Treg 间接抑制。",
+      "refs": [
+        "saraiva2010"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL6R",
+      "target": "INFLAM",
+      "rel": "activate",
+      "label": "IL-6 驱动急性期",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "IL-6 诱导 CRP、SAA、发热与血管通透性；tocilizumab 可快速降低 CRP。",
+      "refs": [
+        "kishimoto2005"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL6R",
+      "target": "TH17",
+      "rel": "activate",
+      "label": "IL-6 促进 Th17",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "IL-6 与 TGF-β 协同促进 Th17 分化；在肿瘤中可驱动 IL-17 炎症。",
+      "refs": [
+        "kishimoto2005"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1R1",
+      "target": "INFLAM",
+      "rel": "activate",
+      "label": "IL-1 驱动炎症",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "IL-1 激活内皮、诱导 IL-6/CXCL8 与发热；anakinra/canakinumab 验证了该轴。",
+      "refs": [
+        "dinarello2009"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1R1",
+      "target": "TH17",
+      "rel": "activate",
+      "label": "IL-1 促进 Th17",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "IL-1 与 IL-6/IL-23 协同维持 Th17 炎症。",
+      "refs": [
+        "dinarello2009"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL12R",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "IL-12 驱动 Th1",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "IL-12 诱导 IFN-γ 与 Th1，增强细胞毒；全身给药毒性较大。",
+      "refs": [
+        "teng2015"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL12R",
+      "target": "NK",
+      "rel": "activate",
+      "label": "IL-12 激活 NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "IL-12 增强 NK 的 IFN-γ 与细胞毒，是 NK 与 T 的桥梁细胞因子。",
+      "refs": [
+        "teng2015"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL12R",
+      "target": "IFNG",
+      "rel": "regulate",
+      "label": "IL-12 诱导 IFN-γ",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "IL-12–STAT4 诱导 IFN-γ，形成 Th1 正反馈；也是 PD-L1 适应性上调的上游。",
+      "refs": [
+        "teng2015",
+        "stark1998"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL23R",
+      "target": "TH17",
+      "rel": "activate",
+      "label": "IL-23 维持 Th17",
+      "affinity": "—",
+      "assay": "功能/遗传/临床",
+      "evidence": "A",
+      "note": "IL-23 维持 Th17 存活与 IL-17 分泌；p19 抗体在银屑病中验证了该轴。",
+      "refs": [
+        "teng2015",
+        "gaffen2009"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL4R",
+      "target": "TH2",
+      "rel": "activate",
+      "label": "IL-4 驱动 Th2",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "IL-4 促进 Th2 分化、IgE 类别转换与 M2 极化；dupilumab 阻断 IL-4Rα 验证该轴。",
+      "refs": [
+        "junttila2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL13R",
+      "target": "TH2",
+      "rel": "activate",
+      "label": "IL-13 维持 Th2/黏液",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "IL-13 促进黏液分泌、杯状细胞增生与气道高反应；是重度哮喘的关键效应因子。",
+      "refs": [
+        "junttila2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL17R",
+      "target": "INFLAM",
+      "rel": "activate",
+      "label": "IL-17 招募中性粒",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "IL-17 诱导 CXCL8、抗菌肽与基质金属蛋白酶，招募中性粒细胞。",
+      "refs": [
+        "gaffen2009"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL5R",
+      "target": "EOS",
+      "rel": "activate",
+      "label": "IL-5 维持嗜酸粒",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "IL-5 支持嗜酸粒存活与脱颗粒；mepolizumab/benralizumab 验证该轴。",
+      "refs": [
+        "takatsu2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IFNAR",
+      "target": "ANTIVIRAL",
+      "rel": "activate",
+      "label": "I 型 IFN 抗病毒",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "IFN-α/β 诱导 ISG、MHC-I 与免疫调节；过度激活与自身炎症相关。",
+      "refs": [
+        "stark1998"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IFNGR",
+      "target": "MAC",
+      "rel": "activate",
+      "label": "IFN-γ 激活巨噬",
+      "affinity": "—",
+      "assay": "功能/遗传",
+      "evidence": "A",
+      "note": "IFN-γ 是巨噬细胞经典激活因子，增强杀菌与抗原呈递。",
+      "refs": [
+        "stark1998"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IFNGR",
+      "target": "ANTIVIRAL",
+      "rel": "activate",
+      "label": "II 型 IFN 免疫激活",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "IFN-γ 增强 MHC-I/II 与抗原呈递，也上调 PD-L1。",
+      "refs": [
+        "stark1998"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IFNGR",
+      "target": "CD274",
+      "rel": "regulate",
+      "label": "IFN-γ 诱导 PD-L1",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "IFN-γ–JAK–STAT1 诱导肿瘤与 APC 的 PD-L1，是适应性免疫抵抗与抗 PD-1 耐药的重要机制。",
+      "refs": [
+        "stark1998",
+        "ge2021"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TNFR1",
+      "target": "INFLAM",
+      "rel": "activate",
+      "label": "TNFR1 促炎",
+      "affinity": "—",
+      "assay": "功能/遗传/临床",
+      "evidence": "A",
+      "note": "TNFR1 激活 NF-κB 与凋亡，驱动炎症；抗 TNF 药物在 RA/IBD 中验证。",
+      "refs": [
+        "bradley2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TNFR1",
+      "target": "TEFF",
+      "rel": "activate",
+      "label": "TNFR1 共刺激",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "TNF 可提供 T 细胞共刺激，但慢性 TNF 也促进耗竭；净效应依赖浓度与时间。",
+      "refs": [
+        "bradley2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "TNFR2",
+      "target": "TREG",
+      "rel": "activate",
+      "label": "TNFR2 支持 Treg",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "B",
+      "note": "TNFR2 在 Treg 上高表达并支持其增殖；完全阻断 TNF 可能削弱 Treg。",
+      "refs": [
+        "bradley2008"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CXCR4",
+      "target": "MIGRATION",
+      "rel": "activate",
+      "label": "CXCL12 驱动归巢/转移",
+      "affinity": "—",
+      "assay": "功能/临床",
+      "evidence": "A",
+      "note": "CXCL12/CXCR4 驱动干细胞归巢与肿瘤转移；plerixafor 用于干细胞动员。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CCR2",
+      "target": "MIGRATION",
+      "rel": "activate",
+      "label": "CCL2 招募单核",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "CCL2/CCR2 招募单核细胞与 TAM，是髓系靶向的候选轴。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CXCR3",
+      "target": "MIGRATION",
+      "rel": "activate",
+      "label": "CXCL10 招募效应 T/NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "CXCR3 轴决定效应 T/NK 浸润；IFN-γ 诱导 CXCL10 形成正反馈。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CCR5",
+      "target": "MIGRATION",
+      "rel": "activate",
+      "label": "CCL5 招募 T/NK",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "CCR5 轴参与 T/NK/单核募集；maraviroc 是 CCR5 变构拮抗剂。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "CXCR2",
+      "target": "MIGRATION",
+      "rel": "activate",
+      "label": "CXCL8 招募中性粒",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "CXCR1/2 轴招募中性粒细胞，促进肿瘤炎症与免疫抑制。",
+      "refs": [
+        "griffith2014"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IFNG",
+      "target": "CXCL10",
+      "rel": "regulate",
+      "label": "IFN-γ 诱导 CXCL10",
+      "affinity": "—",
+      "assay": "功能",
+      "evidence": "A",
+      "note": "IFN-γ 诱导 CXCL10，招募 CXCR3+ 效应 T/NK，形成炎症正反馈。",
+      "refs": [
+        "griffith2014",
+        "stark1998"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    },
+    {
+      "source": "IL1RN",
+      "target": "IL1R1",
+      "rel": "compete",
+      "label": "竞争 IL-1R1",
+      "affinity": "IL-1Ra 高亲和力，但不招募 IL-1RAcP",
+      "assay": "结合/功能",
+      "evidence": "A",
+      "note": "IL-1Ra 是天然竞争性拮抗剂；anakinra 是其重组形式，验证了竞争性阻断策略。",
+      "refs": [
+        "dinarello2009"
+      ],
+      "modules": [
+        "cytokine"
+      ]
+    }
+  ],
+  "drugs": [
+    {
+      "id": "pembrolizumab",
+      "label": "帕博利珠单抗",
+      "inn": "pembrolizumab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4κ 抗 PD-1",
+      "stage": "已上市",
+      "approved": "2014（FDA）",
+      "region": "全球",
+      "trial": "KEYNOTE-006 / KEYNOTE-189 等",
+      "note": "阻断 PD-L1/PD-L2 与 PD-1 结合；广泛用于黑色素瘤、NSCLC 等。免疫相关不良反应需监测。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "nivolumab",
+      "label": "纳武利尤单抗",
+      "inn": "nivolumab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG4 抗 PD-1",
+      "stage": "已上市",
+      "approved": "2014（FDA）",
+      "region": "全球",
+      "trial": "CheckMate 067 / CheckMate 227 等",
+      "note": "与 ipilimumab 联合是黑色素瘤、NSCLC 等的重要方案；PD-1 阻断的骨架药物。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "cemiplimab",
+      "label": "西米普利单抗",
+      "inn": "cemiplimab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG4 抗 PD-1",
+      "stage": "已上市",
+      "approved": "2018（FDA）",
+      "region": "全球",
+      "trial": "皮肤鳞癌 / BCC 研究",
+      "note": "首个获批用于晚期皮肤鳞状细胞癌的 PD-1 抗体。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "dostarlimab",
+      "label": "多塔利单抗",
+      "inn": "dostarlimab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 PD-1",
+      "stage": "已上市",
+      "approved": "2021（FDA）",
+      "region": "全球",
+      "trial": "GARNET",
+      "note": "用于 dMMR 子宫内膜癌等；dMMR 实体瘤的分子分型是关键。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "retifanlimab",
+      "label": "瑞弗利单抗",
+      "inn": "retifanlimab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 PD-1",
+      "stage": "已上市",
+      "approved": "2023（FDA）",
+      "region": "美国",
+      "trial": "POD1UM-201",
+      "note": "用于转移性 Merkel 细胞癌。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "tislelizumab",
+      "label": "替雷利珠单抗",
+      "inn": "tislelizumab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 PD-1（Fc 工程）",
+      "stage": "已上市",
+      "approved": "2019（NMPA）",
+      "region": "中国/全球扩展",
+      "trial": "RATIONALE 系列",
+      "note": "Fc 工程旨在减少巨噬细胞 FcγR 结合；在食管癌、NSCLC 等有 III 期数据。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "nmpa",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "toripalimab",
+      "label": "特瑞普利单抗",
+      "inn": "toripalimab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 PD-1",
+      "stage": "已上市",
+      "approved": "2018（NMPA）/ 2023（FDA）",
+      "region": "中国/美国",
+      "trial": "JUPITER-02 等",
+      "note": "鼻咽癌等适应证；中国创新 PD-1 抗体出海的代表之一。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "nmpa",
+        "fda"
+      ]
+    },
+    {
+      "id": "sintilimab",
+      "label": "信迪利单抗",
+      "inn": "sintilimab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG4 抗 PD-1",
+      "stage": "已上市",
+      "approved": "2018（NMPA）",
+      "region": "中国",
+      "trial": "ORIENT 系列",
+      "note": "经典型霍奇金淋巴瘤等；多项联合方案在国内外开展。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "nmpa"
+      ]
+    },
+    {
+      "id": "camrelizumab",
+      "label": "卡瑞利珠单抗",
+      "inn": "camrelizumab",
+      "targets": [
+        "PDCD1"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 PD-1",
+      "stage": "已上市",
+      "approved": "2019（NMPA）",
+      "region": "中国",
+      "trial": "多项 III 期",
+      "note": "反应性毛细血管增生症是其较特殊的不良反应。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "nmpa"
+      ]
+    },
+    {
+      "id": "atezolizumab",
+      "label": "阿替利珠单抗",
+      "inn": "atezolizumab",
+      "targets": [
+        "CD274"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG1 抗 PD-L1（Fc 效应弱化）",
+      "stage": "已上市",
+      "approved": "2016（FDA）",
+      "region": "全球",
+      "trial": "IMbrave150 / IMpower 系列",
+      "note": "不阻断 PD-L2；Fc 效应弱化以减少效应细胞清除，是抗 PD-L1 与抗 PD-1 机制差异的实例。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "durvalumab",
+      "label": "度伐利尤单抗",
+      "inn": "durvalumab",
+      "targets": [
+        "CD274"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 PD-L1（Fc 效应弱化）",
+      "stage": "已上市",
+      "approved": "2017（FDA）",
+      "region": "全球",
+      "trial": "PACIFIC / HIMALAYA",
+      "note": "用于 III 期 NSCLC 巩固治疗及与 tremelimumab 联合的 HCC 方案。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "avelumab",
+      "label": "阿维鲁单抗",
+      "inn": "avelumab",
+      "targets": [
+        "CD274"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 PD-L1（保留 ADCC）",
+      "stage": "已上市",
+      "approved": "2017（FDA）",
+      "region": "全球",
+      "trial": "JAVELIN 系列",
+      "note": "保留 Fc 效应功能，理论上可协同 ADCC；用于 Merkel 细胞癌、尿路上皮癌等。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "envafolimab",
+      "label": "恩沃利单抗",
+      "inn": "envafolimab",
+      "targets": [
+        "CD274"
+      ],
+      "mechanism": "block",
+      "modality": "纳米抗体（VHH）-Fc 融合，抗 PD-L1",
+      "stage": "已上市",
+      "approved": "2021（NMPA）",
+      "region": "中国",
+      "trial": "皮下给药研究",
+      "note": "皮下注射的 PD-L1 纳米抗体；小分子量带来不同组织分布与给药便利性。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "nmpa"
+      ]
+    },
+    {
+      "id": "ipilimumab",
+      "label": "伊匹木单抗",
+      "inn": "ipilimumab",
+      "targets": [
+        "CTLA4"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 CTLA-4",
+      "stage": "已上市",
+      "approved": "2011（FDA）",
+      "region": "全球",
+      "trial": "CheckMate 067",
+      "note": "首个获批的检查点抗体；Fc 效应可能参与 Treg 清除，但人类证据仍有争议。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "tremelimumab",
+      "label": "曲美木单抗",
+      "inn": "tremelimumab",
+      "targets": [
+        "CTLA4"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG2 抗 CTLA-4",
+      "stage": "已上市",
+      "approved": "2022（FDA）",
+      "region": "全球",
+      "trial": "HIMALAYA",
+      "note": "与 durvalumab 联合用于不可切除 HCC；IgG2 的 Fc 效应不同于 ipilimumab。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "relatlimab",
+      "label": "瑞拉利单抗",
+      "inn": "relatlimab",
+      "targets": [
+        "LAG3"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG4 抗 LAG-3",
+      "stage": "已上市",
+      "approved": "2022（FDA）",
+      "region": "全球",
+      "trial": "RELATIVITY-047",
+      "note": "与 nivolumab 固定剂量复方（Opdualag）用于黑色素瘤；首个获批的 LAG-3 阻断抗体。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "tiragolumab",
+      "label": "替瑞利尤单抗",
+      "inn": "tiragolumab",
+      "targets": [
+        "TIGIT"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 TIGIT",
+      "stage": "III 期（部分研究未达主要终点）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "SKYSCRAPER-01 / -02",
+      "note": "TIGIT 单药或联合 PD-L1 的 III 期结果不一致；TIGIT/CD226 轴与 Fc 设计仍是关键变量。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "domvanalimab",
+      "label": "多姆凡利单抗",
+      "inn": "domvanalimab",
+      "targets": [
+        "TIGIT"
+      ],
+      "mechanism": "block",
+      "modality": "Fc 沉默抗 TIGIT",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "ARC-7 / STARGAZE 等",
+      "note": "Fc 沉默设计旨在避免 TIGIT+ 免疫细胞被清除；与 PD-1 联合是主要开发方向。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "vibostolimab",
+      "label": "维博利单抗",
+      "inn": "vibostolimab",
+      "targets": [
+        "TIGIT"
+      ],
+      "mechanism": "block",
+      "modality": "抗 TIGIT",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "KEYVIBE 系列",
+      "note": "与 pembrolizumab 复方开发；TIGIT 领域整体仍在验证最佳联合与生物标志物。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "monalizumab",
+      "label": "莫那利珠单抗",
+      "inn": "monalizumab",
+      "targets": [
+        "KLRC1"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 NKG2A",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "COAST / PACIFIC-9",
+      "note": "阻断 NKG2A 恢复 NK/CD8 对 HLA-E+ 肿瘤的杀伤；与 durvalumab 联合是重点方向。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "sabatolimab",
+      "label": "沙巴托利单抗",
+      "inn": "sabatolimab",
+      "targets": [
+        "HAVCR2"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 TIM-3",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "MDS 相关 III 期",
+      "note": "TIM-3 单药在实体瘤中获益有限，MDS 等血液肿瘤是重点方向。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "cobolimab",
+      "label": "考博利单抗",
+      "inn": "cobolimab",
+      "targets": [
+        "HAVCR2"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 TIM-3",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "COSTAR Lung",
+      "note": "与 dostarlimab 联合的 NSCLC III 期；TIM-3 的临床验证仍在进行。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "magrolimab",
+      "label": "马格利单抗",
+      "inn": "magrolimab",
+      "targets": [
+        "CD47"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 CD47",
+      "stage": "III 期（部分研究终止）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "ENHANCE 等",
+      "note": "阻断 CD47/SIRPα 增强 ADCP；2024 年多项 III 期因无效或安全性问题停止，提示该轴并非单药万能。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "evorpacept",
+      "label": "依沃帕西普",
+      "inn": "evorpacept（ALX148）",
+      "targets": [
+        "SIRPA"
+      ],
+      "mechanism": "block",
+      "modality": "高亲和力 SIRPα-Fc 融合（无活性 Fc）",
+      "stage": "II/III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "ASPEN 系列",
+      "note": "SIRPα 变体阻断 CD47，同时避免 Fc 效应；与抗体联合增强吞噬。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "lemzoparlimab",
+      "label": "来佐利单抗",
+      "inn": "lemzoparlimab",
+      "targets": [
+        "CD47"
+      ],
+      "mechanism": "block",
+      "modality": "抗 CD47",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "联合研究",
+      "note": "设计上减少与红细胞结合以降低贫血风险；CD47 靶向的共同挑战是抗原 sink 与血液毒性。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "urelumab",
+      "label": "乌瑞芦单抗",
+      "inn": "urelumab",
+      "targets": [
+        "TNFRSF9"
+      ],
+      "mechanism": "agonist",
+      "modality": "人 IgG4 抗 4-1BB 激动剂",
+      "stage": "I/II 期（肝毒性限制）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "BMS-663513 研究",
+      "note": "强激动活性伴随严重肝毒性；4-1BB 激动剂的治疗窗与交联策略是核心难题。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "utomilumab",
+      "label": "乌托鲁单抗",
+      "inn": "utomilumab",
+      "targets": [
+        "TNFRSF9"
+      ],
+      "mechanism": "agonist",
+      "modality": "人 IgG2 抗 4-1BB 激动剂",
+      "stage": "I 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "联合 PD-1 研究",
+      "note": "激动活性较弱、肝毒性较低，但单药抗肿瘤活性有限；说明「激动强度」与「安全性」需权衡。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "ivuxolimab",
+      "label": "伊沃利单抗",
+      "inn": "ivuxolimab",
+      "targets": [
+        "TNFRSF4"
+      ],
+      "mechanism": "agonist",
+      "modality": "抗 OX40 激动剂",
+      "stage": "I/II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "联合研究",
+      "note": "OX40 激动可增强效应 T，但也可能扩增 Treg；Fc 设计与联合方案影响净效应。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "mitazalimab",
+      "label": "米塔利单抗",
+      "inn": "mitazalimab",
+      "targets": [
+        "CD40"
+      ],
+      "mechanism": "agonist",
+      "modality": "人 IgG1 抗 CD40 激动剂",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "OPTIMIZE-1",
+      "note": "与化疗联合用于胰腺癌；CD40 激动依赖 FcγR 交联，系统毒性需要管理。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "selicrelumab",
+      "label": "司利鲁单抗",
+      "inn": "selicrelumab",
+      "targets": [
+        "CD40"
+      ],
+      "mechanism": "agonist",
+      "modality": "人 IgG2 抗 CD40 激动剂",
+      "stage": "I 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "联合研究",
+      "note": "早期 CD40 激动剂；单药活性有限，联合策略与给药方式仍在探索。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "vopratelimab",
+      "label": "沃普利单抗",
+      "inn": "vopratelimab",
+      "targets": [
+        "ICOS"
+      ],
+      "mechanism": "agonist",
+      "modality": "抗 ICOS 激动剂",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "联合 PD-1 研究",
+      "note": "ICOS 激动旨在增强效应 T，但可能扩增 Treg；生物标志物选择是关键。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "feladilimab",
+      "label": "非拉利单抗",
+      "inn": "feladilimab",
+      "targets": [
+        "ICOS"
+      ],
+      "mechanism": "agonist",
+      "modality": "抗 ICOS 激动剂",
+      "stage": "II 期（部分终止）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "INDUCE 系列",
+      "note": "ICOS 激动剂的临床结果不一致，提示单纯增强共刺激未必能克服肿瘤微环境抑制。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "varlilumab",
+      "label": "瓦利鲁单抗",
+      "inn": "varlilumab",
+      "targets": [
+        "CD27"
+      ],
+      "mechanism": "agonist",
+      "modality": "抗 CD27 激动剂",
+      "stage": "I/II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "联合 PD-1 研究",
+      "note": "CD27 共刺激支持 T 细胞记忆；临床活性有限，联合策略仍在探索。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "tgn1412",
+      "label": "TGN1412",
+      "inn": "TGN1412",
+      "targets": [
+        "CD28"
+      ],
+      "mechanism": "agonist",
+      "modality": "抗 CD28 超激动剂",
+      "stage": "终止（I 期细胞因子风暴）",
+      "approved": "—",
+      "region": "历史案例",
+      "trial": "2006 年 I 期",
+      "note": "6 名健康志愿者出现严重细胞因子风暴与多器官衰竭；种属差异与 CD28 超激动机制是免疫激动剂开发的重要警示。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": true,
+      "refs": [
+        "suntharalingam2006"
+      ]
+    },
+    {
+      "id": "abatacept",
+      "label": "阿巴西普",
+      "inn": "abatacept",
+      "targets": [
+        "CD80",
+        "CD86"
+      ],
+      "mechanism": "block",
+      "modality": "CTLA-4-Ig 融合蛋白",
+      "stage": "已上市",
+      "approved": "2005（FDA）",
+      "region": "全球",
+      "trial": "RA 研究",
+      "note": "高亲和力结合 CD80/86，阻断 CD28 共刺激；是「用可溶性受体竞争配体」的经典药物。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "belatacept",
+      "label": "贝拉西普",
+      "inn": "belatacept",
+      "targets": [
+        "CD80",
+        "CD86"
+      ],
+      "mechanism": "block",
+      "modality": "第二代 CTLA-4-Ig（更高亲和力）",
+      "stage": "已上市",
+      "approved": "2011（FDA）",
+      "region": "全球",
+      "trial": "肾移植研究",
+      "note": "用于肾移植免疫抑制；与 abatacept 的差异在于亲和力与适应证。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "frexalimab",
+      "label": "弗雷沙利单抗",
+      "inn": "frexalimab",
+      "targets": [
+        "CD40LG"
+      ],
+      "mechanism": "block",
+      "modality": "抗 CD40L，Fc 沉默",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "MS 研究",
+      "note": "Fc 沉默避免血小板/血栓风险；CD40L 阻断在自身免疫病中重新受到关注。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "dapirolizumab",
+      "label": "达匹利珠单抗",
+      "inn": "dapirolizumab pegol",
+      "targets": [
+        "CD40LG"
+      ],
+      "mechanism": "block",
+      "modality": "PEG 化抗 CD40L Fab",
+      "stage": "III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "SLE 研究",
+      "note": "无 Fc 的抗 CD40L 片段，旨在阻断共刺激同时降低血栓风险。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "onvatilimab",
+      "label": "昂瓦利单抗",
+      "inn": "onvatilimab",
+      "targets": [
+        "VSIR"
+      ],
+      "mechanism": "block",
+      "modality": "抗 VISTA",
+      "stage": "I/II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "联合 PD-1 研究",
+      "note": "VISTA 机制仍有争议，临床开发需明确 PSGL-1/pH 依赖的结合模式。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "trx518",
+      "label": "TRX518",
+      "inn": "TRX518",
+      "targets": [
+        "TNFRSF18"
+      ],
+      "mechanism": "agonist",
+      "modality": "抗 GITR 激动剂（Fc 沉默）",
+      "stage": "I/II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "实体瘤研究",
+      "note": "Fc 沉默以避免 Treg 清除，试图利用纯激动效应增强 T 细胞；结果仍需更大样本验证。",
+      "modules": [
+        "checkpoint"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "aldesleukin",
+      "label": "阿地白介素",
+      "inn": "aldesleukin",
+      "targets": [
+        "IL2R_HIGH",
+        "IL2R_INT"
+      ],
+      "mechanism": "agonist",
+      "modality": "重组人 IL-2",
+      "stage": "已上市",
+      "approved": "1992（FDA）",
+      "region": "全球",
+      "trial": "转移性 RCC/黑色素瘤",
+      "note": "高剂量 IL-2 可带来持久缓解，但毛细血管渗漏综合征与器官毒性显著；低剂量则偏向 Treg 扩增。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "bempegaldesleukin",
+      "label": "贝姆哌白介素",
+      "inn": "bempegaldesleukin（NKTR-214）",
+      "targets": [
+        "IL2R_INT"
+      ],
+      "mechanism": "agonist",
+      "modality": "PEG 化 IL-2（偏向 βγ）",
+      "stage": "终止（III 期失败）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "多项 III 期",
+      "note": "设计上偏向 IL-2Rβγ 以激活效应 T/NK、减少 Treg；III 期未显示获益，说明受体偏向策略仍需验证。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "nemvaleukin",
+      "label": "奈姆白介素 α",
+      "inn": "nemvaleukin alfa",
+      "targets": [
+        "IL2R_INT"
+      ],
+      "mechanism": "agonist",
+      "modality": "工程化 IL-2 融合蛋白",
+      "stage": "II/III 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "ARTISTRY 系列",
+      "note": "工程化设计旨在增强肿瘤内效应 T/NK 而不扩增 Treg；与 PD-1 联合是重点方向。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "n803",
+      "label": "N-803（Anktiva）",
+      "inn": "nogapendekin alfa inbakicept",
+      "targets": [
+        "IL15R"
+      ],
+      "mechanism": "agonist",
+      "modality": "IL-15 超级激动剂（IL-15N72D/IL-15RαSu-Fc）",
+      "stage": "已上市",
+      "approved": "2024（FDA）",
+      "region": "美国",
+      "trial": "QUILT-3.032",
+      "note": "与 BCG 联用治疗 BCG 无应答的非肌层浸润性膀胱癌；IL-15 轴偏向 NK/CD8，不显著扩增 Treg。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda",
+        "ctgov"
+      ]
+    },
+    {
+      "id": "basiliximab",
+      "label": "巴利昔单抗",
+      "inn": "basiliximab",
+      "targets": [
+        "IL2R_HIGH"
+      ],
+      "mechanism": "block",
+      "modality": "嵌合 IgG1 抗 CD25（IL-2Rα）",
+      "stage": "已上市",
+      "approved": "1998（FDA）",
+      "region": "全球",
+      "trial": "肾移植诱导",
+      "note": "阻断高亲和力 IL-2Rα，抑制活化 T 细胞；不阻断 βγ 的中/低亲和力信号。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "tocilizumab",
+      "label": "托珠单抗",
+      "inn": "tocilizumab",
+      "targets": [
+        "IL6R"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG1 抗 IL-6R",
+      "stage": "已上市",
+      "approved": "2010（FDA）",
+      "region": "全球",
+      "trial": "RA / CRS 研究",
+      "note": "阻断经典与反式 IL-6 信号；用于 RA、细胞因子释放综合征等。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "sarilumab",
+      "label": "沙利鲁单抗",
+      "inn": "sarilumab",
+      "targets": [
+        "IL6R"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 IL-6R",
+      "stage": "已上市",
+      "approved": "2017（FDA）",
+      "region": "全球",
+      "trial": "RA 研究",
+      "note": "与 tocilizumab 类似，阻断 IL-6R；不同 Fc 与给药方案影响效应。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "siltuximab",
+      "label": "司妥昔单抗",
+      "inn": "siltuximab",
+      "targets": [
+        "IL6"
+      ],
+      "mechanism": "block",
+      "modality": "嵌合 IgG1 抗 IL-6",
+      "stage": "已上市",
+      "approved": "2014（FDA）",
+      "region": "全球",
+      "trial": "Castleman 病",
+      "note": "直接中和 IL-6 配体，与受体阻断的分布与动力学不同。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "anakinra",
+      "label": "阿那白滞素",
+      "inn": "anakinra",
+      "targets": [
+        "IL1R1"
+      ],
+      "mechanism": "block",
+      "modality": "重组 IL-1Ra",
+      "stage": "已上市",
+      "approved": "2001（FDA）",
+      "region": "全球",
+      "trial": "RA / 自身炎症",
+      "note": "天然竞争性拮抗剂的药物化；半衰期短，需每日给药。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "canakinumab",
+      "label": "卡那奴单抗",
+      "inn": "canakinumab",
+      "targets": [
+        "IL1B"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 IL-1β",
+      "stage": "已上市",
+      "approved": "2009（FDA）",
+      "region": "全球",
+      "trial": "CAPS",
+      "note": "中和 IL-1β 配体；与 anakinra 的受体阻断策略形成对照。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "infliximab",
+      "label": "英夫利西单抗",
+      "inn": "infliximab",
+      "targets": [
+        "TNF"
+      ],
+      "mechanism": "block",
+      "modality": "嵌合 IgG1 抗 TNF",
+      "stage": "已上市",
+      "approved": "1998（FDA）",
+      "region": "全球",
+      "trial": "RA / IBD",
+      "note": "中和可溶与膜型 TNF，可诱导反向信号与细胞凋亡；结核再激活需筛查。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "adalimumab",
+      "label": "阿达木单抗",
+      "inn": "adalimumab",
+      "targets": [
+        "TNF"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 TNF",
+      "stage": "已上市",
+      "approved": "2002（FDA）",
+      "region": "全球",
+      "trial": "RA / IBD 等",
+      "note": "全人源抗 TNF；与 infliximab 的 Fc 与给药方式不同。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "etanercept",
+      "label": "依那西普",
+      "inn": "etanercept",
+      "targets": [
+        "TNF"
+      ],
+      "mechanism": "block",
+      "modality": "TNFR2-Fc 融合蛋白",
+      "stage": "已上市",
+      "approved": "1998（FDA）",
+      "region": "全球",
+      "trial": "RA 等",
+      "note": "可溶性受体陷阱，中和 TNF 与淋巴毒素-α；不诱导反向信号。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "dupilumab",
+      "label": "度普利尤单抗",
+      "inn": "dupilumab",
+      "targets": [
+        "IL4R"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG4 抗 IL-4Rα",
+      "stage": "已上市",
+      "approved": "2017（FDA）",
+      "region": "全球",
+      "trial": "SOLO 1/2 等",
+      "note": "阻断 IL-4Rα 同时削弱 IL-4 与 IL-13 信号；是「共享亚基」策略的成功案例。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "tralokinumab",
+      "label": "曲罗芦单抗",
+      "inn": "tralokinumab",
+      "targets": [
+        "IL13"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG4 抗 IL-13",
+      "stage": "已上市",
+      "approved": "2021（FDA）",
+      "region": "全球",
+      "trial": "ECZTRA 系列",
+      "note": "选择性中和 IL-13，保留 IL-4 信号；与 dupilumab 的广泛阻断形成对照。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "lebrikizumab",
+      "label": "来金珠单抗",
+      "inn": "lebrikizumab",
+      "targets": [
+        "IL13"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 IL-13",
+      "stage": "已上市",
+      "approved": "2023（FDA）",
+      "region": "美国",
+      "trial": "ADvocate 系列",
+      "note": "用于特应性皮炎；IL-13 是 Th2 炎症的关键效应因子。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "secukinumab",
+      "label": "司库奇尤单抗",
+      "inn": "secukinumab",
+      "targets": [
+        "IL17A"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 IL-17A",
+      "stage": "已上市",
+      "approved": "2015（FDA）",
+      "region": "全球",
+      "trial": "FIXTURE 等",
+      "note": "阻断 IL-17A，银屑病疗效显著；念珠菌感染风险提示 IL-17 的屏障免疫作用。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "ixekizumab",
+      "label": "依奇珠单抗",
+      "inn": "ixekizumab",
+      "targets": [
+        "IL17A"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 IL-17A",
+      "stage": "已上市",
+      "approved": "2016（FDA）",
+      "region": "全球",
+      "trial": "UNCOVER 系列",
+      "note": "与 secukinumab 同为 IL-17A 阻断，Fc 与给药方案不同。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "bimekizumab",
+      "label": "比美吉珠单抗",
+      "inn": "bimekizumab",
+      "targets": [
+        "IL17A"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG1 抗 IL-17A/F",
+      "stage": "已上市",
+      "approved": "2023（FDA）",
+      "region": "全球",
+      "trial": "BE 系列",
+      "note": "同时中和 IL-17A 与 IL-17F，覆盖更广的 IL-17 轴。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "brodalumab",
+      "label": "布罗达单抗",
+      "inn": "brodalumab",
+      "targets": [
+        "IL17R"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG2 抗 IL-17RA",
+      "stage": "已上市",
+      "approved": "2017（FDA）",
+      "region": "全球",
+      "trial": "AMAGINE 系列",
+      "note": "阻断受体而非配体，可覆盖 IL-17A/F 等；有自杀风险黑框警告。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "mepolizumab",
+      "label": "美泊利单抗",
+      "inn": "mepolizumab",
+      "targets": [
+        "IL5"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG1 抗 IL-5",
+      "stage": "已上市",
+      "approved": "2015（FDA）",
+      "region": "全球",
+      "trial": "MENSA 等",
+      "note": "中和 IL-5，减少嗜酸粒；重度嗜酸哮喘的生物制剂代表。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "reslizumab",
+      "label": "瑞利珠单抗",
+      "inn": "reslizumab",
+      "targets": [
+        "IL5"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG4 抗 IL-5",
+      "stage": "已上市",
+      "approved": "2016（FDA）",
+      "region": "全球",
+      "trial": "哮喘研究",
+      "note": "静脉给药抗 IL-5；与 mepolizumab 的给药途径与 Fc 不同。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "benralizumab",
+      "label": "贝那利珠单抗",
+      "inn": "benralizumab",
+      "targets": [
+        "IL5R"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG1 抗 IL-5Rα（ADCC）",
+      "stage": "已上市",
+      "approved": "2017（FDA）",
+      "region": "全球",
+      "trial": "SIROCCO / CALIMA",
+      "note": "通过 Fc 效应清除嗜酸粒，而不只是中和 IL-5；是「受体阻断 + 细胞清除」的范例。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "ustekinumab",
+      "label": "乌司奴单抗",
+      "inn": "ustekinumab",
+      "targets": [
+        "IL12",
+        "IL23"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 IL-12/23 p40",
+      "stage": "已上市",
+      "approved": "2009（FDA）",
+      "region": "全球",
+      "trial": "银屑病 / IBD",
+      "note": "阻断共享 p40 亚基，同时影响 IL-12 与 IL-23；p19 抗体则选择性阻断 IL-23。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "risankizumab",
+      "label": "瑞莎珠单抗",
+      "inn": "risankizumab",
+      "targets": [
+        "IL23"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG1 抗 IL-23 p19",
+      "stage": "已上市",
+      "approved": "2019（FDA）",
+      "region": "全球",
+      "trial": "银屑病 / IBD",
+      "note": "选择性阻断 IL-23，保留 IL-12/Th1 轴；与 p40 阻断的感染风险谱不同。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "guselkumab",
+      "label": "古塞奇尤单抗",
+      "inn": "guselkumab",
+      "targets": [
+        "IL23"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG1 抗 IL-23 p19",
+      "stage": "已上市",
+      "approved": "2017（FDA）",
+      "region": "全球",
+      "trial": "VOYAGE 系列",
+      "note": "IL-23 p19 阻断的代表药物之一。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "tildrakizumab",
+      "label": "替拉珠单抗",
+      "inn": "tildrakizumab",
+      "targets": [
+        "IL23"
+      ],
+      "mechanism": "block",
+      "modality": "人源化 IgG1 抗 IL-23 p19",
+      "stage": "已上市",
+      "approved": "2018（FDA）",
+      "region": "全球",
+      "trial": "reSURFACE 系列",
+      "note": "IL-23 p19 阻断；不同抗体的给药间隔与 Fc 设计不同。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "fresolimumab",
+      "label": "弗雷索单抗",
+      "inn": "fresolimumab",
+      "targets": [
+        "TGFB1"
+      ],
+      "mechanism": "block",
+      "modality": "人 IgG4 抗 TGF-β1/2/3",
+      "stage": "II 期",
+      "approved": "—",
+      "region": "临床",
+      "trial": "纤维化/肿瘤研究",
+      "note": "中和 TGF-β 配体；完全阻断 TGF-β 的免疫毒性（自身免疫、心脏毒性）是主要障碍。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "galunisertib",
+      "label": "加利尼塞替",
+      "inn": "galunisertib（LY2157299）",
+      "targets": [
+        "TGFBR"
+      ],
+      "mechanism": "block",
+      "modality": "TGFBR1 小分子激酶抑制剂",
+      "stage": "II 期（未获批）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "肿瘤联合研究",
+      "note": "抑制 TGFBR1 激酶，阻断 SMAD 信号；选择性优于配体中和，但疗效有限且需生物标志物。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "bintrafusp",
+      "label": "双抗融合蛋白 M7824",
+      "inn": "bintrafusp alfa",
+      "targets": [
+        "TGFB1",
+        "CD274"
+      ],
+      "mechanism": "block",
+      "modality": "TGF-βRII 胞外域-Fc + 抗 PD-L1",
+      "stage": "终止（III 期失败）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "INTR@PID 系列",
+      "note": "同时阻断 PD-L1 与 TGF-β；III 期未达终点，说明双通路阻断的设计逻辑不等于临床获益。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "pegilodecakin",
+      "label": "培戈白介素",
+      "inn": "pegilodecakin（AM0010）",
+      "targets": [
+        "IL10R"
+      ],
+      "mechanism": "agonist",
+      "modality": "PEG 化 IL-10",
+      "stage": "终止（III 期失败）",
+      "approved": "—",
+      "region": "临床",
+      "trial": "多项 III 期",
+      "note": "IL-10 激动旨在增强 CD8 功能，但临床未获益且毒性明显；是「细胞因子激动」反例。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "ctgov"
+      ]
+    },
+    {
+      "id": "plerixafor",
+      "label": "普乐沙福",
+      "inn": "plerixafor",
+      "targets": [
+        "CXCR4"
+      ],
+      "mechanism": "block",
+      "modality": "小分子 CXCR4 拮抗剂",
+      "stage": "已上市",
+      "approved": "2008（FDA）",
+      "region": "全球",
+      "trial": "干细胞动员",
+      "note": "阻断 CXCL12/CXCR4 使造血干细胞释放入血；是趋化因子轴药物化的成功案例。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": true,
+      "refs": [
+        "fda"
+      ]
+    },
+    {
+      "id": "maraviroc",
+      "label": "马拉维若",
+      "inn": "maraviroc",
+      "targets": [
+        "CCR5"
+      ],
+      "mechanism": "block",
+      "modality": "小分子 CCR5 变构拮抗剂",
+      "stage": "已上市",
+      "approved": "2007（FDA）",
+      "region": "全球",
+      "trial": "HIV 治疗",
+      "note": "结合 CCR5 的变构位点，阻断 HIV 利用共受体；说明趋化因子受体也可被小分子精准调控。",
+      "modules": [
+        "cytokine"
+      ],
+      "graph": false,
+      "refs": [
+        "fda"
+      ]
+    }
+  ]
+}</script>
+
+<script>
+"use strict";
+
+const DATA = JSON.parse(document.getElementById("immune-data").textContent);
+const REFS = DATA.refs;
+const NODES = DATA.nodes;
+const NODE_MAP = new Map(NODES.map(n => [n.id, n]));
+const DRUGS = DATA.drugs;
+const DRUG_MAP = new Map(DRUGS.map(d => [d.id, d]));
+const MODULE_MAP = new Map(DATA.modules.map(m => [m.id, m]));
+
+const REL_META = {
+  bind:      { label: "结合",       color: "#64748b", marker: "arrow-slate" },
+  activate:  { label: "激活/共刺激", color: "#15803d", marker: "arrow-green" },
+  inhibit:   { label: "抑制",       color: "#dc2626", marker: "tbar-red" },
+  compete:   { label: "竞争",       color: "#d97706", marker: "arrow-amber" },
+  block:     { label: "药物阻断",   color: "#7c3aed", marker: "tbar-purple" },
+  agonist:   { label: "药物激动",   color: "#db2777", marker: "arrow-pink" },
+  regulate:  { label: "表达调控",   color: "#0891b2", marker: "arrow-cyan" }
+};
+const KIND_LABEL = { receptor: "受体", ligand: "配体", cytokine: "细胞因子", complex: "受体复合物", cell: "细胞效应", drug: "药物" };
+const KIND_FILL = {
+  receptor: { fill: "#e8f0fe", stroke: "#1d4ed8", text: "#173a8a" },
+  ligand:   { fill: "#e6f7f4", stroke: "#0f766e", text: "#115e59" },
+  cytokine: { fill: "#fff2e8", stroke: "#c2410c", text: "#9a3412" },
+  complex:  { fill: "#eef2ff", stroke: "#4338ca", text: "#3730a3" },
+  cell:     { fill: "#ecfdf3", stroke: "#15803d", text: "#166534" },
+  drug:     { fill: "#f5f0ff", stroke: "#6d28d9", text: "#5b21b6" }
+};
+
+const W = 1200, H = 900;
+const X_LAYER = { 1: 340, 2: 650, 3: 970 };
+
+const state = {
+  module: DATA.modules[0].id,
+  showDrugs: true,
+  showLabels: false,
+  rels: new Set(Object.keys(REL_META)),
+  evidence: "all",
+  search: "",
+  status: "all",
+  mech: "all",
+  selected: null,
+  viewNodes: [],
+  viewEdges: [],
+  positions: new Map(),
+  transform: { x: 0, y: 0, k: 1 },
+  suppressClick: false
+};
+
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const isChinese = ch => /[\u3400-\u9fff]/.test(ch);
+const relColor = rel => (REL_META[rel] || REL_META.bind).color;
+const relLabel = rel => (REL_META[rel] || REL_META.bind).label;
+
+function pillWidth(n) {
+  let w = 0;
+  for (const ch of String(n.label || n.id)) w += isChinese(ch) ? 12 : 7.1;
+  return Math.min(n.kind === "cell" ? 168 : 152, Math.max(56, w + 20));
+}
+function pillHeight(n) { return n.kind === "cell" ? 32 : 28; }
+function layerOf(n) {
+  if (n.kind === "cell") return 3;
+  if (n.kind === "receptor" || n.kind === "complex") return 2;
+  return 1;
+}
+function moduleName(id) { return (MODULE_MAP.get(id) || {}).name || id; }
+function nodeLabel(id) { const n = NODE_MAP.get(id); return n ? n.label : id; }
+function nodeRefs(n) { return (n.refs || []).filter(r => REFS[r]); }
+
+function refsHtml(ids) {
+  const arr = (ids || []).filter(id => REFS[id]);
+  if (!arr.length) return "";
+  return `<ul class="ref-list">${arr.map(id => {
+    const r = REFS[id];
+    const link = r.url ? ` <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.id || "链接")}</a>` : (r.id ? ` <span style="color:#94a3b8">${esc(r.id)}</span>` : "");
+    return `<li>${esc(r.cite)}${link}</li>`;
+  }).join("")}</ul>`;
+}
+
+/* ---------- view building ---------- */
+function buildView() {
+  const mod = state.module;
+  const main = NODES.filter(n => n.modules.includes(mod));
+  const ids = new Set(main.map(n => n.id));
+  let edges = DATA.edges.filter(e => e.modules.includes(mod) && ids.has(e.source) && ids.has(e.target));
+  edges = edges.filter(e => state.rels.has(e.rel));
+  if (state.evidence === "A") edges = edges.filter(e => e.evidence === "A");
+  if (state.evidence === "AB") edges = edges.filter(e => e.evidence !== "C");
+
+  const nodes = main.slice();
+  const drugEdges = [];
+  if (state.showDrugs) {
+    for (const d of DRUGS) {
+      if (!d.graph || !d.modules.includes(mod)) continue;
+      if (!state.rels.has(d.mechanism)) continue;
+      const targets = d.targets.filter(t => ids.has(t));
+      if (!targets.length) continue;
+      nodes.push(Object.assign({}, d, { kind: "drug", modules: d.modules }));
+      for (const t of targets) {
+        drugEdges.push({
+          source: d.id, target: t, rel: d.mechanism,
+          label: d.mechanism === "agonist" ? "激动" : "阻断",
+          affinity: "—", assay: "药物–靶点", evidence: d.evidence || "A",
+          note: d.note, refs: d.refs, modules: d.modules, _drug: true
+        });
+      }
+    }
+  }
+  state.viewNodes = nodes;
+  state.viewEdges = edges.concat(drugEdges);
+}
+
+function mainPositionsReady() {
+  return state.viewNodes.filter(n => n.kind !== "drug").every(n => state.positions.has(n.id));
+}
+
+function runLayout() {
+  state.positions.clear();
+  const main = state.viewNodes.filter(n => n.kind !== "drug");
+  const groups = (MODULE_MAP.get(state.module) || {}).groups || [];
+  const gidx = {};
+  groups.forEach((g, i) => { gidx[g] = i; });
+  const layers = { 1: [], 2: [], 3: [] };
+  for (const n of main) layers[layerOf(n)].push(n);
+
+  for (const k of ["1", "2", "3"]) {
+    const arr = layers[k];
+    arr.sort((a, b) => {
+      const ga = gidx[a.group] == null ? 99 : gidx[a.group];
+      const gb = gidx[b.group] == null ? 99 : gidx[b.group];
+      return ga - gb || String(a.label).localeCompare(String(b.label), "zh");
+    });
+    const n = arr.length;
+    arr.forEach((node, i) => {
+      const y = n === 1 ? H / 2 : 70 + i * (H - 140) / (n - 1);
+      state.positions.set(node.id, { x: X_LAYER[k], y, w: pillWidth(node), h: pillHeight(node), layer: k });
+    });
+  }
+
+  const springs = state.viewEdges.filter(e => !e._drug && state.positions.has(e.source) && state.positions.has(e.target));
+  const anchors = {};
+  groups.forEach((g, i) => { anchors[g] = 60 + (i + 0.5) * (H - 120) / Math.max(1, groups.length); });
+
+  const iters = 360;
+  for (let it = 0; it < iters; it++) {
+    const alpha = 1 - it / iters;
+    for (const e of springs) {
+      const s = state.positions.get(e.source), t = state.positions.get(e.target);
+      if (!s || !t || s.layer === t.layer) continue;
+      const dy = t.y - s.y;
+      const f = dy * 0.018 * alpha;
+      s.y += f * 0.5;
+      t.y -= f * 0.5;
+    }
+    for (const k of ["1", "2", "3"]) {
+      for (const node of layers[k]) {
+        const p = state.positions.get(node.id);
+        if (k !== "3" && anchors[node.group] != null) p.y += (anchors[node.group] - p.y) * 0.0035 * alpha;
+      }
+      const arr = layers[k].map(node => state.positions.get(node.id)).sort((a, b) => a.y - b.y);
+      for (let i = 1; i < arr.length; i++) {
+        const a = arr[i - 1], b = arr[i];
+        const min = (a.h + b.h) / 2 + 7;
+        const gap = b.y - a.y;
+        if (gap < min) {
+          const push = (min - gap) / 2 + 0.05;
+          a.y -= push;
+          b.y += push;
+        }
+      }
+      for (const p of arr) p.y = clamp(p.y, 42, H - 42);
+    }
+  }
+  layoutDrugs();
+}
+
+function layoutDrugs() {
+  const drugs = state.viewNodes.filter(n => n.kind === "drug");
+  for (const d of drugs) {
+    const ts = d.targets.map(id => state.positions.get(id)).filter(Boolean);
+    if (!ts.length) continue;
+    const tx = ts.reduce((a, b) => a + b.x, 0) / ts.length;
+    const ty = ts.reduce((a, b) => a + b.y, 0) / ts.length;
+    state.positions.set(d.id, {
+      x: clamp(tx - 195, 70, W - 80), y: ty,
+      w: pillWidth(d), h: pillHeight(d), layer: 0
+    });
+  }
+  const arr = drugs.map(d => state.positions.get(d.id)).filter(Boolean);
+  for (let it = 0; it < 100; it++) {
+    arr.sort((a, b) => a.y - b.y);
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i], b = arr[j];
+        if (Math.abs(a.x - b.x) > 175) continue;
+        const min = (a.h + b.h) / 2 + 8;
+        if (b.y - a.y < min) {
+          const push = (min - (b.y - a.y)) / 2 + 0.05;
+          a.y -= push;
+          b.y += push;
+        }
+      }
+    }
+    for (const p of arr) p.y = clamp(p.y, 38, H - 38);
+  }
+}
+
+/* ---------- graph rendering ---------- */
+function edgeGeometry(e) {
+  const s = state.positions.get(e.source), t = state.positions.get(e.target);
+  if (!s || !t) return null;
+  const same = Math.abs(s.x - t.x) < 6;
+  let x1, y1 = s.y, x2, y2 = t.y, c1, c2;
+  if (same) {
+    x1 = s.x + s.w / 2; x2 = t.x + t.w / 2;
+    const cx = Math.max(x1, x2) + 72;
+    return { d: `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`, mx: (x1 + x2) / 2 + 46, my: (y1 + y2) / 2 };
+  }
+  const forward = t.x > s.x;
+  x1 = forward ? s.x + s.w / 2 : s.x - s.w / 2;
+  x2 = forward ? t.x - t.w / 2 : t.x + t.w / 2;
+  const dx = Math.max(48, Math.abs(x2 - x1) * 0.5);
+  c1 = x1 + (forward ? dx : -dx);
+  c2 = x2 - (forward ? dx : -dx);
+  return {
+    d: `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}`,
+    mx: (x1 + 3 * c1 + 3 * c2 + x2) / 8,
+    my: (y1 + y2) / 2
+  };
+}
+
+function searchMatch(n) {
+  if (!state.search) return true;
+  const q = state.search.toLowerCase();
+  const d = n.kind === "drug" ? DRUG_MAP.get(n.id) : null;
+  const hay = [n.id, n.label, n.group, n.expr, n.note, d && d.inn, d && d.trial, d && d.modality]
+    .filter(Boolean).join(" ").toLowerCase();
+  return hay.includes(q);
+}
+
+function renderGraph() {
+  const svg = $("#graph");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const view = state.positions;
+  const sel = state.selected;
+  const selNode = sel && sel.type === "node" ? sel.id : null;
+  const selEdge = sel && sel.type === "edge" ? sel.idx : null;
+  const matchIds = new Set(state.viewNodes.filter(searchMatch).map(n => n.id));
+
+  const neighbor = new Set();
+  if (selNode) {
+    for (const e of state.viewEdges) {
+      if (e.source === selNode) neighbor.add(e.target);
+      if (e.target === selNode) neighbor.add(e.source);
+    }
+  }
+
+  let defs = `<defs>`;
+  const markers = [
+    ["arrow-slate", "#64748b", "arrow"], ["arrow-green", "#15803d", "arrow"],
+    ["arrow-amber", "#d97706", "arrow"], ["arrow-pink", "#db2777", "arrow"],
+    ["arrow-cyan", "#0891b2", "arrow"], ["tbar-red", "#dc2626", "tbar"],
+    ["tbar-purple", "#7c3aed", "tbar"]
+  ];
+  for (const [id, color, type] of markers) {
+    if (type === "arrow") {
+      defs += `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${color}"/></marker>`;
+    } else {
+      defs += `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto"><path d="M9,1.4 L9,8.6" stroke="${color}" stroke-width="2.4" stroke-linecap="round" fill="none"/></marker>`;
+    }
+  }
+  defs += `</defs>`;
+
+  let edgeHtml = "";
+  state.viewEdges.forEach((e, idx) => {
+    const g = edgeGeometry(e);
+    if (!g) return;
+    const meta = REL_META[e.rel] || REL_META.bind;
+    const isSel = selEdge === idx;
+    let dim = false;
+    if (selNode) dim = !(e.source === selNode || e.target === selNode);
+    if (selEdge != null && !isSel) dim = true;
+    if (state.search) dim = dim || !(matchIds.has(e.source) && matchIds.has(e.target));
+    const cls = "edge" + (dim ? " dim" : "") + (isSel ? " hl" : "");
+    const dash = e.rel === "compete" || e._drug ? ` stroke-dasharray="${e.rel === "compete" ? "6 5" : "4 4"}"` : "";
+    const label = e.label || relLabel(e.rel);
+    const showLabel = state.showLabels || isSel;
+    edgeHtml += `<g class="edge-g" data-idx="${idx}">`;
+    edgeHtml += `<path class="edge-hit" d="${g.d}" stroke="transparent" stroke-width="14" fill="none"/>`;
+    edgeHtml += `<path class="${cls}" d="${g.d}" stroke="${meta.color}" stroke-width="${isSel ? 3 : 1.7}" fill="none" marker-end="url(#${meta.marker})"${dash} opacity="${isSel ? 1 : 0.78}"><title>${esc(nodeLabel(e.source))} → ${esc(nodeLabel(e.target))} · ${esc(relLabel(e.rel))}${e.affinity ? " · " + esc(e.affinity) : ""}</title></path>`;
+    if (showLabel) {
+      edgeHtml += `<text x="${g.mx}" y="${g.my - 4}" text-anchor="middle" font-size="10.5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Microsoft YaHei,sans-serif" fill="#475569" paint-order="stroke" stroke="#fdfefe" stroke-width="3.2" stroke-linejoin="round" pointer-events="none">${esc(label)}</text>`;
+    }
+    edgeHtml += `</g>`;
+  });
+
+  let nodeHtml = "";
+  for (const n of state.viewNodes) {
+    const p = view.get(n.id);
+    if (!p) continue;
+    const col = KIND_FILL[n.kind] || KIND_FILL.receptor;
+    const isSel = selNode === n.id;
+    let dim = false;
+    if (selNode) dim = !(n.id === selNode || neighbor.has(n.id));
+    if (selEdge != null) {
+      const e = state.viewEdges[selEdge];
+      dim = !(e && (e.source === n.id || e.target === n.id));
+    }
+    if (state.search && !matchIds.has(n.id)) dim = true;
+    const cls = "node" + (dim ? " dim" : "") + (isSel ? " selected" : "") + (state.search && matchIds.has(n.id) ? " match" : "");
+    const dash = n.kind === "drug" ? ` stroke-dasharray="5 3"` : "";
+    const fs = n.kind === "cell" ? 11.2 : 12;
+    nodeHtml += `<g class="${cls}" data-id="${esc(n.id)}" transform="translate(${p.x},${p.y})" style="cursor:grab">`;
+    nodeHtml += `<rect x="${-p.w / 2}" y="${-p.h / 2}" width="${p.w}" height="${p.h}" rx="${p.h / 2}" fill="${col.fill}" stroke="${col.stroke}" stroke-width="${isSel ? 3.2 : 1.5}"${dash}/>`;
+    nodeHtml += `<text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="650" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Microsoft YaHei,sans-serif" fill="${col.text}" pointer-events="none">${esc(n.label)}</text>`;
+    nodeHtml += `<title>${esc(n.label)} · ${esc(KIND_LABEL[n.kind] || "")}</title>`;
+    nodeHtml += `</g>`;
+  }
+
+  svg.innerHTML = `${defs}<g id="viewport" transform="translate(${state.transform.x},${state.transform.y}) scale(${state.transform.k})">${edgeHtml}${nodeHtml}</g>`;
+  bindGraphEvents();
+}
+
+/* ---------- detail panel ---------- */
+function evidenceBadge(ev) { return `<span class="badge ev${esc(ev || "C")}">证据 ${esc(ev || "C")}</span>`; }
+
+function renderDetail() {
+  const el = $("#detail");
+  const sel = state.selected;
+  if (!sel) {
+    const m = MODULE_MAP.get(state.module);
+    el.innerHTML = `
+      <div class="detail-empty">
+        <h2>${esc(m.name)}</h2>
+        <p>${esc(m.desc)}</p>
+        <div class="note-box">点击任一<b>节点</b>查看表达、机制、相关药物与证据；点击<b>连线</b>查看关系类型、亲和力、测定体系与原始文献。拖动节点可整理布局，滚轮缩放。</div>
+        <div class="section-h">本模块高频节点</div>
+        <div class="tag-list" id="quickTags"></div>
+        <div class="disclaimer">${esc(DATA.meta.disclaimer)}</div>
+      </div>`;
+    const quick = state.viewNodes.filter(n => n.kind !== "cell" && n.kind !== "drug").slice(0, 14);
+    $("#quickTags").innerHTML = quick.map(n => `<span class="tag" data-node="${esc(n.id)}">${esc(n.label)}</span>`).join("");
+    $("#quickTags").querySelectorAll("[data-node]").forEach(t => t.addEventListener("click", () => selectNode(t.dataset.node)));
+    return;
+  }
+  if (sel.type === "edge") {
+    const e = state.viewEdges[sel.idx];
+    if (!e) { state.selected = null; renderDetail(); return; }
+    const meta = REL_META[e.rel] || REL_META.bind;
+    el.innerHTML = `
+      <div class="detail-title">${esc(nodeLabel(e.source))} <span style="color:#94a3b8">→</span> ${esc(nodeLabel(e.target))}</div>
+      <div class="detail-sub">${esc(e._drug ? "药物–靶点关系" : "分子间关系")}</div>
+      <div class="badges"><span class="badge rel" style="color:${meta.color};background:${meta.color}15">${esc(meta.label)}</span>${evidenceBadge(e.evidence)}</div>
+      <div class="kv">
+        <div class="kv-row"><dt>亲和力</dt><dd>${esc(e.affinity || "—")}</dd></div>
+        <div class="kv-row"><dt>测定体系</dt><dd>${esc(e.assay || "—")}</dd></div>
+        <div class="kv-row"><dt>模块</dt><dd>${(e.modules || []).map(moduleName).map(esc).join(" / ")}</dd></div>
+      </div>
+      <div class="section-h">机制解释</div>
+      <div class="note-box">${esc(e.note || "暂无补充说明。")}</div>
+      <div class="section-h">文献</div>
+      ${refsHtml(e.refs) || '<p style="font-size:.72rem;color:#94a3b8">暂无文献条目。</p>'}
+      <div class="disclaimer">亲和力受测定体系影响；不要把不同构建/不同实验的 KD 直接横向排序。</div>`;
+    return;
+  }
+
+  const n = NODE_MAP.get(sel.id);
+  if (!n) {
+    if (DRUG_MAP.has(sel.id)) { renderDrugDetail(sel.id); return; }
+    state.selected = null; renderDetail(); return;
+  }
+
+  const rels = [];
+  state.viewEdges.forEach((e, idx) => {
+    if (e.source === n.id || e.target === n.id) rels.push({ e, idx });
+  });
+  const drugs = DRUGS.filter(d => d.targets.includes(n.id));
+  const isDrug = false;
+
+  el.innerHTML = `
+    <div class="detail-title">${esc(n.label)}</div>
+    <div class="detail-sub">${esc(n.id)}${n.group ? " · " + esc(n.group) : ""}</div>
+    <div class="badges">
+      <span class="badge ${esc(n.kind)}">${esc(KIND_LABEL[n.kind] || n.kind)}</span>
+      ${(n.modules || []).map(m => `<span class="badge rel">${esc(moduleName(m))}</span>`).join("")}
+    </div>
+    ${n.expr ? `<div class="kv"><div class="kv-row"><dt>表达/定位</dt><dd>${esc(n.expr)}</dd></div></div>` : ""}
+    <div class="section-h">机制要点</div>
+    <div class="note-box">${esc(n.note || "暂无补充说明。")}</div>
+    <div class="section-h">直接关系（${rels.length}）</div>
+    <ul class="rel-list">
+      ${rels.map(({ e, idx }) => {
+        const other = e.source === n.id ? e.target : e.source;
+        const dir = e.source === n.id ? "→" : "←";
+        const meta = REL_META[e.rel] || REL_META.bind;
+        return `<li data-edge="${idx}"><span class="rel-dot" style="background:${meta.color}"></span><span class="rel-txt"><b>${esc(nodeLabel(other))}</b> <span style="color:#94a3b8">${dir}</span> ${esc(meta.label)}<small>${esc(e.affinity || e.assay || "")}</small></span></li>`;
+      }).join("") || '<li style="cursor:default;color:#94a3b8">当前筛选下无可见关系</li>'}
+    </ul>
+    ${drugs.length ? `<div class="section-h">相关药物（${drugs.length}）</div><ul class="drug-list">${drugs.map(d => `<li data-drug="${esc(d.id)}"><span class="rel-dot" style="background:${d.mechanism === "agonist" ? "#db2777" : "#6d28d9"}"></span><span class="rel-txt"><b>${esc(d.label)}</b><small>${esc(d.modality)} · ${esc(d.stage)}</small></span></li>`).join("")}</ul>` : ""}
+    <div class="section-h">文献</div>
+    ${refsHtml(n.refs) || '<p style="font-size:.72rem;color:#94a3b8">暂无文献条目。</p>'}
+    <div class="disclaimer">${esc(DATA.meta.disclaimer)}</div>`;
+
+  if (!isDrug && !rels.length && !drugs.length) return;
+}
+
+function renderDrugDetail(id) {
+  const d = DRUG_MAP.get(id);
+  const el = $("#detail");
+  if (!d) { el.innerHTML = ""; return; }
+  const mech = d.mechanism === "agonist" ? "激动 /  agonist" : "阻断 / 拮抗";
+  el.innerHTML = `
+    <button class="back-link" id="backOverview">← 返回模块概览</button>
+    <div class="detail-title">${esc(d.label)}</div>
+    <div class="detail-sub">${esc(d.inn || d.id)}</div>
+    <div class="badges"><span class="badge drug">药物</span><span class="badge rel">${esc(mech)}</span>${evidenceBadge(d.evidence || "A")}</div>
+    <div class="kv">
+      <div class="kv-row"><dt>靶点</dt><dd>${d.targets.map(t => `<span class="tag" data-node="${esc(t)}">${esc(nodeLabel(t))}</span>`).join(" ")}</dd></div>
+      <div class="kv-row"><dt>类型</dt><dd>${esc(d.modality || "—")}</dd></div>
+      <div class="kv-row"><dt>阶段</dt><dd>${esc(d.stage || "—")}</dd></div>
+      <div class="kv-row"><dt>首次批准</dt><dd>${esc(d.approved || "—")}</dd></div>
+      <div class="kv-row"><dt>地区</dt><dd>${esc(d.region || "—")}</dd></div>
+      <div class="kv-row"><dt>关键试验</dt><dd>${esc(d.trial || "—")}</dd></div>
+    </div>
+    <div class="section-h">机制与注意点</div>
+    <div class="note-box">${esc(d.note || "暂无补充说明。")}</div>
+    <div class="section-h">文献与注册信息</div>
+    ${refsHtml(d.refs) || '<p style="font-size:.72rem;color:#94a3b8">暂无文献条目。</p>'}
+    <div class="disclaimer">${esc(DATA.meta.disclaimer)}</div>`;
+  $("#backOverview").addEventListener("click", () => { state.selected = null; renderGraph(); renderDetail(); });
+  el.querySelectorAll("[data-node]").forEach(t => t.addEventListener("click", () => selectNode(t.dataset.node)));
+}
+
+/* ---------- selection ---------- */
+function selectNode(id) {
+  state.selected = { type: "node", id };
+  renderGraph();
+  renderDetail();
+  $("#detail").scrollTop = 0;
+}
+function selectEdge(idx) {
+  state.selected = { type: "edge", idx };
+  renderGraph();
+  renderDetail();
+  $("#detail").scrollTop = 0;
+}
+
+/* ---------- stats / tabs / chips / legend ---------- */
+function updateStats() {
+  const usedRefs = new Set();
+  for (const n of state.viewNodes) for (const r of n.refs || []) usedRefs.add(r);
+  for (const e of state.viewEdges) for (const r of e.refs || []) usedRefs.add(r);
+  const drugs = DRUGS.filter(d => d.modules.includes(state.module)).length;
+  $("#stats").innerHTML = `
+    <div class="stat"><b>${state.viewNodes.filter(n => n.kind !== "drug").length}</b>节点</div>
+    <div class="stat"><b>${state.viewEdges.filter(e => !e._drug).length}</b>关系</div>
+    <div class="stat"><b>${drugs}</b>药物</div>
+    <div class="stat"><b>${[...usedRefs].filter(r => REFS[r]).length}</b>文献</div>`;
+}
+
+function renderTabs() {
+  $("#tabs").innerHTML = DATA.modules.map(m => `<button class="tab${m.id === state.module ? " active" : ""}" data-module="${esc(m.id)}" role="tab" aria-selected="${m.id === state.module}">${esc(m.name)}</button>`).join("");
+  $("#tabs").querySelectorAll("[data-module]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.module === state.module) return;
+    state.module = b.dataset.module;
+    state.selected = null;
+    state.positions.clear();
+    rebuild(true);
+    renderTabs();
+  }));
+}
+
+function renderChips() {
+  const chips = [
+    `<span style="font-size:.7rem;color:#94a3b8;font-weight:650">关系</span>`,
+    ...Object.entries(REL_META).map(([rel, m]) => `<button class="chip ${state.rels.has(rel) ? "on" : "off"}" data-rel="${rel}"><span class="dot" style="background:${m.color}"></span>${esc(m.label)}</button>`),
+    `<span class="tool-sep"></span>`,
+    `<select class="control" id="evidenceFilter" aria-label="证据等级">
+       <option value="all"${state.evidence === "all" ? " selected" : ""}>证据：全部</option>
+       <option value="AB"${state.evidence === "AB" ? " selected" : ""}>证据：A + B</option>
+       <option value="A"${state.evidence === "A" ? " selected" : ""}>证据：仅 A</option>
+     </select>`,
+    `<button class="chip ${state.showDrugs ? "on" : "off"}" id="toggleDrugs">显示药物节点</button>`,
+    `<button class="chip ${state.showLabels ? "on" : "off"}" id="toggleLabels">显示边标签</button>`,
+    `<span class="tool-sep"></span>`,
+    `<button class="control" id="resetView">重置视图</button>`,
+    `<button class="control" id="zoomIn">＋</button>`,
+    `<button class="control" id="zoomOut">－</button>`,
+    `<button class="control primary" id="exportPng">导出 PNG</button>`,
+    `<button class="control" id="exportEdgeCsv">导出证据 CSV</button>`
+  ];
+  $("#relChips").innerHTML = chips.join("");
+
+  $("#relChips").querySelectorAll("[data-rel]").forEach(b => b.addEventListener("click", () => {
+    const rel = b.dataset.rel;
+    if (state.rels.has(rel)) state.rels.delete(rel); else state.rels.add(rel);
+    rebuild(false);
+    renderChips();
+  }));
+  $("#evidenceFilter").addEventListener("change", ev => { state.evidence = ev.target.value; rebuild(false); });
+  $("#toggleDrugs").addEventListener("click", () => { state.showDrugs = !state.showDrugs; rebuild(false); renderChips(); });
+  $("#toggleLabels").addEventListener("click", () => { state.showLabels = !state.showLabels; renderGraph(); renderChips(); });
+  $("#resetView").addEventListener("click", () => { state.transform = { x: 0, y: 0, k: 1 }; applyTransform(); });
+  $("#zoomIn").addEventListener("click", () => zoomBy(1.25));
+  $("#zoomOut").addEventListener("click", () => zoomBy(0.8));
+  $("#exportPng").addEventListener("click", exportPng);
+  $("#exportEdgeCsv").addEventListener("click", exportEdgeCsv);
+}
+
+function renderLegend() {
+  $("#legend").innerHTML = `
+    <span><i style="border-color:#64748b"></i>结合</span>
+    <span><i style="border-color:#15803d"></i>激活/共刺激</span>
+    <span><i class="tbar" style="color:#dc2626"></i>抑制</span>
+    <span><i class="dash" style="border-color:#d97706"></i>竞争</span>
+    <span><i class="tbar" style="color:#7c3aed"></i>药物阻断</span>
+    <span><i style="border-color:#db2777"></i>药物激动</span>
+    <span><i style="border-color:#0891b2"></i>表达调控</span>
+    <span style="color:#94a3b8">虚线框 = 药物节点</span>`;
+}
+
+/* ---------- table ---------- */
+function statusClass(d) {
+  if (/终止|失败|撤市/.test(d.stage)) return "terminated";
+  if (/已上市/.test(d.stage)) return "approved";
+  return "clinical";
+}
+function renderTable() {
+  const q = state.search.toLowerCase();
+  let rows = DRUGS.filter(d => d.modules.includes(state.module));
+  if (state.status !== "all") rows = rows.filter(d => statusClass(d) === state.status);
+  if (state.mech !== "all") rows = rows.filter(d => d.mechanism === state.mech);
+  if (q) rows = rows.filter(d => [d.label, d.inn, d.modality, d.stage, d.trial, d.note, ...d.targets.map(nodeLabel)].join(" ").toLowerCase().includes(q));
+  rows.sort((a, b) => {
+    const order = { approved: 0, clinical: 1, terminated: 2 };
+    return (order[statusClass(a)] - order[statusClass(b)]) || String(a.label).localeCompare(String(b.label), "zh");
+  });
+  $("#tableCount").textContent = `当前模块 ${rows.length} 条 · 点击行查看详情或定位`;
+  $("#drugBody").innerHTML = rows.map(d => {
+    const sc = statusClass(d);
+    const targets = d.targets.map(t => `<span class="tag" data-node="${esc(t)}">${esc(nodeLabel(t))}</span>`).join(" ");
+    return `<tr data-drug="${esc(d.id)}">
+      <td><span class="drug-name">${esc(d.label)}</span><span class="drug-inn">${esc(d.inn || "")}</span></td>
+      <td>${targets}</td>
+      <td><span class="mech ${esc(d.mechanism)}">${d.mechanism === "agonist" ? "激动" : "阻断"}</span></td>
+      <td>${esc(d.modality || "—")}</td>
+      <td><span class="status ${sc}">${esc(d.stage)}</span></td>
+      <td>${esc(d.approved || "—")}<span class="small">${esc(d.region || "")}</span></td>
+      <td>${esc(d.trial || "—")}<span class="small">${esc(d.note || "")}</span></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" style="color:#94a3b8;padding:18px;text-align:center">没有匹配的药物</td></tr>`;
+
+  $("#drugBody").querySelectorAll("tr[data-drug]").forEach(tr => tr.addEventListener("click", () => {
+    const id = tr.dataset.drug;
+    if (state.showDrugs && state.positions.has(id)) {
+      selectNode(id);
+      return;
+    }
+    state.selected = { type: "node", id };
+    renderDrugDetail(id);
+    $("#detail").scrollTop = 0;
+  }));
+  $("#drugBody").querySelectorAll("[data-node]").forEach(t => t.addEventListener("click", ev => {
+    ev.stopPropagation();
+    selectNode(t.dataset.node);
+  }));
+}
+
+function renderSources() {
+  const used = new Set();
+  for (const n of NODES) for (const r of n.refs || []) used.add(r);
+  for (const e of DATA.edges) for (const r of e.refs || []) used.add(r);
+  for (const d of DRUGS) for (const r of d.refs || []) used.add(r);
+  const rows = [...used].filter(id => REFS[id]).map(id => {
+    const r = REFS[id];
+    const link = r.url ? ` <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.id || "链接")}</a>` : (r.id ? ` <span style="color:#94a3b8">${esc(r.id)}</span>` : "");
+    return `<li>${esc(r.cite)}${link}</li>`;
+  });
+  $("#sourceList").innerHTML = rows.join("");
+}
+
+/* ---------- graph events ---------- */
+let drag = null;
+let pan = null;
+let moved = false;
+let rafPending = false;
+
+function bindGraphEvents() {
+  const svg = $("#graph");
+  svg.onpointerdown = onPointerDown;
+  svg.onpointermove = onPointerMove;
+  svg.onpointerup = onPointerUp;
+  svg.onpointercancel = onPointerUp;
+  svg.onwheel = onWheel;
+  svg.onclick = onClick;
+  svg.onpointerover = onPointerOver;
+  svg.onpointerout = onPointerOut;
+}
+
+function rootPoint(evt) {
+  const svg = $("#graph");
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX; pt.y = evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function graphPoint(evt) {
+  const p = rootPoint(evt);
+  return { x: (p.x - state.transform.x) / state.transform.k, y: (p.y - state.transform.y) / state.transform.k };
+}
+function onPointerDown(evt) {
+  if (evt.button !== 0) return;
+  const nodeEl = evt.target.closest && evt.target.closest(".node");
+  moved = false;
+  if (nodeEl) {
+    const id = nodeEl.dataset.id;
+    const p = state.positions.get(id);
+    if (!p) return;
+    const gp = graphPoint(evt);
+    drag = { id, dx: gp.x - p.x, dy: gp.y - p.y };
+    $("#graphWrap").classList.add("dragging");
+  } else {
+    pan = { clientX: evt.clientX, clientY: evt.clientY, tx: state.transform.x, ty: state.transform.y };
+    $("#graphWrap").classList.add("dragging");
+  }
+  const svg = $("#graph");
+  if (svg.setPointerCapture) svg.setPointerCapture(evt.pointerId);
+}
+function onPointerMove(evt) {
+  if (drag) {
+    const gp = graphPoint(evt);
+    const p = state.positions.get(drag.id);
+    if (!p) return;
+    p.x = clamp(gp.x - drag.dx, 50, W - 50);
+    p.y = clamp(gp.y - drag.dy, 30, H - 30);
+    moved = true;
+    if (!rafPending) {
+      rafPending = true;
+      requestAnimationFrame(() => { rafPending = false; renderGraph(); });
+    }
+  } else if (pan) {
+    const dx = evt.clientX - pan.clientX;
+    const dy = evt.clientY - pan.clientY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    state.transform.x = pan.tx + dx;
+    state.transform.y = pan.ty + dy;
+    applyTransform();
+  }
+}
+function onPointerUp() {
+  drag = null; pan = null;
+  $("#graphWrap").classList.remove("dragging");
+  if (moved) {
+    state.suppressClick = true;
+    setTimeout(() => { state.suppressClick = false; }, 60);
+  }
+}
+function onClick(evt) {
+  if (state.suppressClick) return;
+  const nodeEl = evt.target.closest && evt.target.closest(".node");
+  if (nodeEl) { selectNode(nodeEl.dataset.id); return; }
+  const edgeEl = evt.target.closest && evt.target.closest(".edge-g");
+  if (edgeEl) { selectEdge(Number(edgeEl.dataset.idx)); return; }
+  state.selected = null;
+  renderGraph();
+  renderDetail();
+}
+function onWheel(evt) {
+  evt.preventDefault();
+  const p = rootPoint(evt);
+  const k = state.transform.k;
+  const k2 = clamp(k * (evt.deltaY < 0 ? 1.12 : 0.89), 0.35, 3.2);
+  state.transform.x = p.x - (p.x - state.transform.x) * (k2 / k);
+  state.transform.y = p.y - (p.y - state.transform.y) * (k2 / k);
+  state.transform.k = k2;
+  applyTransform();
+}
+function applyTransform() {
+  const vp = $("#viewport");
+  if (vp) vp.setAttribute("transform", `translate(${state.transform.x},${state.transform.y}) scale(${state.transform.k})`);
+}
+function zoomBy(f) {
+  const svg = $("#graph");
+  const rect = svg.getBoundingClientRect();
+  const p = { x: W / 2, y: H / 2 };
+  const k = state.transform.k;
+  const k2 = clamp(k * f, 0.35, 3.2);
+  state.transform.x = p.x - (p.x - state.transform.x) * (k2 / k);
+  state.transform.y = p.y - (p.y - state.transform.y) * (k2 / k);
+  state.transform.k = k2;
+  applyTransform();
+}
+function onPointerOver(evt) {
+  const tip = $("#tip");
+  const edgeEl = evt.target.closest && evt.target.closest(".edge-g");
+  const nodeEl = evt.target.closest && evt.target.closest(".node");
+  if (edgeEl) {
+    const e = state.viewEdges[Number(edgeEl.dataset.idx)];
+    if (!e) return;
+    tip.innerHTML = `<b>${esc(nodeLabel(e.source))} → ${esc(nodeLabel(e.target))}</b><br>${esc(relLabel(e.rel))}${e.affinity ? " · " + esc(e.affinity) : ""}`;
+    showTip(evt);
+  } else if (nodeEl) {
+    const n = state.viewNodes.find(x => x.id === nodeEl.dataset.id);
+    if (!n) return;
+    tip.innerHTML = `<b>${esc(n.label)}</b><br>${esc(KIND_LABEL[n.kind] || "")}${n.expr ? " · " + esc(n.expr) : ""}`;
+    showTip(evt);
+  }
+}
+function showTip(evt) {
+  const tip = $("#tip");
+  const wrap = $("#graphWrap").getBoundingClientRect();
+  tip.style.left = (evt.clientX - wrap.left) + "px";
+  tip.style.top = (evt.clientY - wrap.top - 8) + "px";
+  tip.classList.add("on");
+}
+function onPointerOut(evt) {
+  if (evt.target.closest && (evt.target.closest(".edge-g") || evt.target.closest(".node"))) {
+    $("#tip").classList.remove("on");
+  }
+}
+
+/* ---------- rebuild ---------- */
+function rebuild(relayout) {
+  buildView();
+  if (relayout || !mainPositionsReady()) runLayout();
+  else layoutDrugs();
+  if (state.selected && state.selected.type === "edge" && !state.viewEdges[state.selected.idx]) state.selected = null;
+  if (state.selected && state.selected.type === "node" && !state.positions.has(state.selected.id)) state.selected = null;
+  renderGraph();
+  renderDetail();
+  updateStats();
+  renderTable();
+}
+
+/* ---------- exports ---------- */
+function downloadBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function csvEscape(v) { return `"${String(v == null ? "" : v).replace(/"/g, '""')}"`; }
+function exportEdgeCsv() {
+  const rows = [["source", "target", "relation", "affinity", "assay", "evidence", "note", "refs"]];
+  for (const e of state.viewEdges) {
+    rows.push([nodeLabel(e.source), nodeLabel(e.target), relLabel(e.rel), e.affinity, e.assay, e.evidence, e.note, (e.refs || []).join(";")]);
+  }
+  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\r\n");
+  downloadBlob(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }), `immune-relations-${state.module}.csv`);
+}
+function exportDrugCsv() {
+  const q = state.search.toLowerCase();
+  let rows = DRUGS.filter(d => d.modules.includes(state.module));
+  if (state.status !== "all") rows = rows.filter(d => statusClass(d) === state.status);
+  if (state.mech !== "all") rows = rows.filter(d => d.mechanism === state.mech);
+  if (q) rows = rows.filter(d => [d.label, d.inn, d.modality, d.stage, d.trial, d.note, ...d.targets.map(nodeLabel)].join(" ").toLowerCase().includes(q));
+  const out = [["drug", "inn", "targets", "mechanism", "modality", "stage", "approved", "region", "trial", "note"]];
+  for (const d of rows) out.push([d.label, d.inn, d.targets.map(nodeLabel).join(";"), d.mechanism, d.modality, d.stage, d.approved, d.region, d.trial, d.note]);
+  const csv = out.map(r => r.map(csvEscape).join(",")).join("\r\n");
+  downloadBlob(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }), `immune-drugs-${state.module}.csv`);
+}
+function exportPng() {
+  const svg = $("#graph");
+  const clone = svg.cloneNode(true);
+  const vp = clone.querySelector("#viewport");
+  if (vp) vp.setAttribute("transform", "translate(0,0) scale(1)");
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", W);
+  clone.setAttribute("height", H);
+  const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#ffffff");
+  clone.insertBefore(bg, clone.firstChild);
+  const str = new XMLSerializer().serializeToString(clone);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = W * 2; c.height = H * 2;
+    const ctx = c.getContext("2d");
+    ctx.scale(2, 2);
+    ctx.drawImage(img, 0, 0, W, H);
+    c.toBlob(b => downloadBlob(b, `immune-map-${state.module}.png`), "image/png");
+  };
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(str);
+}
+
+/* ---------- boot ---------- */
+function boot() {
+  $("#snapshot").textContent = DATA.meta.snapshot;
+  $("#snapshot2").textContent = DATA.meta.snapshot;
+  renderTabs();
+  renderChips();
+  renderLegend();
+  renderSources();
+  buildView();
+  runLayout();
+  renderGraph();
+  renderDetail();
+  updateStats();
+  renderTable();
+
+  $("#search").addEventListener("input", ev => {
+    state.search = ev.target.value.trim();
+    renderGraph();
+    renderTable();
+  });
+  $("#statusFilter").addEventListener("change", ev => { state.status = ev.target.value; renderTable(); });
+  $("#mechFilter").addEventListener("change", ev => { state.mech = ev.target.value; renderTable(); });
+  $("#exportDrugCsv").addEventListener("click", exportDrugCsv);
+  document.addEventListener("keydown", ev => {
+    if (ev.key === "Escape") { state.selected = null; renderGraph(); renderDetail(); }
+  });
+}
+boot();
+
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () => {
+    const swUrl = new URL("sw.js", document.baseURI);
+    const scope = new URL(".", swUrl).pathname;
+    navigator.serviceWorker.register(swUrl, { scope }).catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

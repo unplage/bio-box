@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1d4ed8">
+<meta name="description" content="免疫靶点关系图谱：检查点/共刺激与细胞因子/趋化因子的配体-受体-药物证据网络，标注亲和力、机制与文献来源。">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="免疫图谱">
+<title>免疫靶点关系图谱 · Immune Target Atlas</title>
+<style>
+:root{
+  --ink:#0f172a; --muted:#64748b; --muted2:#94a3b8;
+  --bg:#f3f6fb; --card:#ffffff; --line:#e2e8f0;
+  --blue:#1d4ed8; --blue-soft:#e8effd; --teal:#0f766e; --teal-soft:#e6f7f4;
+  --orange:#c2410c; --orange-soft:#fff2e8; --indigo:#4338ca; --indigo-soft:#eef2ff;
+  --green:#15803d; --green-soft:#ecfdf3; --red:#b91c1c;
+  --purple:#6d28d9; --purple-soft:#f5f0ff; --amber:#b45309;
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 12px 32px rgba(15,23,42,.07);
+  --radius:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6;padding-bottom:48px}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+button,select,input{font:inherit}
+.wrap{max-width:1440px;margin:0 auto;padding:0 20px}
+
+/* Hero */
+.hero{
+  background:
+    radial-gradient(900px 420px at 18% -20%,rgba(56,189,248,.30),transparent 60%),
+    radial-gradient(760px 360px at 82% -10%,rgba(167,139,250,.28),transparent 60%),
+    linear-gradient(135deg,#0f172a 0%,#172554 52%,#312e81 100%);
+  color:#fff;padding:38px 0 34px;position:relative;overflow:hidden;
+}
+.hero::after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.08) 1px,transparent 1px);background-size:22px 22px;opacity:.45;pointer-events:none}
+.hero .wrap{position:relative;z-index:1}
+.hero-top{display:flex;justify-content:space-between;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.hero h1{font-size:clamp(1.5rem,2.4vw,2.15rem);letter-spacing:.01em;font-weight:750}
+.hero .sub{color:#c7d2fe;margin-top:8px;font-size:.95rem;max-width:850px}
+.snapshot{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:12px;padding:10px 14px;font-size:.72rem;color:#c7d2fe;text-align:right;white-space:nowrap}
+.snapshot strong{display:block;font-size:1.02rem;color:#fff;font-weight:650;letter-spacing:.03em}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.stat{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.17);border-radius:11px;padding:8px 13px;font-size:.76rem;color:#dbeafe;min-width:96px}
+.stat b{display:block;color:#fff;font-size:1.25rem;line-height:1.15;font-variant-numeric:tabular-nums}
+
+/* Cards */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid rgba(226,232,240,.8)}
+.intro{margin-top:20px;padding:16px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.intro-item{display:flex;gap:11px;align-items:flex-start}
+.intro-num{flex:0 0 auto;width:27px;height:27px;border-radius:9px;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;font-weight:750;font-size:.8rem}
+.intro h3{font-size:.85rem;font-weight:700;margin-bottom:2px}
+.intro p{font-size:.76rem;color:var(--muted);line-height:1.5}
+
+/* Module bar */
+.modulebar{margin-top:18px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;background:#e9eef7;border:1px solid var(--line);padding:4px;border-radius:12px}
+.tab{border:0;background:transparent;color:var(--muted);padding:8px 15px;border-radius:9px;font-size:.82rem;font-weight:650;cursor:pointer;transition:.15s;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.active{background:#fff;color:var(--blue);box-shadow:0 1px 5px rgba(15,23,42,.12)}
+.searchbox{position:relative;flex:1;max-width:380px;min-width:220px}
+.searchbox input{width:100%;padding:10px 13px 10px 36px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);font-size:.82rem;outline:none;transition:.15s}
+.searchbox input:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.13)}
+.searchbox::before{content:"⌕";position:absolute;left:12px;top:50%;transform:translateY(-52%);color:var(--muted2);font-size:1.05rem}
+
+/* Workspace */
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:16px;margin-top:16px;align-items:start}
+.graph-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid rgba(226,232,240,.8);overflow:hidden}
+.graph-toolbar{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#fbfdff}
+.chip{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:999px;padding:5px 10px;font-size:.71rem;font-weight:650;cursor:pointer;display:inline-flex;gap:6px;align-items:center;transition:.14s;user-select:none}
+.chip .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.chip.on{background:#f8fafc;color:var(--ink);border-color:#cbd5e1;box-shadow:inset 0 0 0 1px rgba(148,163,184,.12)}
+.chip.off{opacity:.42;filter:grayscale(.4)}
+.tool-sep{width:1px;height:22px;background:var(--line);margin:0 2px}
+.control{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;font-size:.73rem;color:var(--muted);cursor:pointer;transition:.14s;font-weight:600}
+.control:hover{border-color:#cbd5e1;color:var(--ink)}
+.control.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.control.primary:hover{background:#1e40af}
+.control:disabled{opacity:.4;cursor:not-allowed}
+.graph-wrap{position:relative;height:clamp(540px,72vh,860px);overflow:hidden;background:radial-gradient(circle at 35% 25%,rgba(232,240,254,.85),transparent 55%),radial-gradient(circle at 75% 75%,rgba(236,253,243,.65),transparent 55%),#fdfefe;cursor:grab;touch-action:none}
+.graph-wrap.dragging{cursor:grabbing}
+#graph{width:100%;height:100%;display:block;touch-action:none}
+.zoom-hint{position:absolute;left:12px;bottom:10px;background:rgba(255,255,255,.88);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:.66rem;color:var(--muted2);pointer-events:none;backdrop-filter:blur(4px)}
+.tip{position:absolute;z-index:20;pointer-events:none;max-width:300px;background:rgba(15,23,42,.94);color:#e2e8f0;border-radius:9px;padding:8px 10px;font-size:.71rem;line-height:1.45;box-shadow:0 8px 24px rgba(2,6,23,.28);opacity:0;transform:translate(-50%,-115%);transition:opacity .1s}
+.tip.on{opacity:1}
+.tip b{color:#fff}
+.legend{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:13px;flex-wrap:wrap;font-size:.68rem;color:var(--muted);background:#fbfdff}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:18px;height:0;border-top:2.4px solid #64748b;display:inline-block}
+.legend i.dash{border-top-style:dashed}
+.legend i.tbar{position:relative}
+.legend i.tbar::after{content:"";position:absolute;right:-1px;top:-5px;height:9px;border-right:2.4px solid currentColor}
+
+/* Detail */
+.detail{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid rgba(226,232,240,.8);padding:17px;position:sticky;top:16px;max-height:calc(clamp(540px,72vh,860px) + 100px);overflow:auto}
+.detail::-webkit-scrollbar{width:8px}
+.detail::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+.detail-empty h2{font-size:1rem;margin-bottom:7px}
+.detail-empty p{font-size:.78rem;color:var(--muted);margin-bottom:11px}
+.kv{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.kv-row{display:grid;grid-template-columns:76px 1fr;gap:9px;font-size:.76rem}
+.kv-row dt{color:var(--muted2);font-weight:600}
+.kv-row dd{color:#334155;min-width:0;word-break:break-word}
+.detail-title{font-size:1.12rem;font-weight:750;line-height:1.25}
+.detail-sub{font-size:.73rem;color:var(--muted);margin-top:3px}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.badge{font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.01em}
+.badge.receptor{background:var(--blue-soft);color:#1e40af}
+.badge.ligand{background:var(--teal-soft);color:#115e59}
+.badge.cytokine{background:var(--orange-soft);color:#9a3412}
+.badge.complex{background:var(--indigo-soft);color:#3730a3}
+.badge.cell{background:var(--green-soft);color:#166534}
+.badge.drug{background:var(--purple-soft);color:#5b21b6}
+.badge.evA{background:#dcfce7;color:#166534}
+.badge.evB{background:#fef3c7;color:#92400e}
+.badge.evC{background:#fee2e2;color:#991b1b}
+.badge.rel{background:#f1f5f9;color:#334155}
+.section-h{font-size:.7rem;font-weight:750;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;margin:16px 0 7px}
+.note-box{font-size:.77rem;color:#334155;background:#f8fafc;border:1px solid #eef2f7;border-radius:10px;padding:10px 11px}
+.rel-list,.ref-list,.drug-list{list-style:none;display:flex;flex-direction:column;gap:5px}
+.rel-list li,.drug-list li{font-size:.74rem;border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;display:flex;gap:7px;align-items:flex-start;transition:.13s;background:#fff}
+.rel-list li:hover,.drug-list li:hover{border-color:#bfdbfe;background:#f8fbff}
+.rel-dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;margin-top:6px}
+.rel-txt{flex:1;min-width:0}
+.rel-txt b{font-weight:650}
+.rel-txt small{display:block;color:var(--muted2);font-size:.66rem;line-height:1.35}
+.ref-list li{font-size:.7rem;color:var(--muted);line-height:1.45;padding-left:11px;position:relative}
+.ref-list li::before{content:"·";position:absolute;left:2px;color:#94a3b8}
+.tag-list{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:.68rem;border:1px solid var(--line);border-radius:999px;padding:3px 8px;background:#f8fafc;color:#334155;cursor:pointer}
+.tag:hover{border-color:#bfdbfe;color:var(--blue)}
+.back-link{background:none;border:0;color:var(--blue);font-size:.72rem;cursor:pointer;padding:0;margin-bottom:8px;font-weight:650}
+.disclaimer{font-size:.68rem;color:var(--muted2);margin-top:14px;border-top:1px dashed var(--line);padding-top:10px;line-height:1.5}
+
+/* Table */
+.table-card{margin-top:16px;padding:17px 18px}
+.table-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:11px}
+.table-head h2{font-size:.98rem;font-weight:750}
+.table-head p{font-size:.72rem;color:var(--muted);margin-top:2px}
+.table-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.table-tools select{border:1px solid var(--line);border-radius:9px;padding:6px 9px;font-size:.73rem;background:#fff;color:#334155}
+.table-scroll{overflow:auto;border:1px solid var(--line);border-radius:11px}
+table{width:100%;border-collapse:collapse;font-size:.73rem;min-width:980px}
+thead th{position:sticky;top:0;background:#f8fafc;color:var(--muted);font-weight:700;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr{cursor:pointer;transition:.1s}
+tbody tr:hover{background:#f8fbff}
+.drug-name{font-weight:700;color:#1e293b;white-space:nowrap}
+.drug-inn{display:block;font-weight:400;color:var(--muted2);font-size:.66rem}
+.status{font-size:.64rem;font-weight:700;padding:2px 6px;border-radius:5px;white-space:nowrap;display:inline-block}
+.status.approved{background:#dcfce7;color:#166534}
+.status.clinical{background:#dbeafe;color:#1e40af}
+.status.terminated{background:#fee2e2;color:#991b1b}
+.mech{font-size:.64rem;font-weight:700;padding:2px 6px;border-radius:5px;white-space:nowrap}
+.mech.block{background:#ede9fe;color:#5b21b6}
+.mech.agonist{background:#fce7f3;color:#9d174d}
+td .small{color:var(--muted2);font-size:.66rem;display:block;margin-top:1px}
+.table-note{font-size:.68rem;color:var(--muted2);margin-top:9px;line-height:1.5}
+
+/* Notes & sources */
+.notes{margin-top:16px;padding:18px 20px}
+.notes h2{font-size:1rem;margin-bottom:6px}
+.notes .lead{font-size:.78rem;color:var(--muted);margin-bottom:6px}
+details{border-top:1px solid var(--line);padding:11px 0}
+details:last-child{border-bottom:0;padding-bottom:0}
+summary{cursor:pointer;font-weight:700;font-size:.83rem;color:#1e293b;list-style:none;display:flex;align-items:center;gap:7px}
+summary::before{content:"＋";color:var(--blue);font-weight:800;font-size:.8rem;width:14px}
+details[open] summary::before{content:"－"}
+details p,details li{font-size:.75rem;color:#475569;line-height:1.6}
+details ul{padding-left:19px;margin-top:7px}
+details li{margin-bottom:4px}
+.grade-table{width:100%;border-collapse:collapse;font-size:.72rem;margin-top:8px;min-width:0}
+.grade-table th,.grade-table td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.grade-table th{background:#f8fafc;color:var(--muted);font-weight:700}
+.sources{padding:16px 20px}
+.source-list{columns:2;column-gap:26px;margin-top:10px}
+.source-list li{font-size:.69rem;color:var(--muted);line-height:1.5;break-inside:avoid;margin-bottom:6px;list-style:none;padding-left:10px;position:relative}
+.source-list li::before{content:"·";position:absolute;left:0;color:#94a3b8}
+footer{max-width:1440px;margin:24px auto 0;padding:0 20px;font-size:.7rem;color:var(--muted2);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+@media (max-width:1100px){
+  .workspace{grid-template-columns:1fr}
+  .detail{position:static;max-height:none}
+  .intro{grid-template-columns:1fr}
+  .source-list{columns:1}
+}
+@media (max-width:640px){
+  .wrap{padding:0 12px}
+  .hero{padding:26px 0 24px}
+  .hero h1{font-size:1.35rem}
+  .graph-wrap{height:66vh}
+  .graph-toolbar{padding:8px}
+  .legend{gap:8px}
+  .detail{padding:14px}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-top">
+      <div>
+        <h1>免疫靶点关系图谱</h1>
+        <p class="sub">把配体–受体、共刺激/共抑制、竞争性阻断与激动剂放进同一张可追溯的证据网络。每个关系都标注机制方向、亲和力口径与文献来源。</p>
+      </div>
+      <div class="snapshot">数据快照<strong id="snapshot">—</strong></div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card intro">
+    <div class="intro-item">
+      <div class="intro-num">1</div>
+      <div><h3>先看方向</h3><p>箭头表示关系方向：配体→受体、受体→细胞效应、药物→靶点。红色 T 形是抑制/阻断，绿色箭头是激活/共刺激。</p></div>
+    </div>
+    <div class="intro-item">
+      <div class="intro-num">2</div>
+      <div><h3>再看竞争</h3><p>同一配体被多个受体共享时，亲和力差异决定谁占优势。例如 CTLA-4 与 CD28 竞争 CD80/86，TIGIT 与 CD226 竞争 CD155。</p></div>
+    </div>
+    <div class="intro-item">
+      <div class="intro-num">3</div>
+      <div><h3>最后看证据</h3><p>点击节点或连线查看亲和力、测定体系、证据等级与文献。药物表给出机制、最高阶段与首次批准年份。</p></div>
+    </div>
+  </section>
+
+  <section class="modulebar">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="searchbox"><input id="search" type="search" placeholder="搜索靶点、配体、药物或机制关键词…" autocomplete="off" aria-label="搜索"></div>
+  </section>
+
+  <section class="workspace">
+    <div class="graph-card">
+      <div class="graph-toolbar" id="relChips"></div>
+      <div class="graph-wrap" id="graphWrap">
+        <svg id="graph" role="img" aria-label="免疫靶点关系网络图"></svg>
+        <div class="tip" id="tip"></div>
+        <div class="zoom-hint">滚轮缩放 · 拖动空白平移 · 拖动节点调整 · 点击查看证据</div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <aside class="detail" id="detail" aria-live="polite"></aside>
+  </section>
+
+  <section class="card table-card">
+    <div class="table-head">
+      <div>
+        <h2>药物–靶点证据表</h2>
+        <p id="tableCount"></p>
+      </div>
+      <div class="table-tools">
+        <select id="statusFilter" aria-label="按阶段筛选">
+          <option value="all">全部阶段</option>
+          <option value="approved">已上市</option>
+          <option value="clinical">临床阶段</option>
+          <option value="terminated">终止 / 失败</option>
+        </select>
+        <select id="mechFilter" aria-label="按机制筛选">
+          <option value="all">全部机制</option>
+          <option value="block">阻断 / 拮抗</option>
+          <option value="agonist">激动</option>
+        </select>
+        <button class="control" id="exportDrugCsv">导出药物表 CSV</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>药物</th><th>靶点</th><th>机制</th><th>类型</th><th>阶段（快照）</th><th>首次批准</th><th>关键试验 / 备注</th></tr>
+        </thead>
+        <tbody id="drugBody"></tbody>
+      </table>
+    </div>
+    <p class="table-note">阶段列是公开资料快照，不等于实时监管状态；已上市药物仍可能因适应证撤回或安全性问题改变标签。点击任一行可在图中定位（若该药物已作为图节点显示）。</p>
+  </section>
+
+  <section class="card notes">
+    <h2>如何读这张图</h2>
+    <p class="lead">这张图刻意区分「结合」「信号方向」「竞争」「药物干预」四件事——它们经常被混为一谈。</p>
+
+    <details open>
+      <summary>关系类型与视觉编码</summary>
+      <ul>
+        <li><b>灰色箭头（结合）</b>：配体与受体的物理结合，不代表净激活或抑制。例如 PD-L1→PD-1 是结合，PD-1→T 细胞才是抑制信号。</li>
+        <li><b>绿色箭头（激活/共刺激）</b>：受体 engagement 后增强 T/NK/APC 功能。箭头指向细胞效应节点。</li>
+        <li><b>红色 T 形（抑制）</b>：抑制性受体传递负信号，或阻断关键共刺激。</li>
+        <li><b>橙色虚线（竞争）</b>：两个受体共享同一配体，或配体与天然拮抗剂竞争同一受体。虚线不表示物理结合。</li>
+        <li><b>紫色 T 形 / 粉色箭头</b>：药物阻断 / 药物激动。药物节点靠近其靶点放置，虚线边框表示「干预者」而非内源分子。</li>
+        <li><b>青色箭头（表达调控）</b>：一个通路改变另一个分子的表达，例如 IFN-γ 诱导 PD-L1。</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>亲和力（KD）为什么不能直接横向比较</summary>
+      <p>KD 是体系依赖的：单体 vs 二价 Fc 融合蛋白、固定方式、温度、缓冲液、受体密度都会改变表观值。二价融合蛋白的表观 KD 常比单体低 10–100 倍。本工具优先标注测定体系；没有可靠数值时只写「定性结合」，不强行给出数字。</p>
+      <p style="margin-top:6px">例如 PD-1/PD-L1：二价 SPR 表观 KD 约 10 nM，而单体相互作用在 2–8 µM 范围——相差近三个数量级。CTLA-4/CD80 的单体 KD 约 0.42 µM，CD28/CD80 约 4 µM，因此 CTLA-4 在竞争中占优。</p>
+    </details>
+
+    <details>
+      <summary>证据等级</summary>
+      <table class="grade-table">
+        <thead><tr><th>等级</th><th>含义</th><th>典型支持</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge evA">A</span></td><td>机制与人体相关性较明确</td><td>结构/生化 + 功能实验 + 遗传或临床药物数据</td></tr>
+          <tr><td><span class="badge evB">B</span></td><td>功能证据较强，人体因果性有限</td><td>体外功能、动物模型、多个独立体系</td></tr>
+          <tr><td><span class="badge evC">C</span></td><td>关联性或存在争议</td><td>表达相关性、单一体系、机制仍有分歧</td></tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>几个容易误读的点</summary>
+      <ul>
+        <li><b>「高表达」不等于「高活性」</b>：受体的信号强度取决于配体密度、亲和力、胞内结构域和共受体背景。</li>
+        <li><b>「阻断」不等于「抑制」</b>：阻断 CTLA-4 解除抑制，净效应是激活；阻断 4-1BB 则相反。</li>
+        <li><b>同一分子可以双向</b>：TGF-β 既抑制效应 T/NK，又维持 Treg；IL-2 低剂量优先扩增 Treg，高剂量激活效应细胞。</li>
+        <li><b>激动剂需要交联</b>：4-1BB、CD40、OX40 等 TNFR 家族成员的激动抗体常依赖 FcγR 交联或膜结合配体，体外单体激动数据不能直接外推。</li>
+        <li><b>Fc 效应会改变机制</b>：抗 CTLA-4、抗 CD40、抗 CD25 的 Fc 设计可能通过 ADCC/ADCP 清除靶细胞，而不是单纯阻断信号。</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary>局限与免责声明</summary>
+      <p>本工具用于机制梳理与靶点组合假设生成，不是临床决策工具。亲和力数值来自公开文献，可能因实验体系不同而与实际生理条件有差异；临床阶段与监管状态会随时间变化。药物适应证、联合用药与安全性请以最新说明书、NMPA/FDA 公告和注册临床试验为准。</p>
+    </details>
+  </section>
+
+  <details class="card sources" id="sourcesCard">
+    <summary>文献与数据来源（可检索标识）</summary>
+    <ul class="source-list" id="sourceList"></ul>
+  </details>
+</main>
+
+<footer>
+  <span>Immune Target Atlas · 单文件离线工具 · 无外部依赖</span>
+  <span>数据快照 <span id="snapshot2">—</span> · 仅用于科研与机制讨论</span>
+</footer>
+
+<script id="immune-data" type="application/json">__IMMUNE_DATA__</script>
+
+<script>
+"use strict";
+
+const DATA = JSON.parse(document.getElementById("immune-data").textContent);
+const REFS = DATA.refs;
+const NODES = DATA.nodes;
+const NODE_MAP = new Map(NODES.map(n => [n.id, n]));
+const DRUGS = DATA.drugs;
+const DRUG_MAP = new Map(DRUGS.map(d => [d.id, d]));
+const MODULE_MAP = new Map(DATA.modules.map(m => [m.id, m]));
+
+const REL_META = {
+  bind:      { label: "结合",       color: "#64748b", marker: "arrow-slate" },
+  activate:  { label: "激活/共刺激", color: "#15803d", marker: "arrow-green" },
+  inhibit:   { label: "抑制",       color: "#dc2626", marker: "tbar-red" },
+  compete:   { label: "竞争",       color: "#d97706", marker: "arrow-amber" },
+  block:     { label: "药物阻断",   color: "#7c3aed", marker: "tbar-purple" },
+  agonist:   { label: "药物激动",   color: "#db2777", marker: "arrow-pink" },
+  regulate:  { label: "表达调控",   color: "#0891b2", marker: "arrow-cyan" }
+};
+const KIND_LABEL = { receptor: "受体", ligand: "配体", cytokine: "细胞因子", complex: "受体复合物", cell: "细胞效应", drug: "药物" };
+const KIND_FILL = {
+  receptor: { fill: "#e8f0fe", stroke: "#1d4ed8", text: "#173a8a" },
+  ligand:   { fill: "#e6f7f4", stroke: "#0f766e", text: "#115e59" },
+  cytokine: { fill: "#fff2e8", stroke: "#c2410c", text: "#9a3412" },
+  complex:  { fill: "#eef2ff", stroke: "#4338ca", text: "#3730a3" },
+  cell:     { fill: "#ecfdf3", stroke: "#15803d", text: "#166534" },
+  drug:     { fill: "#f5f0ff", stroke: "#6d28d9", text: "#5b21b6" }
+};
+
+const W = 1200, H = 900;
+const X_LAYER = { 1: 340, 2: 650, 3: 970 };
+
+const state = {
+  module: DATA.modules[0].id,
+  showDrugs: true,
+  showLabels: false,
+  rels: new Set(Object.keys(REL_META)),
+  evidence: "all",
+  search: "",
+  status: "all",
+  mech: "all",
+  selected: null,
+  viewNodes: [],
+  viewEdges: [],
+  positions: new Map(),
+  transform: { x: 0, y: 0, k: 1 },
+  suppressClick: false
+};
+
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const isChinese = ch => /[\u3400-\u9fff]/.test(ch);
+const relColor = rel => (REL_META[rel] || REL_META.bind).color;
+const relLabel = rel => (REL_META[rel] || REL_META.bind).label;
+
+function pillWidth(n) {
+  let w = 0;
+  for (const ch of String(n.label || n.id)) w += isChinese(ch) ? 12 : 7.1;
+  return Math.min(n.kind === "cell" ? 168 : 152, Math.max(56, w + 20));
+}
+function pillHeight(n) { return n.kind === "cell" ? 32 : 28; }
+function layerOf(n) {
+  if (n.kind === "cell") return 3;
+  if (n.kind === "receptor" || n.kind === "complex") return 2;
+  return 1;
+}
+function moduleName(id) { return (MODULE_MAP.get(id) || {}).name || id; }
+function nodeLabel(id) { const n = NODE_MAP.get(id); return n ? n.label : id; }
+function nodeRefs(n) { return (n.refs || []).filter(r => REFS[r]); }
+
+function refsHtml(ids) {
+  const arr = (ids || []).filter(id => REFS[id]);
+  if (!arr.length) return "";
+  return `<ul class="ref-list">${arr.map(id => {
+    const r = REFS[id];
+    const link = r.url ? ` <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.id || "链接")}</a>` : (r.id ? ` <span style="color:#94a3b8">${esc(r.id)}</span>` : "");
+    return `<li>${esc(r.cite)}${link}</li>`;
+  }).join("")}</ul>`;
+}
+
+/* ---------- view building ---------- */
+function buildView() {
+  const mod = state.module;
+  const main = NODES.filter(n => n.modules.includes(mod));
+  const ids = new Set(main.map(n => n.id));
+  let edges = DATA.edges.filter(e => e.modules.includes(mod) && ids.has(e.source) && ids.has(e.target));
+  edges = edges.filter(e => state.rels.has(e.rel));
+  if (state.evidence === "A") edges = edges.filter(e => e.evidence === "A");
+  if (state.evidence === "AB") edges = edges.filter(e => e.evidence !== "C");
+
+  const nodes = main.slice();
+  const drugEdges = [];
+  if (state.showDrugs) {
+    for (const d of DRUGS) {
+      if (!d.graph || !d.modules.includes(mod)) continue;
+      if (!state.rels.has(d.mechanism)) continue;
+      const targets = d.targets.filter(t => ids.has(t));
+      if (!targets.length) continue;
+      nodes.push(Object.assign({}, d, { kind: "drug", modules: d.modules }));
+      for (const t of targets) {
+        drugEdges.push({
+          source: d.id, target: t, rel: d.mechanism,
+          label: d.mechanism === "agonist" ? "激动" : "阻断",
+          affinity: "—", assay: "药物–靶点", evidence: d.evidence || "A",
+          note: d.note, refs: d.refs, modules: d.modules, _drug: true
+        });
+      }
+    }
+  }
+  state.viewNodes = nodes;
+  state.viewEdges = edges.concat(drugEdges);
+}
+
+function mainPositionsReady() {
+  return state.viewNodes.filter(n => n.kind !== "drug").every(n => state.positions.has(n.id));
+}
+
+function runLayout() {
+  state.positions.clear();
+  const main = state.viewNodes.filter(n => n.kind !== "drug");
+  const groups = (MODULE_MAP.get(state.module) || {}).groups || [];
+  const gidx = {};
+  groups.forEach((g, i) => { gidx[g] = i; });
+  const layers = { 1: [], 2: [], 3: [] };
+  for (const n of main) layers[layerOf(n)].push(n);
+
+  for (const k of ["1", "2", "3"]) {
+    const arr = layers[k];
+    arr.sort((a, b) => {
+      const ga = gidx[a.group] == null ? 99 : gidx[a.group];
+      const gb = gidx[b.group] == null ? 99 : gidx[b.group];
+      return ga - gb || String(a.label).localeCompare(String(b.label), "zh");
+    });
+    const n = arr.length;
+    arr.forEach((node, i) => {
+      const y = n === 1 ? H / 2 : 70 + i * (H - 140) / (n - 1);
+      state.positions.set(node.id, { x: X_LAYER[k], y, w: pillWidth(node), h: pillHeight(node), layer: k });
+    });
+  }
+
+  const springs = state.viewEdges.filter(e => !e._drug && state.positions.has(e.source) && state.positions.has(e.target));
+  const anchors = {};
+  groups.forEach((g, i) => { anchors[g] = 60 + (i + 0.5) * (H - 120) / Math.max(1, groups.length); });
+
+  const iters = 360;
+  for (let it = 0; it < iters; it++) {
+    const alpha = 1 - it / iters;
+    for (const e of springs) {
+      const s = state.positions.get(e.source), t = state.positions.get(e.target);
+      if (!s || !t || s.layer === t.layer) continue;
+      const dy = t.y - s.y;
+      const f = dy * 0.018 * alpha;
+      s.y += f * 0.5;
+      t.y -= f * 0.5;
+    }
+    for (const k of ["1", "2", "3"]) {
+      for (const node of layers[k]) {
+        const p = state.positions.get(node.id);
+        if (k !== "3" && anchors[node.group] != null) p.y += (anchors[node.group] - p.y) * 0.0035 * alpha;
+      }
+      const arr = layers[k].map(node => state.positions.get(node.id)).sort((a, b) => a.y - b.y);
+      for (let i = 1; i < arr.length; i++) {
+        const a = arr[i - 1], b = arr[i];
+        const min = (a.h + b.h) / 2 + 7;
+        const gap = b.y - a.y;
+        if (gap < min) {
+          const push = (min - gap) / 2 + 0.05;
+          a.y -= push;
+          b.y += push;
+        }
+      }
+      for (const p of arr) p.y = clamp(p.y, 42, H - 42);
+    }
+  }
+  layoutDrugs();
+}
+
+function layoutDrugs() {
+  const drugs = state.viewNodes.filter(n => n.kind === "drug");
+  for (const d of drugs) {
+    const ts = d.targets.map(id => state.positions.get(id)).filter(Boolean);
+    if (!ts.length) continue;
+    const tx = ts.reduce((a, b) => a + b.x, 0) / ts.length;
+    const ty = ts.reduce((a, b) => a + b.y, 0) / ts.length;
+    state.positions.set(d.id, {
+      x: clamp(tx - 195, 70, W - 80), y: ty,
+      w: pillWidth(d), h: pillHeight(d), layer: 0
+    });
+  }
+  const arr = drugs.map(d => state.positions.get(d.id)).filter(Boolean);
+  for (let it = 0; it < 100; it++) {
+    arr.sort((a, b) => a.y - b.y);
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i], b = arr[j];
+        if (Math.abs(a.x - b.x) > 175) continue;
+        const min = (a.h + b.h) / 2 + 8;
+        if (b.y - a.y < min) {
+          const push = (min - (b.y - a.y)) / 2 + 0.05;
+          a.y -= push;
+          b.y += push;
+        }
+      }
+    }
+    for (const p of arr) p.y = clamp(p.y, 38, H - 38);
+  }
+}
+
+/* ---------- graph rendering ---------- */
+function edgeGeometry(e) {
+  const s = state.positions.get(e.source), t = state.positions.get(e.target);
+  if (!s || !t) return null;
+  const same = Math.abs(s.x - t.x) < 6;
+  let x1, y1 = s.y, x2, y2 = t.y, c1, c2;
+  if (same) {
+    x1 = s.x + s.w / 2; x2 = t.x + t.w / 2;
+    const cx = Math.max(x1, x2) + 72;
+    return { d: `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`, mx: (x1 + x2) / 2 + 46, my: (y1 + y2) / 2 };
+  }
+  const forward = t.x > s.x;
+  x1 = forward ? s.x + s.w / 2 : s.x - s.w / 2;
+  x2 = forward ? t.x - t.w / 2 : t.x + t.w / 2;
+  const dx = Math.max(48, Math.abs(x2 - x1) * 0.5);
+  c1 = x1 + (forward ? dx : -dx);
+  c2 = x2 - (forward ? dx : -dx);
+  return {
+    d: `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}`,
+    mx: (x1 + 3 * c1 + 3 * c2 + x2) / 8,
+    my: (y1 + y2) / 2
+  };
+}
+
+function searchMatch(n) {
+  if (!state.search) return true;
+  const q = state.search.toLowerCase();
+  const d = n.kind === "drug" ? DRUG_MAP.get(n.id) : null;
+  const hay = [n.id, n.label, n.group, n.expr, n.note, d && d.inn, d && d.trial, d && d.modality]
+    .filter(Boolean).join(" ").toLowerCase();
+  return hay.includes(q);
+}
+
+function renderGraph() {
+  const svg = $("#graph");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const view = state.positions;
+  const sel = state.selected;
+  const selNode = sel && sel.type === "node" ? sel.id : null;
+  const selEdge = sel && sel.type === "edge" ? sel.idx : null;
+  const matchIds = new Set(state.viewNodes.filter(searchMatch).map(n => n.id));
+
+  const neighbor = new Set();
+  if (selNode) {
+    for (const e of state.viewEdges) {
+      if (e.source === selNode) neighbor.add(e.target);
+      if (e.target === selNode) neighbor.add(e.source);
+    }
+  }
+
+  let defs = `<defs>`;
+  const markers = [
+    ["arrow-slate", "#64748b", "arrow"], ["arrow-green", "#15803d", "arrow"],
+    ["arrow-amber", "#d97706", "arrow"], ["arrow-pink", "#db2777", "arrow"],
+    ["arrow-cyan", "#0891b2", "arrow"], ["tbar-red", "#dc2626", "tbar"],
+    ["tbar-purple", "#7c3aed", "tbar"]
+  ];
+  for (const [id, color, type] of markers) {
+    if (type === "arrow") {
+      defs += `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${color}"/></marker>`;
+    } else {
+      defs += `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto"><path d="M9,1.4 L9,8.6" stroke="${color}" stroke-width="2.4" stroke-linecap="round" fill="none"/></marker>`;
+    }
+  }
+  defs += `</defs>`;
+
+  let edgeHtml = "";
+  state.viewEdges.forEach((e, idx) => {
+    const g = edgeGeometry(e);
+    if (!g) return;
+    const meta = REL_META[e.rel] || REL_META.bind;
+    const isSel = selEdge === idx;
+    let dim = false;
+    if (selNode) dim = !(e.source === selNode || e.target === selNode);
+    if (selEdge != null && !isSel) dim = true;
+    if (state.search) dim = dim || !(matchIds.has(e.source) && matchIds.has(e.target));
+    const cls = "edge" + (dim ? " dim" : "") + (isSel ? " hl" : "");
+    const dash = e.rel === "compete" || e._drug ? ` stroke-dasharray="${e.rel === "compete" ? "6 5" : "4 4"}"` : "";
+    const label = e.label || relLabel(e.rel);
+    const showLabel = state.showLabels || isSel;
+    edgeHtml += `<g class="edge-g" data-idx="${idx}">`;
+    edgeHtml += `<path class="edge-hit" d="${g.d}" stroke="transparent" stroke-width="14" fill="none"/>`;
+    edgeHtml += `<path class="${cls}" d="${g.d}" stroke="${meta.color}" stroke-width="${isSel ? 3 : 1.7}" fill="none" marker-end="url(#${meta.marker})"${dash} opacity="${isSel ? 1 : 0.78}"><title>${esc(nodeLabel(e.source))} → ${esc(nodeLabel(e.target))} · ${esc(relLabel(e.rel))}${e.affinity ? " · " + esc(e.affinity) : ""}</title></path>`;
+    if (showLabel) {
+      edgeHtml += `<text x="${g.mx}" y="${g.my - 4}" text-anchor="middle" font-size="10.5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Microsoft YaHei,sans-serif" fill="#475569" paint-order="stroke" stroke="#fdfefe" stroke-width="3.2" stroke-linejoin="round" pointer-events="none">${esc(label)}</text>`;
+    }
+    edgeHtml += `</g>`;
+  });
+
+  let nodeHtml = "";
+  for (const n of state.viewNodes) {
+    const p = view.get(n.id);
+    if (!p) continue;
+    const col = KIND_FILL[n.kind] || KIND_FILL.receptor;
+    const isSel = selNode === n.id;
+    let dim = false;
+    if (selNode) dim = !(n.id === selNode || neighbor.has(n.id));
+    if (selEdge != null) {
+      const e = state.viewEdges[selEdge];
+      dim = !(e && (e.source === n.id || e.target === n.id));
+    }
+    if (state.search && !matchIds.has(n.id)) dim = true;
+    const cls = "node" + (dim ? " dim" : "") + (isSel ? " selected" : "") + (state.search && matchIds.has(n.id) ? " match" : "");
+    const dash = n.kind === "drug" ? ` stroke-dasharray="5 3"` : "";
+    const fs = n.kind === "cell" ? 11.2 : 12;
+    nodeHtml += `<g class="${cls}" data-id="${esc(n.id)}" transform="translate(${p.x},${p.y})" style="cursor:grab">`;
+    nodeHtml += `<rect x="${-p.w / 2}" y="${-p.h / 2}" width="${p.w}" height="${p.h}" rx="${p.h / 2}" fill="${col.fill}" stroke="${col.stroke}" stroke-width="${isSel ? 3.2 : 1.5}"${dash}/>`;
+    nodeHtml += `<text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-size="${fs}" font-weight="650" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Microsoft YaHei,sans-serif" fill="${col.text}" pointer-events="none">${esc(n.label)}</text>`;
+    nodeHtml += `<title>${esc(n.label)} · ${esc(KIND_LABEL[n.kind] || "")}</title>`;
+    nodeHtml += `</g>`;
+  }
+
+  svg.innerHTML = `${defs}<g id="viewport" transform="translate(${state.transform.x},${state.transform.y}) scale(${state.transform.k})">${edgeHtml}${nodeHtml}</g>`;
+  bindGraphEvents();
+}
+
+/* ---------- detail panel ---------- */
+function evidenceBadge(ev) { return `<span class="badge ev${esc(ev || "C")}">证据 ${esc(ev || "C")}</span>`; }
+
+function renderDetail() {
+  const el = $("#detail");
+  const sel = state.selected;
+  if (!sel) {
+    const m = MODULE_MAP.get(state.module);
+    el.innerHTML = `
+      <div class="detail-empty">
+        <h2>${esc(m.name)}</h2>
+        <p>${esc(m.desc)}</p>
+        <div class="note-box">点击任一<b>节点</b>查看表达、机制、相关药物与证据；点击<b>连线</b>查看关系类型、亲和力、测定体系与原始文献。拖动节点可整理布局，滚轮缩放。</div>
+        <div class="section-h">本模块高频节点</div>
+        <div class="tag-list" id="quickTags"></div>
+        <div class="disclaimer">${esc(DATA.meta.disclaimer)}</div>
+      </div>`;
+    const quick = state.viewNodes.filter(n => n.kind !== "cell" && n.kind !== "drug").slice(0, 14);
+    $("#quickTags").innerHTML = quick.map(n => `<span class="tag" data-node="${esc(n.id)}">${esc(n.label)}</span>`).join("");
+    $("#quickTags").querySelectorAll("[data-node]").forEach(t => t.addEventListener("click", () => selectNode(t.dataset.node)));
+    return;
+  }
+  if (sel.type === "edge") {
+    const e = state.viewEdges[sel.idx];
+    if (!e) { state.selected = null; renderDetail(); return; }
+    const meta = REL_META[e.rel] || REL_META.bind;
+    el.innerHTML = `
+      <div class="detail-title">${esc(nodeLabel(e.source))} <span style="color:#94a3b8">→</span> ${esc(nodeLabel(e.target))}</div>
+      <div class="detail-sub">${esc(e._drug ? "药物–靶点关系" : "分子间关系")}</div>
+      <div class="badges"><span class="badge rel" style="color:${meta.color};background:${meta.color}15">${esc(meta.label)}</span>${evidenceBadge(e.evidence)}</div>
+      <div class="kv">
+        <div class="kv-row"><dt>亲和力</dt><dd>${esc(e.affinity || "—")}</dd></div>
+        <div class="kv-row"><dt>测定体系</dt><dd>${esc(e.assay || "—")}</dd></div>
+        <div class="kv-row"><dt>模块</dt><dd>${(e.modules || []).map(moduleName).map(esc).join(" / ")}</dd></div>
+      </div>
+      <div class="section-h">机制解释</div>
+      <div class="note-box">${esc(e.note || "暂无补充说明。")}</div>
+      <div class="section-h">文献</div>
+      ${refsHtml(e.refs) || '<p style="font-size:.72rem;color:#94a3b8">暂无文献条目。</p>'}
+      <div class="disclaimer">亲和力受测定体系影响；不要把不同构建/不同实验的 KD 直接横向排序。</div>`;
+    return;
+  }
+
+  const n = NODE_MAP.get(sel.id);
+  if (!n) {
+    if (DRUG_MAP.has(sel.id)) { renderDrugDetail(sel.id); return; }
+    state.selected = null; renderDetail(); return;
+  }
+
+  const rels = [];
+  state.viewEdges.forEach((e, idx) => {
+    if (e.source === n.id || e.target === n.id) rels.push({ e, idx });
+  });
+  const drugs = DRUGS.filter(d => d.targets.includes(n.id));
+  const isDrug = false;
+
+  el.innerHTML = `
+    <div class="detail-title">${esc(n.label)}</div>
+    <div class="detail-sub">${esc(n.id)}${n.group ? " · " + esc(n.group) : ""}</div>
+    <div class="badges">
+      <span class="badge ${esc(n.kind)}">${esc(KIND_LABEL[n.kind] || n.kind)}</span>
+      ${(n.modules || []).map(m => `<span class="badge rel">${esc(moduleName(m))}</span>`).join("")}
+    </div>
+    ${n.expr ? `<div class="kv"><div class="kv-row"><dt>表达/定位</dt><dd>${esc(n.expr)}</dd></div></div>` : ""}
+    <div class="section-h">机制要点</div>
+    <div class="note-box">${esc(n.note || "暂无补充说明。")}</div>
+    <div class="section-h">直接关系（${rels.length}）</div>
+    <ul class="rel-list">
+      ${rels.map(({ e, idx }) => {
+        const other = e.source === n.id ? e.target : e.source;
+        const dir = e.source === n.id ? "→" : "←";
+        const meta = REL_META[e.rel] || REL_META.bind;
+        return `<li data-edge="${idx}"><span class="rel-dot" style="background:${meta.color}"></span><span class="rel-txt"><b>${esc(nodeLabel(other))}</b> <span style="color:#94a3b8">${dir}</span> ${esc(meta.label)}<small>${esc(e.affinity || e.assay || "")}</small></span></li>`;
+      }).join("") || '<li style="cursor:default;color:#94a3b8">当前筛选下无可见关系</li>'}
+    </ul>
+    ${drugs.length ? `<div class="section-h">相关药物（${drugs.length}）</div><ul class="drug-list">${drugs.map(d => `<li data-drug="${esc(d.id)}"><span class="rel-dot" style="background:${d.mechanism === "agonist" ? "#db2777" : "#6d28d9"}"></span><span class="rel-txt"><b>${esc(d.label)}</b><small>${esc(d.modality)} · ${esc(d.stage)}</small></span></li>`).join("")}</ul>` : ""}
+    <div class="section-h">文献</div>
+    ${refsHtml(n.refs) || '<p style="font-size:.72rem;color:#94a3b8">暂无文献条目。</p>'}
+    <div class="disclaimer">${esc(DATA.meta.disclaimer)}</div>`;
+
+  if (!isDrug && !rels.length && !drugs.length) return;
+}
+
+function renderDrugDetail(id) {
+  const d = DRUG_MAP.get(id);
+  const el = $("#detail");
+  if (!d) { el.innerHTML = ""; return; }
+  const mech = d.mechanism === "agonist" ? "激动 /  agonist" : "阻断 / 拮抗";
+  el.innerHTML = `
+    <button class="back-link" id="backOverview">← 返回模块概览</button>
+    <div class="detail-title">${esc(d.label)}</div>
+    <div class="detail-sub">${esc(d.inn || d.id)}</div>
+    <div class="badges"><span class="badge drug">药物</span><span class="badge rel">${esc(mech)}</span>${evidenceBadge(d.evidence || "A")}</div>
+    <div class="kv">
+      <div class="kv-row"><dt>靶点</dt><dd>${d.targets.map(t => `<span class="tag" data-node="${esc(t)}">${esc(nodeLabel(t))}</span>`).join(" ")}</dd></div>
+      <div class="kv-row"><dt>类型</dt><dd>${esc(d.modality || "—")}</dd></div>
+      <div class="kv-row"><dt>阶段</dt><dd>${esc(d.stage || "—")}</dd></div>
+      <div class="kv-row"><dt>首次批准</dt><dd>${esc(d.approved || "—")}</dd></div>
+      <div class="kv-row"><dt>地区</dt><dd>${esc(d.region || "—")}</dd></div>
+      <div class="kv-row"><dt>关键试验</dt><dd>${esc(d.trial || "—")}</dd></div>
+    </div>
+    <div class="section-h">机制与注意点</div>
+    <div class="note-box">${esc(d.note || "暂无补充说明。")}</div>
+    <div class="section-h">文献与注册信息</div>
+    ${refsHtml(d.refs) || '<p style="font-size:.72rem;color:#94a3b8">暂无文献条目。</p>'}
+    <div class="disclaimer">${esc(DATA.meta.disclaimer)}</div>`;
+  $("#backOverview").addEventListener("click", () => { state.selected = null; renderGraph(); renderDetail(); });
+  el.querySelectorAll("[data-node]").forEach(t => t.addEventListener("click", () => selectNode(t.dataset.node)));
+}
+
+/* ---------- selection ---------- */
+function selectNode(id) {
+  state.selected = { type: "node", id };
+  renderGraph();
+  renderDetail();
+  $("#detail").scrollTop = 0;
+}
+function selectEdge(idx) {
+  state.selected = { type: "edge", idx };
+  renderGraph();
+  renderDetail();
+  $("#detail").scrollTop = 0;
+}
+
+/* ---------- stats / tabs / chips / legend ---------- */
+function updateStats() {
+  const usedRefs = new Set();
+  for (const n of state.viewNodes) for (const r of n.refs || []) usedRefs.add(r);
+  for (const e of state.viewEdges) for (const r of e.refs || []) usedRefs.add(r);
+  const drugs = DRUGS.filter(d => d.modules.includes(state.module)).length;
+  $("#stats").innerHTML = `
+    <div class="stat"><b>${state.viewNodes.filter(n => n.kind !== "drug").length}</b>节点</div>
+    <div class="stat"><b>${state.viewEdges.filter(e => !e._drug).length}</b>关系</div>
+    <div class="stat"><b>${drugs}</b>药物</div>
+    <div class="stat"><b>${[...usedRefs].filter(r => REFS[r]).length}</b>文献</div>`;
+}
+
+function renderTabs() {
+  $("#tabs").innerHTML = DATA.modules.map(m => `<button class="tab${m.id === state.module ? " active" : ""}" data-module="${esc(m.id)}" role="tab" aria-selected="${m.id === state.module}">${esc(m.name)}</button>`).join("");
+  $("#tabs").querySelectorAll("[data-module]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.module === state.module) return;
+    state.module = b.dataset.module;
+    state.selected = null;
+    state.positions.clear();
+    rebuild(true);
+    renderTabs();
+  }));
+}
+
+function renderChips() {
+  const chips = [
+    `<span style="font-size:.7rem;color:#94a3b8;font-weight:650">关系</span>`,
+    ...Object.entries(REL_META).map(([rel, m]) => `<button class="chip ${state.rels.has(rel) ? "on" : "off"}" data-rel="${rel}"><span class="dot" style="background:${m.color}"></span>${esc(m.label)}</button>`),
+    `<span class="tool-sep"></span>`,
+    `<select class="control" id="evidenceFilter" aria-label="证据等级">
+       <option value="all"${state.evidence === "all" ? " selected" : ""}>证据：全部</option>
+       <option value="AB"${state.evidence === "AB" ? " selected" : ""}>证据：A + B</option>
+       <option value="A"${state.evidence === "A" ? " selected" : ""}>证据：仅 A</option>
+     </select>`,
+    `<button class="chip ${state.showDrugs ? "on" : "off"}" id="toggleDrugs">显示药物节点</button>`,
+    `<button class="chip ${state.showLabels ? "on" : "off"}" id="toggleLabels">显示边标签</button>`,
+    `<span class="tool-sep"></span>`,
+    `<button class="control" id="resetView">重置视图</button>`,
+    `<button class="control" id="zoomIn">＋</button>`,
+    `<button class="control" id="zoomOut">－</button>`,
+    `<button class="control primary" id="exportPng">导出 PNG</button>`,
+    `<button class="control" id="exportEdgeCsv">导出证据 CSV</button>`
+  ];
+  $("#relChips").innerHTML = chips.join("");
+
+  $("#relChips").querySelectorAll("[data-rel]").forEach(b => b.addEventListener("click", () => {
+    const rel = b.dataset.rel;
+    if (state.rels.has(rel)) state.rels.delete(rel); else state.rels.add(rel);
+    rebuild(false);
+    renderChips();
+  }));
+  $("#evidenceFilter").addEventListener("change", ev => { state.evidence = ev.target.value; rebuild(false); });
+  $("#toggleDrugs").addEventListener("click", () => { state.showDrugs = !state.showDrugs; rebuild(false); renderChips(); });
+  $("#toggleLabels").addEventListener("click", () => { state.showLabels = !state.showLabels; renderGraph(); renderChips(); });
+  $("#resetView").addEventListener("click", () => { state.transform = { x: 0, y: 0, k: 1 }; applyTransform(); });
+  $("#zoomIn").addEventListener("click", () => zoomBy(1.25));
+  $("#zoomOut").addEventListener("click", () => zoomBy(0.8));
+  $("#exportPng").addEventListener("click", exportPng);
+  $("#exportEdgeCsv").addEventListener("click", exportEdgeCsv);
+}
+
+function renderLegend() {
+  $("#legend").innerHTML = `
+    <span><i style="border-color:#64748b"></i>结合</span>
+    <span><i style="border-color:#15803d"></i>激活/共刺激</span>
+    <span><i class="tbar" style="color:#dc2626"></i>抑制</span>
+    <span><i class="dash" style="border-color:#d97706"></i>竞争</span>
+    <span><i class="tbar" style="color:#7c3aed"></i>药物阻断</span>
+    <span><i style="border-color:#db2777"></i>药物激动</span>
+    <span><i style="border-color:#0891b2"></i>表达调控</span>
+    <span style="color:#94a3b8">虚线框 = 药物节点</span>`;
+}
+
+/* ---------- table ---------- */
+function statusClass(d) {
+  if (/终止|失败|撤市/.test(d.stage)) return "terminated";
+  if (/已上市/.test(d.stage)) return "approved";
+  return "clinical";
+}
+function renderTable() {
+  const q = state.search.toLowerCase();
+  let rows = DRUGS.filter(d => d.modules.includes(state.module));
+  if (state.status !== "all") rows = rows.filter(d => statusClass(d) === state.status);
+  if (state.mech !== "all") rows = rows.filter(d => d.mechanism === state.mech);
+  if (q) rows = rows.filter(d => [d.label, d.inn, d.modality, d.stage, d.trial, d.note, ...d.targets.map(nodeLabel)].join(" ").toLowerCase().includes(q));
+  rows.sort((a, b) => {
+    const order = { approved: 0, clinical: 1, terminated: 2 };
+    return (order[statusClass(a)] - order[statusClass(b)]) || String(a.label).localeCompare(String(b.label), "zh");
+  });
+  $("#tableCount").textContent = `当前模块 ${rows.length} 条 · 点击行查看详情或定位`;
+  $("#drugBody").innerHTML = rows.map(d => {
+    const sc = statusClass(d);
+    const targets = d.targets.map(t => `<span class="tag" data-node="${esc(t)}">${esc(nodeLabel(t))}</span>`).join(" ");
+    return `<tr data-drug="${esc(d.id)}">
+      <td><span class="drug-name">${esc(d.label)}</span><span class="drug-inn">${esc(d.inn || "")}</span></td>
+      <td>${targets}</td>
+      <td><span class="mech ${esc(d.mechanism)}">${d.mechanism === "agonist" ? "激动" : "阻断"}</span></td>
+      <td>${esc(d.modality || "—")}</td>
+      <td><span class="status ${sc}">${esc(d.stage)}</span></td>
+      <td>${esc(d.approved || "—")}<span class="small">${esc(d.region || "")}</span></td>
+      <td>${esc(d.trial || "—")}<span class="small">${esc(d.note || "")}</span></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" style="color:#94a3b8;padding:18px;text-align:center">没有匹配的药物</td></tr>`;
+
+  $("#drugBody").querySelectorAll("tr[data-drug]").forEach(tr => tr.addEventListener("click", () => {
+    const id = tr.dataset.drug;
+    if (state.showDrugs && state.positions.has(id)) {
+      selectNode(id);
+      return;
+    }
+    state.selected = { type: "node", id };
+    renderDrugDetail(id);
+    $("#detail").scrollTop = 0;
+  }));
+  $("#drugBody").querySelectorAll("[data-node]").forEach(t => t.addEventListener("click", ev => {
+    ev.stopPropagation();
+    selectNode(t.dataset.node);
+  }));
+}
+
+function renderSources() {
+  const used = new Set();
+  for (const n of NODES) for (const r of n.refs || []) used.add(r);
+  for (const e of DATA.edges) for (const r of e.refs || []) used.add(r);
+  for (const d of DRUGS) for (const r of d.refs || []) used.add(r);
+  const rows = [...used].filter(id => REFS[id]).map(id => {
+    const r = REFS[id];
+    const link = r.url ? ` <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.id || "链接")}</a>` : (r.id ? ` <span style="color:#94a3b8">${esc(r.id)}</span>` : "");
+    return `<li>${esc(r.cite)}${link}</li>`;
+  });
+  $("#sourceList").innerHTML = rows.join("");
+}
+
+/* ---------- graph events ---------- */
+let drag = null;
+let pan = null;
+let moved = false;
+let rafPending = false;
+
+function bindGraphEvents() {
+  const svg = $("#graph");
+  svg.onpointerdown = onPointerDown;
+  svg.onpointermove = onPointerMove;
+  svg.onpointerup = onPointerUp;
+  svg.onpointercancel = onPointerUp;
+  svg.onwheel = onWheel;
+  svg.onclick = onClick;
+  svg.onpointerover = onPointerOver;
+  svg.onpointerout = onPointerOut;
+}
+
+function rootPoint(evt) {
+  const svg = $("#graph");
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX; pt.y = evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function graphPoint(evt) {
+  const p = rootPoint(evt);
+  return { x: (p.x - state.transform.x) / state.transform.k, y: (p.y - state.transform.y) / state.transform.k };
+}
+function onPointerDown(evt) {
+  if (evt.button !== 0) return;
+  const nodeEl = evt.target.closest && evt.target.closest(".node");
+  moved = false;
+  if (nodeEl) {
+    const id = nodeEl.dataset.id;
+    const p = state.positions.get(id);
+    if (!p) return;
+    const gp = graphPoint(evt);
+    drag = { id, dx: gp.x - p.x, dy: gp.y - p.y };
+    $("#graphWrap").classList.add("dragging");
+  } else {
+    pan = { clientX: evt.clientX, clientY: evt.clientY, tx: state.transform.x, ty: state.transform.y };
+    $("#graphWrap").classList.add("dragging");
+  }
+  const svg = $("#graph");
+  if (svg.setPointerCapture) svg.setPointerCapture(evt.pointerId);
+}
+function onPointerMove(evt) {
+  if (drag) {
+    const gp = graphPoint(evt);
+    const p = state.positions.get(drag.id);
+    if (!p) return;
+    p.x = clamp(gp.x - drag.dx, 50, W - 50);
+    p.y = clamp(gp.y - drag.dy, 30, H - 30);
+    moved = true;
+    if (!rafPending) {
+      rafPending = true;
+      requestAnimationFrame(() => { rafPending = false; renderGraph(); });
+    }
+  } else if (pan) {
+    const dx = evt.clientX - pan.clientX;
+    const dy = evt.clientY - pan.clientY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    state.transform.x = pan.tx + dx;
+    state.transform.y = pan.ty + dy;
+    applyTransform();
+  }
+}
+function onPointerUp() {
+  drag = null; pan = null;
+  $("#graphWrap").classList.remove("dragging");
+  if (moved) {
+    state.suppressClick = true;
+    setTimeout(() => { state.suppressClick = false; }, 60);
+  }
+}
+function onClick(evt) {
+  if (state.suppressClick) return;
+  const nodeEl = evt.target.closest && evt.target.closest(".node");
+  if (nodeEl) { selectNode(nodeEl.dataset.id); return; }
+  const edgeEl = evt.target.closest && evt.target.closest(".edge-g");
+  if (edgeEl) { selectEdge(Number(edgeEl.dataset.idx)); return; }
+  state.selected = null;
+  renderGraph();
+  renderDetail();
+}
+function onWheel(evt) {
+  evt.preventDefault();
+  const p = rootPoint(evt);
+  const k = state.transform.k;
+  const k2 = clamp(k * (evt.deltaY < 0 ? 1.12 : 0.89), 0.35, 3.2);
+  state.transform.x = p.x - (p.x - state.transform.x) * (k2 / k);
+  state.transform.y = p.y - (p.y - state.transform.y) * (k2 / k);
+  state.transform.k = k2;
+  applyTransform();
+}
+function applyTransform() {
+  const vp = $("#viewport");
+  if (vp) vp.setAttribute("transform", `translate(${state.transform.x},${state.transform.y}) scale(${state.transform.k})`);
+}
+function zoomBy(f) {
+  const svg = $("#graph");
+  const rect = svg.getBoundingClientRect();
+  const p = { x: W / 2, y: H / 2 };
+  const k = state.transform.k;
+  const k2 = clamp(k * f, 0.35, 3.2);
+  state.transform.x = p.x - (p.x - state.transform.x) * (k2 / k);
+  state.transform.y = p.y - (p.y - state.transform.y) * (k2 / k);
+  state.transform.k = k2;
+  applyTransform();
+}
+function onPointerOver(evt) {
+  const tip = $("#tip");
+  const edgeEl = evt.target.closest && evt.target.closest(".edge-g");
+  const nodeEl = evt.target.closest && evt.target.closest(".node");
+  if (edgeEl) {
+    const e = state.viewEdges[Number(edgeEl.dataset.idx)];
+    if (!e) return;
+    tip.innerHTML = `<b>${esc(nodeLabel(e.source))} → ${esc(nodeLabel(e.target))}</b><br>${esc(relLabel(e.rel))}${e.affinity ? " · " + esc(e.affinity) : ""}`;
+    showTip(evt);
+  } else if (nodeEl) {
+    const n = state.viewNodes.find(x => x.id === nodeEl.dataset.id);
+    if (!n) return;
+    tip.innerHTML = `<b>${esc(n.label)}</b><br>${esc(KIND_LABEL[n.kind] || "")}${n.expr ? " · " + esc(n.expr) : ""}`;
+    showTip(evt);
+  }
+}
+function showTip(evt) {
+  const tip = $("#tip");
+  const wrap = $("#graphWrap").getBoundingClientRect();
+  tip.style.left = (evt.clientX - wrap.left) + "px";
+  tip.style.top = (evt.clientY - wrap.top - 8) + "px";
+  tip.classList.add("on");
+}
+function onPointerOut(evt) {
+  if (evt.target.closest && (evt.target.closest(".edge-g") || evt.target.closest(".node"))) {
+    $("#tip").classList.remove("on");
+  }
+}
+
+/* ---------- rebuild ---------- */
+function rebuild(relayout) {
+  buildView();
+  if (relayout || !mainPositionsReady()) runLayout();
+  else layoutDrugs();
+  if (state.selected && state.selected.type === "edge" && !state.viewEdges[state.selected.idx]) state.selected = null;
+  if (state.selected && state.selected.type === "node" && !state.positions.has(state.selected.id)) state.selected = null;
+  renderGraph();
+  renderDetail();
+  updateStats();
+  renderTable();
+}
+
+/* ---------- exports ---------- */
+function downloadBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function csvEscape(v) { return `"${String(v == null ? "" : v).replace(/"/g, '""')}"`; }
+function exportEdgeCsv() {
+  const rows = [["source", "target", "relation", "affinity", "assay", "evidence", "note", "refs"]];
+  for (const e of state.viewEdges) {
+    rows.push([nodeLabel(e.source), nodeLabel(e.target), relLabel(e.rel), e.affinity, e.assay, e.evidence, e.note, (e.refs || []).join(";")]);
+  }
+  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\r\n");
+  downloadBlob(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }), `immune-relations-${state.module}.csv`);
+}
+function exportDrugCsv() {
+  const q = state.search.toLowerCase();
+  let rows = DRUGS.filter(d => d.modules.includes(state.module));
+  if (state.status !== "all") rows = rows.filter(d => statusClass(d) === state.status);
+  if (state.mech !== "all") rows = rows.filter(d => d.mechanism === state.mech);
+  if (q) rows = rows.filter(d => [d.label, d.inn, d.modality, d.stage, d.trial, d.note, ...d.targets.map(nodeLabel)].join(" ").toLowerCase().includes(q));
+  const out = [["drug", "inn", "targets", "mechanism", "modality", "stage", "approved", "region", "trial", "note"]];
+  for (const d of rows) out.push([d.label, d.inn, d.targets.map(nodeLabel).join(";"), d.mechanism, d.modality, d.stage, d.approved, d.region, d.trial, d.note]);
+  const csv = out.map(r => r.map(csvEscape).join(",")).join("\r\n");
+  downloadBlob(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }), `immune-drugs-${state.module}.csv`);
+}
+function exportPng() {
+  const svg = $("#graph");
+  const clone = svg.cloneNode(true);
+  const vp = clone.querySelector("#viewport");
+  if (vp) vp.setAttribute("transform", "translate(0,0) scale(1)");
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", W);
+  clone.setAttribute("height", H);
+  const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bg.setAttribute("width", W); bg.setAttribute("height", H); bg.setAttribute("fill", "#ffffff");
+  clone.insertBefore(bg, clone.firstChild);
+  const str = new XMLSerializer().serializeToString(clone);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = W * 2; c.height = H * 2;
+    const ctx = c.getContext("2d");
+    ctx.scale(2, 2);
+    ctx.drawImage(img, 0, 0, W, H);
+    c.toBlob(b => downloadBlob(b, `immune-map-${state.module}.png`), "image/png");
+  };
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(str);
+}
+
+/* ---------- boot ---------- */
+function boot() {
+  $("#snapshot").textContent = DATA.meta.snapshot;
+  $("#snapshot2").textContent = DATA.meta.snapshot;
+  renderTabs();
+  renderChips();
+  renderLegend();
+  renderSources();
+  buildView();
+  runLayout();
+  renderGraph();
+  renderDetail();
+  updateStats();
+  renderTable();
+
+  $("#search").addEventListener("input", ev => {
+    state.search = ev.target.value.trim();
+    renderGraph();
+    renderTable();
+  });
+  $("#statusFilter").addEventListener("change", ev => { state.status = ev.target.value; renderTable(); });
+  $("#mechFilter").addEventListener("change", ev => { state.mech = ev.target.value; renderTable(); });
+  $("#exportDrugCsv").addEventListener("click", exportDrugCsv);
+  document.addEventListener("keydown", ev => {
+    if (ev.key === "Escape") { state.selected = null; renderGraph(); renderDetail(); }
+  });
+}
+boot();
+
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () => {
+    const swUrl = new URL("sw.js", document.baseURI);
+    const scope = new URL(".", swUrl).pathname;
+    navigator.serviceWorker.register(swUrl, { scope }).catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
