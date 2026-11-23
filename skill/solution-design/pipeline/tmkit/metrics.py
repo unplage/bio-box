@@ -107,8 +107,9 @@ def mutation_calls(ref_seq, mut_seq):
 
 def parse_plddt(pdb_path):
     from collections import defaultdict
+    from .pdbio import as_pdb
     values = defaultdict(list)
-    with open(pdb_path) as f:
+    with open(as_pdb(pdb_path)) as f:
         for line in f:
             if line.startswith('ATOM') and line[12:16].strip() == 'CA':
                 ch = line[21]
@@ -118,7 +119,8 @@ def parse_plddt(pdb_path):
                 except ValueError:
                     continue
                 values[(ch, res)].append(v)
-    return {res: float(np.mean(v)) for (ch, res), v in values.items()}
+    return {(ch, res): float(np.mean(v))
+            for (ch, res), v in values.items()}
 
 
 def is_transferable(ref_base, transferable_aa, inter_loop_residue,

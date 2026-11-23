@@ -44,7 +44,38 @@ def symmetry_ties_dict(target, chain_ids, mask):
     return _t(target, chain_ids, mask)
 
 
-def mpnn_command(inputs, config, outdir, num_seqs=8, temperature='0.15 0.2'):
+def _as_list(value):
+    if value is None:
+        return [None]
+    if isinstance(value, (list, tuple)):
+        return list(value) if value else [None]
+    return [value]
+
+
+def mpnn_runs(config):
+    """Expand scalar or list model/noise/seed settings into individual runs.
+
+    Each run gets its own output folder so FASTA files never overwrite one
+    another. ``seeds`` falls back to ``seed`` for a single explicit seed.
+    """
+    models = _as_list(config.get('model_name'))
+    noises = _as_list(config.get('backbone_noise'))
+    seeds = _as_list(config.get('seeds', config.get('seed')))
+    runs = []
+    for model in models:
+        for noise in noises:
+            for seed in seeds:
+                runs.append({
+                    'tag': f'run{len(runs):02d}',
+                    'model_name': model,
+                    'backbone_noise': noise,
+                    'seed': seed,
+                })
+    return runs
+
+
+def mpnn_command(inputs, config, outdir, num_seqs=8, temperature='0.15 0.2',
+                 model_name=None, backbone_noise=None, seed=None):
     prog = Path(config.get('proteinmpnn_dir', 'proteinmpnn'))
     cmd = [
         sys.executable, str(prog / 'protein_mpnn_run.py'),
@@ -60,12 +91,15 @@ def mpnn_command(inputs, config, outdir, num_seqs=8, temperature='0.15 0.2'):
     ]
     if config.get('soluble_model'):
         cmd.append('--use_soluble_model')
-    model = config.get('model_name')
+    model = model_name if model_name is not None else config.get('model_name')
     if model:
         cmd += ['--model_name', model]
-    backbone_noise = config.get('backbone_noise')
-    if backbone_noise is not None:
-        cmd += ['--backbone_noise', str(backbone_noise)]
+    noise = backbone_noise if backbone_noise is not None \
+        else config.get('backbone_noise')
+    if noise is not None:
+        cmd += ['--backbone_noise', str(noise)]
+    if seed is not None:
+        cmd += ['--seed', str(seed)]
     bias = config.get('bias_aa')
     if bias:
         bias_json = Path(outdir) / 'bias.jsonl'
@@ -76,24 +110,25 @@ def mpnn_command(inputs, config, outdir, num_seqs=8, temperature='0.15 0.2'):
 
 def parse_design_fasta(fa_path, chain_ids):
     records = []
-    current = None
     for line in Path(fa_path).read_text().splitlines():
         line = line.strip()
         if not line:
             continue
         if line.startswith('>'):
-            current = line[1:]
-            records.append([current, []])
+            records.append([line[1:], []])
         else:
             records[-1][1].append(line)
+    # The leading non-sampled record carries the job/PDB name; sampled records
+    # begin with "T=...,sample=...". Use the job name for monomer designs whose
+    # sampled headers have no name prefix.
+    job_name = ''
+    if records:
+        head = records[0][0].split(',')[0].strip()
+        if not head.startswith('T='):
+            job_name = head
     designs = []
     for header, chunks in records:
         seq = ''.join(chunks)
-        if '/' not in seq:
-            continue
-        chains = seq.split('/')
-        if len(chains) != len(chain_ids):
-            continue
         attr = {}
         for token in header.split(','):
             pair = token.strip().split('=')
@@ -103,8 +138,19 @@ def parse_design_fasta(fa_path, chain_ids):
         # no T=/sample= attrs); skip it so it is not treated as a design.
         if 'T' not in attr and 'sample' not in attr:
             continue
+        if '/' in seq:
+            chains = seq.split('/')
+        elif len(chain_ids) == 1:
+            chains = [seq]
+        else:
+            continue
+        if len(chains) != len(chain_ids):
+            continue
+        name = header.split(',')[0].strip()
+        if not name or name.startswith('T='):
+            name = job_name
         designs.append({
-            'name': header.split(',')[0].strip(),
+            'name': name,
             'chains': {c: s for c, s in zip(chain_ids, chains)},
             'score': float(attr.get('score', 'nan')),
             'seq_recovery': float(attr.get('seq_recovery', 'nan')),

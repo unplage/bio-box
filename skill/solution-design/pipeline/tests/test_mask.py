@@ -64,6 +64,25 @@ def test_ecd_fully_covered(target, mask):
         assert all(r in ecd_refs for r in fixed_ecd)
 
 
+def test_topology_type1_gpcr():
+    """7TM type-I GPCR: first loop intracellular, N-term ectodomain, C-term
+    intracellular (e.g. a type-I GPCR)."""
+    from tmkit.mask import auto_loop_topology, topology_sides
+    tm = [[40, 62], [78, 100], [118, 140], [160, 182],
+          [205, 227], [250, 272], [285, 307]]
+    nterm, cterm, first = topology_sides(tm, {'first_loop': 'ICD'})
+    assert (nterm, cterm, first) == ('ECD', 'ICD', 'ICD')
+    ecd, icd = auto_loop_topology(tm, first)
+    assert (63, 77) in icd and (101, 117) in ecd
+
+
+def test_topology_type1_6tm():
+    """6TM (e.g. STEAP1): first loop ECD => both termini intracellular."""
+    from tmkit.mask import topology_sides
+    tm = [[71, 91], [119, 139], [164, 184], [218, 238], [258, 278], [291, 311]]
+    assert topology_sides(tm, {'first_loop': 'ECD'}) == ('ICD', 'ICD', 'ECD')
+
+
 def test_tm_score_identity(target, ref_seq):
     """TM-score of a chain against itself is 1.0."""
     from tmkit.metrics import tm_score

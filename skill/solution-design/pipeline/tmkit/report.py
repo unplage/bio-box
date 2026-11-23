@@ -66,9 +66,12 @@ def write_report(rows, config, outdir, top_n=10):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     core = ['name', 'pass', 'fail_gates', 'tm_score', 'plddt', 'ecd_rmsd',
-            'surf_hydro', 'surf_hydro_des', 'plddt_ecd', 'pocket_rmsd',
-            'exposed_arom', 'cys_des', 'seq_recovery', 'score', 'mutations',
-            'soluble_score', 'residual_hydro', 'over_polar', 'interface_mut',
+            'surf_hydro', 'surf_hydro_des', 'surf_hydro_tm', 'plddt_ecd',
+            'pocket_rmsd', 'iptm', 'ptm', 'chain_symmetry_rmsd',
+            'interface_recovery', 'exposed_arom', 'cys_des', 'seq_recovery',
+            'score', 'mutations', 'soluble_score', 'residual_hydro',
+            'over_polar', 'interface_mut', 'net_charge', 'abs_net_charge',
+            'isoelectric_point', 'hydrophobic_moment', 'max_hydro_window',
             'model']
     extra = []
     for r in rows:

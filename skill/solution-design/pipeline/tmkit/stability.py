@@ -20,6 +20,101 @@ SOLUBILITY = {
 POLAR_CAP = 0.85          # beyond this, extra polarity is not rewarded
 RESID_HYD_THR = 0.30      # propensity below this counts as residual hydrophobic
 
+# Charge / solubility heuristics. Acidic (-) and basic (+) pKa values, plus
+# Eisenberg consensus hydrophobicity for helical hydrophobic moments.
+PKA = {'D': 3.9, 'E': 4.2, 'C': 8.3, 'Y': 10.1, 'H': 6.0,
+       'K': 10.5, 'R': 12.5}
+ACIDIC = {'D', 'E', 'C', 'Y'}
+BASIC = {'K', 'R', 'H'}
+EISENBERG = {
+    'A': 0.62, 'R': -2.53, 'N': -0.78, 'D': -0.90, 'C': 0.29,
+    'Q': -0.85, 'E': -0.74, 'G': 0.48, 'H': -0.40, 'I': 1.38,
+    'L': 1.06, 'K': -1.50, 'M': 0.64, 'F': 1.19, 'P': 0.12,
+    'S': -0.18, 'T': -0.05, 'W': 0.81, 'Y': 0.26, 'V': 1.08,
+}
+
+
+def net_charge(seq, ph=7.0, termini=True):
+    """Approximate net formal charge of a sequence at the given pH."""
+    charge = 0.0
+    for aa in seq:
+        if aa in ACIDIC:
+            charge -= 1.0 / (1.0 + 10.0 ** (PKA[aa] - ph))
+        elif aa in BASIC:
+            charge += 1.0 / (1.0 + 10.0 ** (ph - PKA[aa]))
+    if termini:
+        charge += 1.0 / (1.0 + 10.0 ** (ph - 9.6))       # N-terminus
+        charge -= 1.0 / (1.0 + 10.0 ** (2.4 - ph))       # C-terminus
+    return float(charge)
+
+
+def isoelectric_point(seq):
+    """Bisection estimate of the pH where net charge crosses zero."""
+    lo, hi = 0.0, 14.0
+    for _ in range(40):
+        mid = (lo + hi) / 2.0
+        if net_charge(seq, mid) > 0:
+            lo = mid
+        else:
+            hi = mid
+    return float((lo + hi) / 2.0)
+
+
+def hydrophobic_moment(seq, tm_segments=None, window=11, angle=100.0):
+    """Max per-residue Eisenberg hydrophobic moment over TM windows."""
+    positions = [i for a, b in (tm_segments or [(1, len(seq))])
+                 for i in range(int(a) - 1, int(b))]
+    if not positions:
+        positions = list(range(len(seq)))
+    step = 1.0 if window <= 1 else 2.0 * np.pi * float(angle) / 360.0
+    phase = [np.cos(step * i) for i in range(window)]
+    quad = [np.sin(step * i) for i in range(window)]
+    best = 0.0
+    half = window // 2
+    for center in positions:
+        start = center - half
+        vals = [EISENBERG.get(seq[i], 0.0)
+                for i in range(start, start + window)
+                if 0 <= i < len(seq)]
+        if len(vals) < 3:
+            continue
+        c = sum(h * o for h, o in zip(vals, phase[:len(vals)]))
+        s = sum(h * o for h, o in zip(vals, quad[:len(vals)]))
+        best = max(best, float(np.hypot(c, s) / len(vals)))
+    return best
+
+
+def max_hydrophobic_window(seq, positions, window=9, hyd_cut=RESID_HYD_THR):
+    """Largest fraction of hydrophobic residues in a designed-position run.
+
+    A sequence-level proxy for exposed hydrophobic patches: consecutive
+    redesigned positions are scanned in windows of `window`; a high value
+    means hydrophobic residues cluster rather than being dispersed.
+    """
+    pos = sorted(p for p in positions if 1 <= p <= len(seq))
+    if len(pos) < window:
+        return float('nan')
+    best = 0.0
+    for i in range(0, len(pos) - window + 1):
+        chunk = pos[i:i + window]
+        hydro = sum(1 for p in chunk
+                    if SOLUBILITY.get(seq[p - 1], 0.4) <= hyd_cut)
+        best = max(best, hydro / float(window))
+    return best
+
+
+def sequence_properties(seq, positions, tm_segments=None):
+    charge = net_charge(seq)
+    moment = hydrophobic_moment(seq, tm_segments)
+    patch = max_hydrophobic_window(seq, positions)
+    return {
+        'net_charge': charge,
+        'abs_net_charge': abs(charge),
+        'isoelectric_point': isoelectric_point(seq),
+        'hydrophobic_moment': moment,
+        'max_hydro_window': patch,
+    }
+
 
 def sequence_solubility(seq, ref_seq, positions, aa1_map=None):
     """Score the redesigned subset of one chain.

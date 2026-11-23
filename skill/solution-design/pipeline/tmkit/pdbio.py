@@ -1,9 +1,52 @@
+import hashlib
 import os
+import tempfile
 import numpy as np
 from pathlib import Path
-from Bio.PDB import PDBParser, PDBIO, Select
+from Bio.PDB.PDBParser import PDBParser
+from Bio.PDB.MMCIFParser import MMCIFParser
+from Bio.PDB.PDBIO import PDBIO, Select
 from Bio.PDB.Polypeptide import is_aa
 from Bio.Align import PairwiseAligner
+
+
+_CIF_CACHE = {}
+
+
+def is_cif(path):
+    return str(path).lower().endswith(('.cif', '.mmcif'))
+
+
+def as_pdb(path, workdir=None):
+    """Return a PDB path for a PDB or mmCIF input.
+
+    Downstream code (fixed-column parsing, freesasa) expects PDB, so mmCIF
+    models (Boltz-2 / AlphaFold3 / PDBx) are converted once and cached. B-factor
+    (pLDDT) and chain/residue ids are preserved by the Biopython round trip.
+    """
+    path = Path(path)
+    if not is_cif(path):
+        return path
+    key = (str(path.resolve()), path.stat().st_mtime)
+    cached = _CIF_CACHE.get(key)
+    if cached and Path(cached).exists():
+        return Path(cached)
+    base = Path(workdir or tempfile.gettempdir()) / 'tmkit_cif'
+    base.mkdir(parents=True, exist_ok=True)
+    out = base / (hashlib.md5(repr(key).encode()).hexdigest() + '.pdb')
+    try:
+        struct = MMCIFParser(QUIET=True, auth_chains=True,
+                             auth_residues=True).get_structure(
+                                 path.stem, str(path))
+    except Exception:
+        struct = MMCIFParser(QUIET=True, auth_chains=False,
+                             auth_residues=False).get_structure(
+                                 path.stem, str(path))
+    io = PDBIO()
+    io.set_structure(struct)
+    io.save(str(out))
+    _CIF_CACHE[key] = str(out)
+    return out
 
 
 AMINO3 = {
@@ -32,7 +75,8 @@ class Target:
 
 def parse_pdb(path, chain_ids=None):
     name = Path(path).stem
-    model = PDBParser(QUIET=True).get_structure(name, str(path))[0]
+    pdb = as_pdb(path)
+    model = PDBParser(QUIET=True).get_structure(name, str(pdb))[0]
     chains = {}
     for cid in chain_ids or [c.id for c in model]:
         try:
@@ -42,7 +86,7 @@ def parse_pdb(path, chain_ids=None):
             continue
         residues = [r for r in ch if r.id[0] == ' ' and is_aa(r)]
         chains[cid] = ChainData(cid, residues)
-    return Target(model, chains, path=str(path))
+    return Target(model, chains, path=str(pdb))
 
 
 def load_target(path, ecd_segments=None):
@@ -54,14 +98,37 @@ def load_target(path, ecd_segments=None):
     return target, ecd_lookup
 
 
+def _chains_are_homomeric(target, chain_ids):
+    """True when chains are the same protein (residues agree at common
+    numbers), even if their modelled ranges (termini) differ slightly."""
+    if len(chain_ids) <= 1:
+        return False
+    maps = [{r.id[1]: r.resname for r in target.chains[cid].residues}
+            for cid in chain_ids]
+    common = set.intersection(*[set(m) for m in maps])
+    if len(common) < 10:
+        return False
+    same = sum(1 for n in common if len({m[n] for m in maps}) == 1)
+    return same / len(common) > 0.9
+
+
 def harmonize_chains(target, chain_ids):
-    sets = [set(r.id[1] for r in target.chains[cid].residues) for cid in chain_ids]
-    common = set.intersection(*sets) if sets else set()
-    for cid in chain_ids:
-        chain = target.chains[cid]
-        seqmap = {res.id[1]: res for res in chain.residues}
-        kept = [seqmap[n] for n in sorted(common)]
-        target.chains[cid] = ChainData(cid, kept)
+    """Restrict homomeric chains to their common residue numbers.
+
+    Only homomers are intersected, so the same ordered positions can be
+    compared/tied. Heteromers keep each chain's own residue set (their
+    numbering is handled per chain by reference alignment).
+    """
+    homomer = _chains_are_homomeric(target, chain_ids)
+    if homomer:
+        sets = [set(r.id[1] for r in target.chains[cid].residues)
+                for cid in chain_ids]
+        common = set.intersection(*sets) if sets else set()
+        for cid in chain_ids:
+            chain = target.chains[cid]
+            seqmap = {res.id[1]: res for res in chain.residues}
+            kept = [seqmap[n] for n in sorted(common)]
+            target.chains[cid] = ChainData(cid, kept)
     for cid in chain_ids:
         target.reference_map.pop(cid, None)
     return target
@@ -239,7 +306,7 @@ def write_fasta(path, records):
 
 def residue_sasa_from_file(pdb_path):
     import freesasa
-    structure = freesasa.Structure(str(pdb_path))
+    structure = freesasa.Structure(str(as_pdb(pdb_path)))
     result = freesasa.calc(structure)
     sasa = {}
     for chain, residues in result.residueAreas().items():

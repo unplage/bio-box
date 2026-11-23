@@ -2,7 +2,8 @@
 import json
 from pathlib import Path
 
-from tmkit.design import prepare_inputs, parse_design_fasta, mpnn_command
+from tmkit.design import prepare_inputs, parse_design_fasta, mpnn_command, \
+    mpnn_runs
 
 
 def test_prepare_inputs_writes_jsonls(target, cfg, tmp_path):
@@ -44,6 +45,41 @@ def test_mpnn_command_flags(target, cfg, tmp_path):
     assert '--num_seq_per_target' in cmd and '10' in cmd
 
 
+def test_mpnn_runs_expands_lists(cfg):
+    conf = dict(cfg)
+    conf['backbone_noise'] = [0.0, 0.02, 0.1]
+    conf['seeds'] = [0, 1]
+    conf['model_name'] = ['v_48_020', 'v_48_030']
+    runs = mpnn_runs(conf)
+    assert len(runs) == 3 * 2 * 2
+    assert len({r['tag'] for r in runs}) == len(runs)
+    assert runs[0]['model_name'] == 'v_48_020'
+    assert runs[1]['seed'] == 1
+    assert runs[3]['backbone_noise'] == 0.02
+
+
+def test_mpnn_runs_single_default(cfg):
+    runs = mpnn_runs(cfg)
+    assert len(runs) == 1
+    assert runs[0]['model_name'] is None
+    assert runs[0]['backbone_noise'] is None
+    assert runs[0]['seed'] is None
+
+
+def test_mpnn_command_sweep_overrides(target, cfg, tmp_path):
+    from tmkit.mask import build_mask
+    from tmkit.design import prepare_inputs
+    mask = build_mask(target, cfg['chains'], cfg)
+    inputs = prepare_inputs(target, cfg['chains'], mask, cfg, tmp_path,
+                            name=cfg['name'])
+    cmd = mpnn_command(inputs, cfg, tmp_path, num_seqs=4,
+                       temperature='0.1', model_name='v_48_030',
+                       backbone_noise=0.05, seed=7)
+    assert cmd[cmd.index('--model_name') + 1] == 'v_48_030'
+    assert cmd[cmd.index('--backbone_noise') + 1] == '0.05'
+    assert cmd[cmd.index('--seed') + 1] == '7'
+
+
 def test_parse_design_fasta_roundtrip(tmp_path):
     fa = tmp_path / 'seqs' / 'x.fa'
     fa.parent.mkdir(parents=True)
@@ -57,6 +93,22 @@ def test_parse_design_fasta_roundtrip(tmp_path):
     assert d['score'] == 0.95
     assert d['seq_recovery'] == 0.42
     assert d['temperature'] == '0.15'
+
+
+def test_parse_design_fasta_monomer_no_slash(tmp_path):
+    """Real ProteinMPNN monomer output has no '/' separator and sampled
+    headers start with T=... instead of the job name."""
+    fa = tmp_path / 'x.fa'
+    fa.write_text(
+        '>job, score=1.0, model_name=v_48_020\n'
+        'AAAAAAAAAA\n'
+        '>T=0.15, sample=1, score=1.2, seq_recovery=0.3\n'
+        'AAASAAAAAS\n')
+    designs = parse_design_fasta(fa, ['A'])
+    assert len(designs) == 1
+    assert designs[0]['name'] == 'job'
+    assert designs[0]['chains']['A'] == 'AAASAAAAAS'
+    assert designs[0]['seq_recovery'] == 0.3
 
 
 def test_assemble_designs_unique_names(target, cfg, tmp_path):

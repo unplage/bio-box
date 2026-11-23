@@ -47,28 +47,59 @@ tm_junction_keep: 2
 surface_sasa_threshold: 40.0
 design_tm_surface_only: true
 
-# Protect the C3 trimer interface; symmetric designable mask (homotrimer).
+# Protect the oligomer interface; symmetric designable mask.
+# Defaults are derived automatically: same sequence across chains => symmetric;
+# single-chain (monomer) targets skip interface/symmetry gates entirely.
 fix_interface_contacts: true
 interface_contact_dist: 6.0
 symmetric_mask: true
+# Topology. STEAP1: N/C termini intracellular, first inter-TM loop (EC1) = ECD.
+# For a type-I GPCR (large extracellular N-terminus) use:
+#   first_loop: ICD
+#   nterm: ECD
+#   cterm: ICD
+first_loop: ECD                # ECD | ICD (side of the TM1-TM2 loop)
+# nterm: ECD
+# cterm: ICD
+
+# --- Membrane slab (optional) ---
+# Restrict designable positions to the lipid-facing slab. Without this block
+# the mask uses SASA alone. Three ways to define the plane:
+#   (a) explicit normal/center (center defaults to TM C-alpha mean projection):
+# membrane: {normal: [0, 0, 1], thickness: 30.0, headgroup: 15.0}
+#   (b) derive the normal by PCA of TM C-alphas:
+# membrane: {normal: auto, thickness: 30.0, headgroup: 15.0}
+#   (c) an OPM/PPM transformed structure (membrane plane z=0):
+# membrane_opm_pdb: /path/to/opm_transformed.pdb
+# If `exclude_aromatic_belt: true` (default), interfacial Trp/Phe/Tyr in the
+# headgroup zone stay native; `restrict_to_core: true` forbids headgroup design.
 
 # Evaluation gates. A design passes only if every gate holds.
+# Assembly/interface gates (iptm, chain_symmetry_rmsd, interface_mut,
+# interface_recovery) are dropped automatically for single-chain targets.
 filters:
   tm_score:      ['>=', 0.800]
   plddt:         ['>=', 80.0]
   plddt_ecd:     ['>=', 75.0]
   ecd_rmsd:      ['<=', 1.0]
+  surf_hydro_tm: ['<=', 0.35]    # exposed hydrophobicity over the whole TMD
   surf_hydro_des: ['<=', 0.30]   # hydrophobicity on the redesigned surface
   pocket_rmsd:   ['<=', 2.0]
+  iptm:          ['>=', 0.80]    # oligomer assembly confidence (multi-chain)
+  chain_symmetry_rmsd: ['<=', 2.0]
+  interface_recovery: ['>=', 0.80]  # template interface contacts kept (multi-chain)
   exposed_arom:  ['<=', 3]
   cys_des:       ['==', 0]
   mutations:     ['<=', 120]
   soluble_score: ['>=', 0.60]
   residual_hydro: ['<=', 0.35]
   interface_mut: ['==', 0]
+  max_hydro_window: ['<=', 0.60]  # largest hydrophobic patch among designed positions
 
-# Pocket residues for the pocket_rmsd gate (UniProt numbering).
+# Pocket residues for the pocket_rmsd gate (reference numbering).
 pocket_residues: [175, 268]
+pocket_shell_dist: 8.0         # grow pocket set with template neighbours
+interface_recovery_dist: 8.0   # C-alpha cutoff for interface contact recovery
 
 # --- ProteinMPNN (dir containing protein_mpnn_run.py) ---
 proteinmpnn_dir: /opt/proteinmpnn
@@ -76,13 +107,25 @@ soluble_model: true            # use soluble model weights (Goverde 2024)
 num_seqs: 32                   # production: >=100 recommended
 temperature: "0.15 0.2"
 
+# Sampling sweeps: each scalar or list expands into one run per combination
+# (model_name x backbone_noise x seeds). Each run writes its own FASTA so
+# designs never overwrite each other. Defaults: one run with no overrides.
+# model_name: [v_48_020, v_48_030]
+# backbone_noise: [0.0, 0.02, 0.1]
+# seeds: [0, 1, 2]
+
 # --- Structure prediction for validation ---
-predict_tool: colabfold        # colabfold | alphafold | none
+# External predictors (boltz, af3, chai, external) are run by the user and
+# read back via --results-dir (PDB or mmCIF). Locally: colabfold | alphafold.
+predict_tool: colabfold        # colabfold | alphafold | boltz | af3 | external | none
 colabfold_model: alpha2_multimer_v3
 num_recycles: 3
 colabfold_amber: true
 predict_native: true           # also predict the native seq as gate baseline
-results_dir: ""
+results_dir: ""                # set via --results-dir for external models
+# Optional custom filename patterns (defaults cover ColabFold/AlphaFold/
+# Boltz/AF3). `{name}` is the design name.
+# results_globs: ['{name}*rank_001*.pdb', '{name}*_model_0.cif']
 
 output: outputs
 workdir: /tmp/opencode

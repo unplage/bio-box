@@ -1,6 +1,7 @@
 import json
 from .pdbio import chain_ordinal, map_to_reference, residue_sasa_map, \
     mpnn_positions
+from .membrane import membrane_geometry, membrane_exclusion, signed_distance
 
 
 def classify_region(refn, tm_segments, ecd_segments, icd_segments, nterm='ICD', cterm='ICD'):
@@ -20,16 +21,36 @@ def classify_region(refn, tm_segments, ecd_segments, icd_segments, nterm='ICD', 
     return 'LOOP'
 
 
-def auto_loop_topology(tm_segments):
+def topology_sides(tm_segments, config):
+    """Infer (nterm, cterm, first_loop) sides from the first inter-TM loop.
+
+    TM1 separates the N-terminus from the first loop, so the N-terminal side is
+    opposite the first loop. The C-terminal side depends on TM-count parity.
+    Explicit `nterm` / `cterm` in the config override the inference.
+    """
+    first_loop = config.get('first_loop', 'ECD')
+    fl = 'ECD' if str(first_loop).upper().startswith('E') else 'ICD'
+    other = 'ICD' if fl == 'ECD' else 'ECD'
+    nterm = config.get('nterm', other)
+    cterm = config.get('cterm', other if len(tm_segments) % 2 == 0 else fl)
+    return nterm, cterm, first_loop
+
+
+def auto_loop_topology(tm_segments, first_loop='ECD'):
+    """Assign inter-TM loops alternately, starting with `first_loop`.
+
+    `first_loop` handles type-I (ECD first, e.g. GPCR) vs type-II/III
+    topologies where the N-terminal loop is intracellular.
+    """
     ecd, icd = [], []
+    first = 'ECD' if str(first_loop).upper().startswith('E') else 'ICD'
     for k in range(len(tm_segments) - 1):
         a = tm_segments[k][1] + 1
         b = tm_segments[k + 1][0] - 1
         if a <= b:
-            if k % 2 == 0:
-                ecd.append((a, b))
-            else:
-                icd.append((a, b))
+            kind = first if k % 2 == 0 else \
+                ('ICD' if first == 'ECD' else 'ECD')
+            (ecd if kind == 'ECD' else icd).append((a, b))
     return ecd, icd
 
 
@@ -37,8 +58,9 @@ def build_mask(target, chain_ids, config):
     tm = [(int(a), int(b)) for a, b in config['tm_segments']]
     ecd = [(int(a), int(b)) for a, b in config.get('ecd_segments', [])]
     icd = [(int(a), int(b)) for a, b in config.get('icd_segments', [])]
+    nterm, cterm, first_loop = topology_sides(tm, config)
     if not ecd and not icd:
-        ecd, icd = auto_loop_topology(tm)
+        ecd, icd = auto_loop_topology(tm, first_loop)
     include_regions = config.get('include_regions',
                                  config.get('include', 'designable'))
     if isinstance(include_regions, str):
@@ -73,6 +95,8 @@ def build_mask(target, chain_ids, config):
             target, chain_ids,
             dist=float(config.get('interface_contact_dist', 6.0)))
 
+    geom = membrane_geometry(target, chain_ids, config)
+
     mask = {}
     for cid in chain_ids:
         mapping = map_to_reference(target, cid)
@@ -80,12 +104,12 @@ def build_mask(target, chain_ids, config):
         for r in target.chains[cid].residues:
             pdb_res = r.id[1]
             refn = mapping.get(pdb_res, pdb_res)
-            region = classify_region(refn, tm, ecd, icd, config.get('nterm', 'ICD'),
-                                     config.get('cterm', 'ICD'))
+            region = classify_region(refn, tm, ecd, icd, nterm, cterm)
             is_interface = (cid, pdb_res) in interface
             designable = False
             reason = 'fixed'
             a = float('inf')
+            mem_d = None
             if region in include_regions:
                 key = (cid, pdb_res)
                 a = sasa.get(key, float('inf'))
@@ -101,10 +125,25 @@ def build_mask(target, chain_ids, config):
                 else:
                     designable = True
                     reason = 'surface'
+            if geom is not None:
+                try:
+                    coord = r['CA'].get_coord()
+                except KeyError:
+                    coord = None
+                if coord is not None:
+                    mem_d = signed_distance(coord, geom)
+                    exclusion = membrane_exclusion(coord, geom, r.resname)
+                    if exclusion is not None:
+                        designable = False
+                        reason = exclusion
             mask[cid][refn] = {'region': region, 'designable': designable,
                                'reason': reason, 'pdb_residue': pdb_res,
-                               'sasa': a, 'interface': is_interface}
-    if config.get('symmetric_mask', True) and len(chain_ids) > 1:
+                               'sasa': a, 'interface': is_interface,
+                               'membrane_d': mem_d}
+    ref_seqs = config.get('reference_sequences', {})
+    seqs = [ref_seqs.get(c) for c in chain_ids]
+    homo = len(chain_ids) > 1 and all(s and s == seqs[0] for s in seqs)
+    if config.get('symmetric_mask', homo) and len(chain_ids) > 1:
         common = None
         for cid in chain_ids:
             s = {refn for refn, info in mask[cid].items() if info['designable']}

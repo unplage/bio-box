@@ -56,3 +56,9 @@ python -m pytest tests
 
 - Do not commit secrets (PATs have been pasted in chat before — rotate, never write into files/remotes you commit).
 - **Never `git commit` / `git push` / sync to GitHub on your own initiative** — only when the user explicitly asks in that turn. Finish the code changes, run the checks, report the diff and wait for the instruction.
+
+## Hard constraints — no local-file leakage
+
+- **Never sync, copy, or write the contents or filenames of files from local operations into this repository, anywhere.** This includes every repository file, source code, config, and comments — do not embed local file paths, names, or content in any committed or working-tree file.
+- This applies to all local files involved in an operation (inputs, intermediates, outputs, temp files), not just ones under the workspace. Refer to them only in ephemeral tool output / chat; never persist their names or contents into the repo.
+- If a file's name or content would need to appear in a repo file to complete a task, stop and ask the user instead of writing it.
