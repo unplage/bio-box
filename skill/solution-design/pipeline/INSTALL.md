@@ -45,6 +45,24 @@ soluble_model: true
 The pipeline itself never calls the code directly — it only builds and runs
 `python protein_mpnn_run.py ...`, so any standard ProteinMPNN checkout works.
 
+### 2b. RFdiffusion (optional, design_mode: rf_diffusion)
+
+Standard runs only need ProteinMPNN. To generate new backbones first, install
+RFdiffusion separately and point the config at its `run_inference.py`:
+
+```yaml
+design_mode: rf_diffusion
+rfdiffusion_script: /path/to/RFdiffusion/scripts/run_inference.py
+rfdiffusion_contigs: '[A1-120]'
+rfdiffusion_num_designs: 8
+```
+
+`rf_diffusion`/`partial_diffusion` add `denoiser.noise_scale_ca` and
+`denoiser.noise_scale_frame` overrides; extra Hydra overrides can be passed in
+`rfdiffusion_extra`. Use `--rfdiffusion-script` or `--rfdiffusion-dir` to
+override paths per invocation without editing the config. With `--dry-run` the
+command is printed and the template backbone is used for the rest of the walk.
+
 ## 3. Structure prediction (step `predict`)
 
 Choose one strategy:
@@ -103,9 +121,11 @@ the full evaluation/report locally.
 
 ## 4. Config wiring
 
-Copy `config.example.yaml` and edit:
-- `reference_sequences` per chain (drives UCD positional numbering)
-- `tm_segments` / `ecd_segments` (reference-numbered bounds)
+Copy `config.template.yaml` (generic) or `config.steap1.yaml` (annotated 6TM
+example) and edit:
+- `membrane_class`, `reference_sequences` per chain
+- `tm_segments` and, for single-pass targets, `nterm`/`cterm`
+- `design_scope`, `fixed_regions`/`fixed_residues`, `pockets`, `interface_mode`
 - `proteinmpnn_dir`, predictor settings, `results_dir`
 - optional `filters` incl. stability gates
 

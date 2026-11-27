@@ -1,0 +1,172 @@
+# Generic membrane-protein solubilization template.
+#
+# Copy this file, fill in the target, then run:
+#   python -m tmkit.pipeline --config my_target.yaml --pdb template.pdb \
+#     --steps annotate,mask,design,native,predict,stability,report
+#
+# The six design axes are: membrane architecture, topology, oligomer/symmetry,
+# functional constraints, product format, and design mode.  Nothing below is
+# specific to STEAP1; see `config.steap1.yaml` for a fully annotated 6TM trimer.
+
+name: target_name
+chains: [A]
+
+# membrane_class:
+#   alpha_helical_multi | single_pass | beta_barrel | tail_anchored | peripheral
+membrane_class: alpha_helical_multi
+
+# Full-length reference sequence(s), 1-based numbering.  Reference numbering is
+# used for every segment/constraint below.
+reference_sequences:
+  A: "MMMMMMMMMMMMMMMMMMMM"   # replace with the full-length sequence
+
+# TM helices (alpha) or beta-strands (beta_barrel), ordered N->C.
+tm_segments:
+  - [1, 20]
+# Optional: provide explicit loop assignments; otherwise they alternate from
+# `first_loop`.  For single-pass targets, set nterm/cterm explicitly.
+# ecd_segments: [[21, 40]]
+# icd_segments: [[41, 60]]
+first_loop: ECD                  # ECD | ICD (side of the TM1-TM2 loop)
+# nterm: ECD                     # required for single_pass/tail_anchored
+# cterm: ICD
+# signal_peptide: [1, 20]        # optional; SIGNAL is always fixed
+
+# Design scope:
+#   tm_surface  = TMD solvent-exposed surface only (default)
+#   tm_core     = all TMD residues
+#   tm_plus_icd = TMD surface + ICD
+#   all_non_ecd = TMD + ICD + loops
+#   all         = everything except hard-fixed ECD (fix_ecd still wins)
+design_scope: tm_surface
+fix_ecd: true
+fixed_regions: [ECD]             # extra hard-fixed regions: ECD/ICD/TMD/LOOP
+fixed_residues: []               # seeds; +/- protect_pad neighbours fixed
+protect_pad: 3
+tm_junction_keep: 2
+surface_sasa_threshold: 40.0
+# Relative SASA (SASA / residue-type maximum) instead of absolute A^2.
+relative_sasa: false
+surface_rsa_threshold: 0.25
+
+# Functional constraints (reference numbering; homomer values apply to all
+# chains, or use {A: [...], B: [...]} for heteromers).
+pockets:
+  - name: ligand
+    residues: []
+    shell: 8.0
+    fix_shell: true
+disulfides: auto                 # auto | false | [[A, 10, A, 20], ...]
+ptms: false                      # false | auto (N-X-S/T sequons) | [positions]
+ptm_motifs: []
+epitopes: []
+fix_epitopes: true
+pore_residues: []                # beta_barrel interior / channel
+pore_shell: 8.0
+fix_pore: true
+exclude_pore: true
+
+# Oligomer interface handling:
+#   fixed = all cross-chain contacts fixed
+#   core  = only contacts with >= interface_core_contacts partners fixed
+#   none  = interface may be redesigned (usually not recommended)
+interface_mode: fixed
+interface_contact_dist: 6.0
+interface_core_contacts: 3
+symmetric_mask: true
+# Homomer chain-equivalence groups; omit for heteromers (no ties, no symmetry gate).
+symmetry:
+  groups: []
+# Optional: restrict interface metrics to specific chain pairs.
+interface_pairs: []
+# Optional: ligands/cofactors to keep fixed and score.
+#   resnames: hetero residue names; residues: explicit reference positions;
+#   shell: contact distance (A); fix_shell: fix nearby protein residues.
+# cofactors:
+#   - name: heme
+#     resnames: [HEM]
+#     shell: 4.5
+cofactors: []
+
+# Membrane slab.  `auto` uses a PCA normal (heuristic); for production use an
+# OPM/PPM-transformed PDB or an explicit normal/center.
+membrane:
+  normal: auto
+  thickness: 30.0
+  headgroup: 15.0
+  exclude_aromatic_belt: true
+# membrane_opm_pdb: /path/to/opm_transformed.pdb
+
+# Assembly:
+#   as_is     = use the template as supplied
+#   prebuilt  = use assembly_pdb (biological assembly prepared externally)
+#   biological= warn only; automatic BIOMT expansion is intentionally omitted
+assembly: as_is
+# assembly_pdb: /path/to/assembly.pdb
+
+# Design mode:
+#   sequence       = ProteinMPNN on the template backbone
+#   scaffold       = ProteinMPNN on each backbone in backbone_dir
+#   rf_diffusion   = run RFdiffusion, then ProteinMPNN on its backbones
+#   partial_diffusion = same adapter, with noise_scale overrides
+design_mode: sequence
+# backbone_dir: /path/to/backbones
+# backbone_globs: ['*.pdb', '*.cif']
+# rfdiffusion_script: /path/to/RFdiffusion/scripts/run_inference.py
+# rfdiffusion_contigs: '[A1-120]'
+# rfdiffusion_num_designs: 8
+# rfdiffusion_noise_ca: 0.5
+# rfdiffusion_noise_frame: 0.5
+# rfdiffusion_extra: []
+
+# ProteinMPNN
+proteinmpnn_dir: /path/to/ProteinMPNN
+soluble_model: true
+num_seqs: 32
+temperature: "0.15 0.2"
+# model_name: [v_48_020]
+# backbone_noise: [0.0, 0.02]
+# seeds: [0, 1]
+
+# Structure prediction: colabfold | alphafold | boltz | af3 | external | none
+predict_tool: colabfold
+colabfold_model: alpha2_multimer_v3
+num_recycles: 3
+colabfold_amber: true
+predict_native: true
+strict_predict: true             # non-zero predictor exit is fatal
+require_predictions: false       # true: missing rank-1 models are fatal
+results_dir: ""
+# max_template_date: "2020-05-14"
+# boltz_use_msa_server: false
+
+# Evaluation gates (drop assembly/interface gates for monomers).
+filters:
+  tm_score: ['>=', 0.80]
+  plddt: ['>=', 80.0]
+  plddt_ecd: ['>=', 75.0]
+  plddt_tm: ['>=', 75.0]
+  ecd_rmsd: ['<=', 1.0]
+  ecd_centroid_shift: ['<=', 2.0]
+  ecd_tm_angle: ['<=', 15.0]
+  surf_hydro_tm: ['<=', 0.35]
+  surf_hydro_des: ['<=', 0.30]
+  pocket_rmsd: ['<=', 2.0]
+  iptm: ['>=', 0.80]
+  chain_symmetry_rmsd: ['<=', 2.0]
+  interface_recovery: ['>=', 0.80]
+  exposed_arom: ['<=', 3]
+  cys_des: ['==', 0]
+  mutations: ['<=', 120]
+  soluble_score: ['>=', 0.60]
+  residual_hydro: ['<=', 0.35]
+  interface_mut: ['==', 0]
+  max_hydro_window: ['<=', 0.60]
+  max_charge_run: ['<=', 5]
+  max_polar_window: ['<=', 0.75]
+  abs_net_charge: ['<=', 15.0]
+  isoelectric_point: [between, 4.5, 10.0]
+  over_polar: ['<=', 0.50]
+
+output: outputs
+workdir: /tmp/opencode

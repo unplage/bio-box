@@ -32,6 +32,65 @@ def rmsd(A, B):
     return float(np.sqrt(d2.mean()))
 
 
+def transform(A, R, t):
+    A = np.asarray(A, float)
+    return A @ np.asarray(R, float).T + np.asarray(t, float)
+
+
+def centroid(A):
+    A = np.asarray(A, float)
+    return A.mean(0) if len(A) else np.zeros(3)
+
+
+def angle_between(v1, v2):
+    v1 = np.asarray(v1, float)
+    v2 = np.asarray(v2, float)
+    n1 = np.linalg.norm(v1)
+    n2 = np.linalg.norm(v2)
+    if n1 == 0 or n2 == 0:
+        return float('nan')
+    c = float(np.dot(v1, v2) / (n1 * n2))
+    return float(np.degrees(np.arccos(np.clip(c, -1.0, 1.0))))
+
+
+def aligned_region_rmsd(model_align, template_align, model_measure,
+                        template_measure):
+    """Superpose on ``align`` and measure ``measure`` without re-fitting.
+
+    This is the correct way to detect a rigid-body displacement of one region
+    (e.g. ECD) relative to another (e.g. TMD).  ``rmsd`` alone performs Kabsch
+    on the measured subset and therefore hides exactly that displacement.
+    """
+    model_align = np.asarray(model_align, float)
+    template_align = np.asarray(template_align, float)
+    model_measure = np.asarray(model_measure, float)
+    template_measure = np.asarray(template_measure, float)
+    n = min(len(model_align), len(template_align))
+    if n < 3 or len(model_measure) < 3:
+        return float('nan')
+    R, t = kabsch(model_align[:n], template_align[:n])
+    moved = transform(model_measure, R, t)
+    m = min(len(moved), len(template_measure))
+    return float(np.sqrt(((moved[:m] - template_measure[:m]) ** 2).sum(1).mean()))
+
+
+def normalize_plddt_scale(values):
+    """Normalize pLDDT to the 0-100 scale.
+
+    Boltz-2 writes ``complex_plddt`` on 0-1 and may also put 0-1 values in the
+    structure B-factor; AF2/ColabFold use 0-100.  Detect by the observed max
+    so a 0-1 model is not rejected by a ``plddt >= 80`` gate.
+    """
+    if not values:
+        return values
+    finite = [v for v in values if isinstance(v, (int, float)) and v == v]
+    if not finite:
+        return values
+    if max(finite) <= 1.5:
+        return {k: float(v) * 100.0 for k, v in values.items()}
+    return values
+
+
 def tm_score(A, B):
     A = np.asarray(A, float)
     B = np.asarray(B, float)
@@ -46,16 +105,17 @@ def tm_score(A, B):
     return float(score)
 
 
-def surface_hydrophobic_fraction(sasa, residue_aa_map):
+def surface_hydrophobic_fraction(sasa, residue_aa_map, sasa_threshold=40.0):
     surface = [aa for (res, aa) in residue_aa_map.items()
-               if sasa.get(res, 0.0) > 40.0]
+               if sasa.get(res, 0.0) > float(sasa_threshold)]
     if not surface:
         return float('nan')
     hydrophobic = [aa for aa in surface if aa in APOLAR]
     return len(hydrophobic) / len(surface)
 
 
-def surface_hydrophobic_fraction_at(sasa, aa_map, positions):
+def surface_hydrophobic_fraction_at(sasa, aa_map, positions,
+                                     sasa_threshold=40.0):
     """Fraction of apolar residues among positions with SASA > 40 A^2.
 
     positions: iterable of (chain, resnum) keys as used in the sasa/aa_map
@@ -63,7 +123,7 @@ def surface_hydrophobic_fraction_at(sasa, aa_map, positions):
     hydrophobicity of the *designed surface* instead of the whole protein.
     """
     surface = [aa_map[p] for p in positions
-               if sasa.get(p, 0.0) > 40.0 and aa_map.get(p)]
+               if sasa.get(p, 0.0) > float(sasa_threshold) and aa_map.get(p)]
     if not surface:
         return float('nan')
     hydrophobic = [aa for aa in surface if aa in APOLAR]

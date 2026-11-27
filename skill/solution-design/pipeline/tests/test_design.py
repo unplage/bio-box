@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from tmkit.design import prepare_inputs, parse_design_fasta, mpnn_command, \
-    mpnn_runs
+    mpnn_runs, rfdiffusion_command, prepare_backbones
 
 
 def test_prepare_inputs_writes_jsonls(target, cfg, tmp_path):
@@ -19,15 +19,18 @@ def test_prepare_inputs_writes_jsonls(target, cfg, tmp_path):
     from tmkit.pdbio import mpnn_positions
     n_chain = max(max(mpnn_positions(target, c).values(), default=0)
                   for c in cfg['chains'])
-    # fixed + designable == modeled residues; design_chains == X-padded
-    # MPNN chain length (gap positions get X, never designed)
+    # fixed + designable == modeled residues; design_chains is ProteinMPNN's
+    # {pdb: [designed_chains, visible_chains]} format, not per-chain positions.
     for c in cfg['chains']:
         n_des = sum(1 for info in mask[c].values() if info['designable'])
         assert len(fix[key][c]) == len(target.chains[c].residues) - n_des
-        assert len(design[key][c]) == n_chain
-    # C3 symmetry: single ties group across three chains
-    assert ties[key][0]['A'][0] == ties[key][0]['B'][0] == \
-        ties[key][0]['C'][0]
+    assert design[key] == [cfg['chains'], []]
+    # One ties group per equivalent site, each spanning the symmetry group.
+    assert len(ties[key]) > 1
+    for group in ties[key]:
+        assert set(group) == set(cfg['chains'])
+        positions = [group[c][0] for c in cfg['chains']]
+        assert positions == [positions[0]] * len(positions)
 
 
 def test_mpnn_command_flags(target, cfg, tmp_path):
@@ -78,6 +81,20 @@ def test_mpnn_command_sweep_overrides(target, cfg, tmp_path):
     assert cmd[cmd.index('--model_name') + 1] == 'v_48_030'
     assert cmd[cmd.index('--backbone_noise') + 1] == '0.05'
     assert cmd[cmd.index('--seed') + 1] == '7'
+
+
+def test_rfdiffusion_command_and_dry_run(cfg, tmp_path):
+    conf = dict(cfg)
+    conf['template_pdb'] = 'template.pdb'
+    conf['rfdiffusion_contigs'] = '[A1-120]'
+    conf['rfdiffusion_noise_ca'] = 0.5
+    conf['rfdiffusion_extra'] = ['inference.symmetry=homomer']
+    cmd = rfdiffusion_command(conf, tmp_path / 'backbones', name='bb')
+    assert 'contigmap.contigs=[A1-120]' in cmd
+    assert 'denoiser.noise_scale_ca=0.5' in cmd
+    assert 'inference.symmetry=homomer' in cmd
+    conf['rfdiffusion_script'] = str(tmp_path / 'missing.py')
+    assert prepare_backbones(conf, tmp_path, dry_run=True) == []
 
 
 def test_parse_design_fasta_roundtrip(tmp_path):

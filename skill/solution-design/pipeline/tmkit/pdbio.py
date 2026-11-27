@@ -304,6 +304,14 @@ def write_fasta(path, records):
     Path(path).write_text('\n'.join(lines) + '\n')
 
 
+MAX_ASA = {
+    'A': 121.0, 'R': 265.0, 'N': 187.0, 'D': 187.0, 'C': 148.0,
+    'Q': 198.0, 'E': 223.0, 'G': 97.0, 'H': 216.0, 'I': 195.0,
+    'L': 191.0, 'K': 236.0, 'M': 203.0, 'F': 228.0, 'P': 154.0,
+    'S': 143.0, 'T': 163.0, 'W': 285.0, 'Y': 263.0, 'V': 165.0,
+}
+
+
 def residue_sasa_from_file(pdb_path):
     import freesasa
     structure = freesasa.Structure(str(as_pdb(pdb_path)))
@@ -320,3 +328,45 @@ def residue_sasa_map(target, chains=None, workdir='/tmp/opencode'):
     p = Path(workdir) / 'sasa_input.pdb'
     write_structure(target, p, chains=chains or list(target.chains))
     return residue_sasa_from_file(p)
+
+def hetero_residues(structure, resnames=None, chain_ids=None):
+    """Return ligand/cofactor residues from a Bio.PDB structure/model.
+
+    Each entry is ``{'chain', 'resid', 'resname', 'coords'}`` with heavy-atom
+    coordinates.  Waters are excluded.  ``resnames`` is case-insensitive.
+    """
+    wanted = {str(x).upper() for x in resnames} if resnames else None
+    out = []
+    for chain in structure:
+        if chain_ids and chain.id not in chain_ids:
+            continue
+        for residue in chain:
+            if residue.id[0] == ' ' or residue.resname == 'HOH':
+                continue
+            if wanted and residue.resname.upper() not in wanted:
+                continue
+            coords = [a.get_coord() for a in residue
+                      if a.element != 'H']
+            if not coords:
+                continue
+            out.append({
+                'chain': chain.id, 'resid': residue.id[1],
+                'resname': residue.resname, 'coords': np.asarray(coords, float),
+            })
+    return out
+
+
+def relative_sasa_map(target, chains=None, workdir='/tmp/opencode'):
+    """Per-residue SASA divided by the residue-type maximum (0-1)."""
+    absolute = residue_sasa_map(target, chains=chains, workdir=workdir)
+    out = {}
+    for cid, data in (target.chains or {}).items():
+        if chains and cid not in chains:
+            continue
+        by_num = {r.id[1]: r.resname for r in data.residues}
+        for (chain, num), area in absolute.items():
+            if chain != cid:
+                continue
+            aa = AMINO3.get(by_num.get(num, ''), 'X')
+            out[(chain, num)] = area / MAX_ASA.get(aa, 1.0)
+    return out

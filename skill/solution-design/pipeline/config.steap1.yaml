@@ -32,18 +32,29 @@ icd_segments:
   - 163
 - - 239
   - 257
-include: designable
+membrane_class: alpha_helical_multi
+design_scope: tm_surface
 fixed_residues:
 - 175
 - 268
 protect_pad: 2
 tm_junction_keep: 2
 surface_sasa_threshold: 40.0
-design_tm_surface_only: true
-fix_interface_contacts: true
+interface_mode: fixed
 interface_contact_dist: 6.0
 symmetric_mask: true
+symmetry:
+  groups:
+  - [A, B, C]
+interface_pairs:
+- [A, B]
+- [A, C]
+- [B, C]
 first_loop: ECD
+disulfides: auto
+ptms: false
+assembly: as_is
+strict_predict: true
 filters:
   tm_score:
   - '>='
@@ -54,9 +65,18 @@ filters:
   plddt_ecd:
   - '>='
   - 75.0
+  plddt_tm:
+  - '>='
+  - 75.0
   ecd_rmsd:
   - <=
   - 1.0
+  ecd_centroid_shift:
+  - <=
+  - 2.0
+  ecd_tm_angle:
+  - <=
+  - 15.0
   surf_hydro_tm:
   - <=
   - 0.35
@@ -96,6 +116,20 @@ filters:
   max_hydro_window:
   - <=
   - 0.6
+  max_charge_run:
+  - <=
+  - 5
+  max_polar_window:
+  - <=
+  - 0.75
+  abs_net_charge:
+  - <=
+  - 15.0
+  isoelectric_point:
+  - [between, 4.5, 10.0]
+  over_polar:
+  - <=
+  - 0.5
 pocket_residues:
 - 175
 - 268

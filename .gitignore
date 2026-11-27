@@ -5,3 +5,6 @@ tools/RFD4-Proteina/RFD4-Proteina-paper.pdf
 
 # External structure predictions (local outputs, never commit)
 af3/
+
+# Generated results (never commit)
+outputs/

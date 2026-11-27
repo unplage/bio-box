@@ -89,3 +89,120 @@ def test_tm_score_identity(target, ref_seq):
     from tmkit.pdbio import ca_coords
     A, refs = ca_coords(target, 'A')
     assert np.isclose(tm_score(A, A), 1.0, atol=1e-6)
+
+
+def test_per_chain_topology_override(cfg):
+    from copy import deepcopy
+    from tmkit.topology import resolve_topologies
+    conf = deepcopy(cfg)
+    conf['topology'] = {
+        'B': {'tm_segments': [[70, 90]], 'ecd_segments': [],
+              'icd_segments': []},
+    }
+    lengths = {c: len(conf['reference_sequences'][c]) for c in conf['chains']}
+    tops = resolve_topologies(conf, lengths, conf['chains'])
+    assert len(tops['A']['tm_segments']) == 6
+    assert tops['B']['tm_segments'] == [(70, 90)]
+    assert tops['C']['tm_segments'] == tops['A']['tm_segments']
+
+
+def test_symmetry_groups_only_for_equivalence(cfg):
+    from tmkit.constraints import symmetry_groups
+    assert symmetry_groups(cfg, cfg['chains']) == [cfg['chains']]
+    hetero = {'reference_sequences': {'A': 'AAA', 'B': 'CCC'}}
+    assert symmetry_groups(hetero, ['A', 'B']) == []
+    explicit = {'symmetry': {'groups': [['B', 'A']]}}
+    assert symmetry_groups(explicit, ['A', 'B', 'C']) == [['B', 'A']]
+
+
+def test_validate_config_rejects_bad_grouping(cfg):
+    from copy import deepcopy
+    from tmkit.config import normalize_config, validate_config
+    conf = normalize_config(deepcopy(cfg))
+    lengths = {c: len(conf['reference_sequences'][c]) for c in conf['chains']}
+    assert isinstance(validate_config(conf, lengths), list)
+    bad = deepcopy(conf)
+    bad['symmetry']['groups'] = [['A', 'B'], ['B', 'C']]
+    with pytest.raises(ValueError):
+        validate_config(bad, lengths)
+    bad = deepcopy(conf)
+    bad['interface_pairs'] = [['A', 'A']]
+    with pytest.raises(ValueError):
+        validate_config(bad, lengths)
+
+
+def test_cofactor_contacts_are_fixed(target, cfg):
+    from copy import deepcopy
+    from tmkit.mask import build_mask
+    conf = deepcopy(cfg)
+    conf['fixed_residues'] = []
+    conf['cofactors'] = [
+        {'name': 'heme', 'resnames': ['HEM'], 'shell': 4.5},
+    ]
+    result = build_mask(target, cfg['chains'], conf)
+    contacts = [(c, r) for c in cfg['chains']
+                for r, info in result[c].items()
+                if info['reason'] == 'cofactor']
+    assert contacts
+
+
+def test_relative_sasa_map_and_mask(target, cfg, tmp_path):
+    from copy import deepcopy
+    from tmkit.pdbio import relative_sasa_map
+    from tmkit.mask import build_mask
+    rel = relative_sasa_map(target, cfg['chains'], workdir=str(tmp_path))
+    assert rel and all(0.0 <= value for value in rel.values())
+    conf = deepcopy(cfg)
+    conf['relative_sasa'] = True
+    conf['surface_rsa_threshold'] = 0.20
+    conf['workdir'] = str(tmp_path)
+    result = build_mask(target, cfg['chains'], conf)
+    assert any(info['designable'] for c in cfg['chains']
+               for info in result[c].values())
+
+
+def test_topology_classes_and_peripheral_scope(cfg):
+    from copy import deepcopy
+    from tmkit.config import normalize_config
+    from tmkit.topology import resolve_topology
+    beta = resolve_topology({
+        'membrane_class': 'beta_barrel',
+        'tm_segments': [[1, 10], [21, 30]],
+        'nterm': 'ECD', 'cterm': 'ECD',
+    })
+    assert beta['tm_type'] == 'strand'
+    single = resolve_topology({
+        'membrane_class': 'single_pass',
+        'tm_segments': [[50, 70]], 'nterm': 'ECD', 'cterm': 'ICD',
+    })
+    assert single['tm_segments'] == [(50, 70)]
+    peripheral = normalize_config(deepcopy({
+        'chains': ['A'], 'membrane_class': 'peripheral',
+        'reference_sequences': {'A': 'AA'},
+    }))
+    assert peripheral['design_scope'] == 'surface'
+
+
+def test_membrane_geometries_are_per_chain(target, cfg):
+    from copy import deepcopy
+    from tmkit.membrane import membrane_geometries
+    from tmkit.topology import resolve_topologies
+    conf = deepcopy(cfg)
+    conf['membrane'] = {
+        'normal': 'auto', 'thickness': 30.0, 'headgroup': 15.0,
+    }
+    lengths = {c: len(conf['reference_sequences'][c]) for c in conf['chains']}
+    tops = resolve_topologies(conf, lengths, conf['chains'])
+    geoms = membrane_geometries(target, conf['chains'], tops, conf)
+    assert set(geoms) == set(conf['chains'])
+    assert all(g is not None for g in geoms.values())
+
+
+def test_tagged_pdb_has_designable_atoms(target, cfg, mask, tmp_path):
+    from tmkit.report import write_tagged_pdb
+    p = tmp_path / 'tagged.pdb'
+    write_tagged_pdb(target, cfg['chains'], mask, p)
+    lines = [ln for ln in p.read_text().splitlines() if ln.startswith('ATOM')]
+    assert len(lines) > 100
+    assert any(float(ln[60:66]) == 1.0 for ln in lines)
+    assert any(float(ln[60:66]) == 0.0 for ln in lines)

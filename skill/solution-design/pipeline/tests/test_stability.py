@@ -2,7 +2,8 @@
 import math
 
 from tmkit.stability import net_charge, isoelectric_point, \
-    hydrophobic_moment, max_hydrophobic_window, sequence_properties
+    hydrophobic_moment, max_hydrophobic_window, max_charge_run, \
+    max_polar_window, sequence_properties
 
 
 def test_net_charge_ph_dependence():
@@ -39,7 +40,8 @@ def test_sequence_properties_keys(cfg):
     props = sequence_properties(ref, list(range(1, 40)),
                                 cfg['tm_segments'])
     for key in ('net_charge', 'abs_net_charge', 'isoelectric_point',
-                'hydrophobic_moment', 'max_hydro_window'):
+                'hydrophobic_moment', 'max_hydro_window',
+                'max_charge_run', 'max_polar_window'):
         assert key in props and math.isfinite(props[key])
 
 
@@ -49,5 +51,6 @@ def test_step_stability_adds_properties(target, cfg):
     row = {'name': 'd1', 'chains_full': ref}
     out = step_stability([row], target, cfg)[0]
     for key in ('net_charge', 'abs_net_charge', 'isoelectric_point',
-                'hydrophobic_moment', 'max_hydro_window'):
+                'hydrophobic_moment', 'max_hydro_window',
+                'max_charge_run', 'max_polar_window'):
         assert key in out and math.isfinite(out[key])

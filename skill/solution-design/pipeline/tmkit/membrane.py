@@ -96,6 +96,23 @@ def membrane_geometry(target, chains, config):
     }
 
 
+def membrane_geometries(target, chain_ids, topologies, config):
+    """Per-chain membrane slabs, using each chain's own TM segments.
+
+    Explicit normals/centers are shared; only ``normal: auto`` is recomputed
+    per chain.  Heteromeric targets therefore do not inherit a geometry
+    inferred from another chain's topology.
+    """
+    out = {}
+    for cid in chain_ids:
+        local = dict(config)
+        topology = (topologies or {}).get(cid) or {}
+        if topology.get('tm_segments') is not None:
+            local['tm_segments'] = topology['tm_segments']
+        out[cid] = membrane_geometry(target, [cid], local)
+    return out
+
+
 def signed_distance(coord, geom):
     return float(np.dot(np.asarray(coord, dtype=float), geom['normal'])
                  - geom['center'])

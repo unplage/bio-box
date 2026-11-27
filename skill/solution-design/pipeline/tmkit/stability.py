@@ -26,6 +26,7 @@ PKA = {'D': 3.9, 'E': 4.2, 'C': 8.3, 'Y': 10.1, 'H': 6.0,
        'K': 10.5, 'R': 12.5}
 ACIDIC = {'D', 'E', 'C', 'Y'}
 BASIC = {'K', 'R', 'H'}
+CHARGED = ACIDIC | BASIC
 EISENBERG = {
     'A': 0.62, 'R': -2.53, 'N': -0.78, 'D': -0.90, 'C': 0.29,
     'Q': -0.85, 'E': -0.74, 'G': 0.48, 'H': -0.40, 'I': 1.38,
@@ -60,8 +61,17 @@ def isoelectric_point(seq):
     return float((lo + hi) / 2.0)
 
 
-def hydrophobic_moment(seq, tm_segments=None, window=11, angle=100.0):
-    """Max per-residue Eisenberg hydrophobic moment over TM windows."""
+def hydrophobic_moment(seq, tm_segments=None, window=11, angle=None,
+                       tm_type='helix'):
+    """Max per-residue Eisenberg hydrophobic moment over TM windows.
+
+    Alpha helices repeat every 3.6 residues (~100 deg per residue); beta
+    strands alternate every ~2 residues (180 deg).  ``tm_type`` selects the
+    default angle so a beta-barrel is not scored with a helical period.
+    """
+    if angle is None:
+        angle = 180.0 if str(tm_type).lower() in (
+            'beta', 'barrel', 'beta-barrel', 'b-barrel') else 100.0
     positions = [i for a, b in (tm_segments or [(1, len(seq))])
                  for i in range(int(a) - 1, int(b))]
     if not positions:
@@ -103,9 +113,44 @@ def max_hydrophobic_window(seq, positions, window=9, hyd_cut=RESID_HYD_THR):
     return best
 
 
-def sequence_properties(seq, positions, tm_segments=None):
+def max_charge_run(seq, positions=None):
+    """Longest run of charged residues among (designed) positions."""
+    if positions is None:
+        indices = list(range(len(seq)))
+    else:
+        indices = sorted(set(int(p) - 1 for p in positions
+                             if 1 <= int(p) <= len(seq)))
+    best = current = 0
+    prev = None
+    for i in indices:
+        if prev is not None and i != prev + 1:
+            current = 0
+        if 0 <= i < len(seq) and seq[i] in CHARGED:
+            current += 1
+            best = max(best, current)
+        else:
+            current = 0
+        prev = i
+    return best
+
+
+def max_polar_window(seq, positions, window=9, polar_cut=POLAR_CAP):
+    """Largest fraction of over-polar residues in a designed-position run."""
+    pos = sorted(p for p in positions if 1 <= p <= len(seq))
+    if len(pos) < window:
+        return float('nan')
+    best = 0.0
+    for i in range(0, len(pos) - window + 1):
+        chunk = pos[i:i + window]
+        polar = sum(1 for p in chunk
+                    if SOLUBILITY.get(seq[p - 1], 0.4) >= polar_cut)
+        best = max(best, polar / float(window))
+    return best
+
+
+def sequence_properties(seq, positions, tm_segments=None, tm_type='helix'):
     charge = net_charge(seq)
-    moment = hydrophobic_moment(seq, tm_segments)
+    moment = hydrophobic_moment(seq, tm_segments, tm_type=tm_type)
     patch = max_hydrophobic_window(seq, positions)
     return {
         'net_charge': charge,
@@ -113,6 +158,8 @@ def sequence_properties(seq, positions, tm_segments=None):
         'isoelectric_point': isoelectric_point(seq),
         'hydrophobic_moment': moment,
         'max_hydro_window': patch,
+        'max_charge_run': max_charge_run(seq, positions),
+        'max_polar_window': max_polar_window(seq, positions),
     }
 
 
@@ -152,14 +199,15 @@ def designable_positions(mask, chain_id):
             if info['designable']]
 
 
-def interface_contact_residues(target, chain_ids, dist=6.0):
-    """Set of (chain, refn) residues whose any heavy atom contacts another chain.
+def interface_contact_counts(target, chain_ids, dist=6.0):
+    """Number of distinct cross-chain residue partners per interface residue.
 
-    Leaves interface residues free only if allowed by the caller; used to
-    hard-fix oligomer interfaces in the mask.
+    Returns ``{(chain, pdb_resnum): n_partners}``.  The count is used to split
+    an oligomer interface into a fixed core and a designable edge; it is not
+    a substitute for an experimental interface measurement.
     """
     if len(chain_ids) < 2:
-        return set()
+        return {}
     atoms = []
     for cid in chain_ids:
         for r in target.chains[cid].residues:
@@ -167,7 +215,7 @@ def interface_contact_residues(target, chain_ids, dist=6.0):
                 if a.element != 'H':
                     atoms.append((cid, r.id[1], a.get_coord()))
 
-    contact = set()
+    partners = {}
     try:
         from scipy.spatial import cKDTree
         coords = np.asarray([a[2] for a in atoms])
@@ -175,15 +223,16 @@ def interface_contact_residues(target, chain_ids, dist=6.0):
         pairs = tree.query_pairs(dist, output_type='set')
         for i, j in pairs:
             a, b = atoms[i], atoms[j]
-            if a[0] != b[0]:
-                contact.add((a[0], a[1]))
-                contact.add((b[0], b[1]))
-        return contact
+            if a[0] == b[0]:
+                continue
+            partners.setdefault((a[0], a[1]), set()).add((b[0], b[1]))
+            partners.setdefault((b[0], b[1]), set()).add((a[0], a[1]))
+        return {k: len(v) for k, v in partners.items()}
     except ImportError:
         pass
 
     # Biopython NeighborSearch (C KD-tree) fallback
-    from Bio.PDB import NeighborSearch
+    from Bio.PDB.NeighborSearch import NeighborSearch
     bio_atoms = []
     meta = {}
     for cid in chain_ids:
@@ -197,7 +246,13 @@ def interface_contact_residues(target, chain_ids, dist=6.0):
         ca, ra = meta[id(a)]
         for b in ns.search(a.get_coord(), dist):
             cb, rb = meta[id(b)]
-            if ca != cb:
-                contact.add((ca, ra))
-                contact.add((cb, rb))
-    return contact
+            if ca == cb:
+                continue
+            partners.setdefault((ca, ra), set()).add((cb, rb))
+            partners.setdefault((cb, rb), set()).add((ca, ra))
+    return {k: len(v) for k, v in partners.items()}
+
+
+def interface_contact_residues(target, chain_ids, dist=6.0):
+    """Set of (chain, pdb_resnum) residues contacting another chain."""
+    return set(interface_contact_counts(target, chain_ids, dist))

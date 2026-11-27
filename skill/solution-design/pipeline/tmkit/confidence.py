@@ -16,6 +16,7 @@ _ALIASES = {
     'iptm': ('iptm', 'interface_ptm', 'interface_iptm'),
     'ptm': ('ptm',),
     'ranking_score': ('ranking_score', 'confidence_score'),
+    'plddt': ('complex_plddt', 'plddt', 'confidence_plddt'),
 }
 
 
@@ -69,7 +70,7 @@ def _json_candidates(model_path):
 def load_confidence(model_path):
     """Return {'ptm','iptm','ranking_score'} (may be None) for a model file."""
     result = {'ptm': None, 'iptm': None, 'ranking_score': None,
-              'source': None}  # type: dict
+              'plddt': None, 'source': None}  # type: dict
     for candidate in _json_candidates(model_path):
         try:
             payload = json.loads(candidate.read_text())

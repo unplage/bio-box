@@ -15,12 +15,14 @@ def prepare_inputs(target, chain_ids, mask, config, outdir, name='target'):
                     omit_resnames=config.get('omit_resnames', []),
                     omit_resseq=config.get('omit_resseq', []))
     fix = fixed_positions_dict(target, chain_ids, mask)
-    ties = symmetry_ties_dict(target, chain_ids, mask)
-    design_chains = {}
-    for c in chain_ids:
-        positions = mpnn_positions(target, c)
-        n = max(positions.values()) if positions else 0
-        design_chains[c] = list(range(1, n + 1))
+    ties = symmetry_ties_dict(target, chain_ids, mask, config)
+    # ProteinMPNN's --chain_id_jsonl format is {pdb: [masked, visible]}, not
+    # {chain: [positions]}.  The old format was silently ignored because
+    # --pdb_path overrides chain_id_dict; keep it correct for --jsonl_path.
+    designed = [c for c in (config.get('mpnn_designed_chains') or chain_ids)
+                if c in chain_ids]
+    visible = [c for c in chain_ids if c not in designed]
+    design_chains = [designed, visible]
     fix_name = outdir / f'{name}_fixed.jsonl'
     ties_name = outdir / f'{name}_ties.jsonl'
     des_name = outdir / f'{name}_designchains.jsonl'
@@ -39,9 +41,88 @@ def fixed_positions_dict(target, chain_ids, mask):
     return fixed
 
 
-def symmetry_ties_dict(target, chain_ids, mask):
+def symmetry_ties_dict(target, chain_ids, mask, config=None):
     from .mask import symmetry_ties_dict as _t
-    return _t(target, chain_ids, mask)
+    return _t(target, chain_ids, mask, config)
+
+
+def list_backbones(config):
+    """List user-supplied RFdiffusion/scaffold backbones, sorted by name."""
+    bdir = config.get('backbone_dir')
+    if not bdir:
+        return []
+    base = Path(bdir)
+    if not base.exists():
+        raise FileNotFoundError(f'backbone_dir does not exist: {base}')
+    globs = config.get('backbone_globs') or ['*.pdb', '*.cif', '*.mmcif']
+    files = sorted({p for pattern in globs for p in base.rglob(pattern)})
+    limit = config.get('max_backbones')
+    return files[:int(limit)] if limit else files
+
+
+def rfdiffusion_script(config):
+    script = config.get('rfdiffusion_script')
+    if script:
+        return Path(script)
+    root = Path(config.get('rfdiffusion_dir', 'RFdiffusion'))
+    return root / 'scripts' / 'run_inference.py'
+
+
+def rfdiffusion_command(config, outdir, name='backbone'):
+    """Build an RFdiffusion ``run_inference.py`` command.
+
+    The adapter is intentionally thin: RFdiffusion options vary by version,
+    so ``rfdiffusion_extra`` can carry any additional Hydra overrides.  The
+    produced backbones are then sequenced by ProteinMPNN in ``step_design``.
+    """
+    script = rfdiffusion_script(config)
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    template = config.get('template_pdb') or config.get('pdb')
+    if not template:
+        raise ValueError('RFdiffusion needs template_pdb/pdb in the config')
+    cmd = [
+        sys.executable, str(script),
+        f'inference.input_pdb={template}',
+        f'inference.output_prefix={outdir / name}',
+        f'inference.num_designs={int(config.get("rfdiffusion_num_designs", 8))}',
+    ]
+    if config.get('rfdiffusion_contigs'):
+        cmd.append(f'contigmap.contigs={config["rfdiffusion_contigs"]}')
+    for key, hydra in [('rfdiffusion_noise_ca', 'denoiser.noise_scale_ca'),
+                       ('rfdiffusion_noise_frame',
+                        'denoiser.noise_scale_frame')]:
+        if config.get(key) is not None:
+            cmd.append(f'{hydra}={config[key]}')
+    cmd += [str(x) for x in (config.get('rfdiffusion_extra') or [])]
+    return cmd
+
+
+def prepare_backbones(config, outdir, dry_run=False):
+    """Return scaffold backbones, optionally running RFdiffusion first."""
+    backbones = list_backbones(config)
+    if backbones:
+        return backbones
+    mode = str(config.get('design_mode', 'sequence')).lower()
+    if mode not in ('rf_diffusion', 'rfdiffusion', 'scaffold',
+                    'partial_diffusion'):
+        return []
+    script = rfdiffusion_script(config)
+    if not dry_run and not script.exists():
+        raise FileNotFoundError(
+            f'RFdiffusion script not found: {script}; set rfdiffusion_script '
+            f'or rfdiffusion_dir')
+    cmd = rfdiffusion_command(config, Path(outdir) / 'backbones',
+                              name=config.get('name', 'target'))
+    print('RFdiffusion command:')
+    print('  ' + ' \\\n  '.join(cmd))
+    if dry_run:
+        return []
+    proc = subprocess.run(cmd)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f'RFdiffusion failed with exit code {proc.returncode}')
+    return list_backbones({**config, 'backbone_dir': Path(outdir) / 'backbones'})
 
 
 def _as_list(value):
@@ -77,8 +158,9 @@ def mpnn_runs(config):
 def mpnn_command(inputs, config, outdir, num_seqs=8, temperature='0.15 0.2',
                  model_name=None, backbone_noise=None, seed=None):
     prog = Path(config.get('proteinmpnn_dir', 'proteinmpnn'))
+    python = config.get('proteinmpnn_python') or sys.executable
     cmd = [
-        sys.executable, str(prog / 'protein_mpnn_run.py'),
+        python, str(prog / 'protein_mpnn_run.py'),
         '--pdb_path', str(inputs['pdb']),
         '--fixed_positions_jsonl', str(inputs['fixed']),
         '--tied_positions_jsonl', str(inputs['ties']),
@@ -86,11 +168,14 @@ def mpnn_command(inputs, config, outdir, num_seqs=8, temperature='0.15 0.2',
         '--num_seq_per_target', str(num_seqs),
         '--sampling_temp', temperature,
         '--out_folder', str(outdir),
-        '--omit_AAs', 'C',
+        '--omit_AAs', str(config.get('omit_AAs', 'C')),
         '--suppress_print', '0',
     ]
     if config.get('soluble_model'):
         cmd.append('--use_soluble_model')
+    designed = config.get('mpnn_designed_chains')
+    if designed:
+        cmd += ['--pdb_path_chains', ' '.join(str(c) for c in designed)]
     model = model_name if model_name is not None else config.get('model_name')
     if model:
         cmd += ['--model_name', model]

@@ -1,5 +1,7 @@
 # 跨膜蛋白可溶性改造：STEAP1 设计方案与流程
 
+> 通用化说明：`pipeline/` 已重构为通用膜蛋白可溶化工具，支持 α-螺旋多次跨膜、单次跨膜、β-桶、尾部锚定和膜外周蛋白；STEAP1 只是完整示例（`pipeline/config.steap1.yaml`）。新靶点从 `pipeline/config.template.yaml` 开始，通用流程与配置项见 `pipeline/README.md`。
+
 > 目标：将全长人源 **STEAP1**（UniProt Q9UHE8，339 aa，六次跨膜铁/铜还原酶相关蛋白、肿瘤抗原）改造为可在水溶液中可溶表达的全长蛋白。
 > 约束：**只改造跨膜区**；**胞外区（ECD）序列与构象完全不变**；哺乳动物细胞（Expi293/HEK293）表达；含 GPU 计算环境，可运行 AlphaFold2 / ProteinMPNN 全套流程。
 >
